@@ -681,7 +681,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 32; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 33; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
 const ICON_TRASH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
@@ -815,6 +815,17 @@ const TERRAIN_ABILITY_MAP = {'Electric Surge':'electric','Grassy Surge':'grassy'
 const STATUS_OPTIONS = ['Healthy','Poisoned','Badly Poisoned','Burned','Paralyzed','Asleep','Frozen'];
 
 const HARDCODED_STATUS_MOVES = {
+  'baneful bunker': { Name:'Baneful Bunker', Type:'Poison', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
+  'burning bulwark': { Name:'Burning Bulwark', Type:'Fire', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
+  "king's shield": { Name:"King's Shield", Type:'Steel', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
+  'obstruct': { Name:'Obstruct', Type:'Dark', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
+  'silk trap': { Name:'Silk Trap', Type:'Bug', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
+  'spiky shield': { Name:'Spiky Shield', Type:'Grass', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
+  'crafty shield': { Name:'Crafty Shield', Type:'Fairy', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
+  'mat block': { Name:'Mat Block', Type:'Fighting', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
+  'quick guard': { Name:'Quick Guard', Type:'Fighting', Category:'Status', Accuracy:101, PP:15, IsStatus:true },
+  'wide guard': { Name:'Wide Guard', Type:'Rock', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
+  'endure': { Name:'Endure', Type:'Normal', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
   'protect': { Name:'Protect', Type:'Normal', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
   'detect': { Name:'Detect', Type:'Fighting', Category:'Status', Accuracy:101, PP:5, IsStatus:true },
   'shell smash': { Name:'Shell Smash', Type:'Normal', Category:'Status', Accuracy:101, PP:15, IsStatus:true },
@@ -947,7 +958,7 @@ const ROLL_MULTS = []; for(let i=0;i<16;i++) ROLL_MULTS.push((85 + i)/100);
 
 const MOVE_PRIORITY_TABLE = {
   'helping hand': 5,
-  'baneful bunker': 4, 'burning bulwark': 4, 'detect': 4, 'endure': 4,
+  'baneful bunker': 4, 'baneful banker': 4, 'burning bulwark': 4, 'detect': 4, 'endure': 4, 'crafty shield': 3,
   "king's shield": 4, 'obstruct': 4, 'protect': 4, 'detect': 4, 'silk trap': 4, 'spiky shield': 4,
   'fake out': 3, 'quick guard': 3, 'upper hand': 3, 'wide guard': 3,
   'ally switch': 2, 'extreme speed': 2, 'feint': 2, 'first impression': 2, 'follow me': 2, 'rage powder': 2,
@@ -2079,6 +2090,79 @@ function getMovePriority(moveKey){
 }
 // Armor Tail / Queenly Majesty: protegem TODO o lado aliado de golpes de prioridade (Singles e Doubles).
 // Recebe os Pokémon em campo do lado atingido; retorna o portador da habilidade (ou null).
+// ================== PROTEÇÃO (Singles e Doubles usam as MESMAS regras) ==================
+//  Protegem só o usuário (+4):  scope 'all' = bloqueia todos os golpes · 'dmg' = só golpes físicos/especiais. contact = efeito no atacante que usa golpe de contato.
+const PROTECT_MOVES = {
+  'protect': { scope: 'all' }, 'detect': { scope: 'all' },
+  'baneful bunker': { scope: 'all', contact: 'poison' }, 'baneful banker': { scope: 'all', contact: 'poison' },
+  'burning bulwark': { scope: 'dmg', contact: 'burn' },
+  "king's shield": { scope: 'dmg', contact: { stat: 'Atk', d: -1 } },
+  'obstruct': { scope: 'dmg', contact: { stat: 'Def', d: -2 } },
+  'silk trap': { scope: 'dmg', contact: { stat: 'Spe', d: -1 } },
+  'spiky shield': { scope: 'all', contact: 'spiky' },
+};
+//  Protegem o lado do usuário: wide (golpes em área, +3) · quick (golpes de prioridade, +3) · crafty (golpes de status dos oponentes, +3) · mat (golpes de dano, prioridade 0, 1º turno em campo)
+const PROTECT_SIDE_FLAG = { 'wide guard': 'wide', 'quick guard': 'quick', 'crafty shield': 'crafty', 'mat block': 'mat' };
+// Golpes que NÃO são afetados pela maioria das proteções
+const PROTECT_IGNORING = new Set(['Acupressure','Aromatic Mist','Block','Confide','Conversion 2','Curse','Decorate','Doom Desire','Feint','Flower Shield','Future Sight','Hold Hands','Hyper Drill','Hyperspace Fury','Hyperspace Hole','Mean Look','Mighty Cleave','Perish Song','Phantom Force','Play Nice','Psych Up','Roar','Role Play','Shadow Force','Sketch','Tearful Look','Teatime','Transform','Whirlwind'].map(normKey));
+// Golpes que atravessam qualquer proteção E a levantam (sem sofrer o efeito de contato)
+const PROTECT_BREAKING = new Set(['Feint','Hyperspace Fury','Hyperspace Hole','Phantom Force','Shadow Force'].map(normKey));
+const PROTECT_HAZARDS = new Set(['stealth rock','spikes','toxic spikes','sticky web']);   // Crafty Shield não protege contra hazards
+// Chance de sucesso: golpes que CHECAM e REDUZEM (as proteções pessoais e Endure) · golpes que só REDUZEM (Quick Guard e Wide Guard)
+const PROTECT_DECREASE_ONLY = new Set(['quick guard', 'wide guard']);
+function protectKind(mk){
+  if(PROTECT_MOVES[mk] || mk === 'endure') return 'check';
+  if(PROTECT_DECREASE_ONLY.has(mk)) return 'decrease';
+  if(PROTECT_SIDE_FLAG[mk]) return 'none';
+  return null;   // não é golpe de proteção
+}
+function protectChancePct(streak){ return streak > 0 ? 100 / Math.pow(3, streak) : 101; }   // 1, 1/3, 1/9, 1/27...
+// last = { turn, streak } do último uso bem-sucedido. Só conta se foi no turno imediatamente anterior (sem outro golpe no meio).
+function protectAttempt(kind, last, turn){
+  const streak = (last && last.turn === turn - 1) ? (last.streak || 0) : 0;
+  return { streak, pct: kind === 'check' ? protectChancePct(streak) : 101 };
+}
+// mv = { status, spread, priority, contact, foeStatus } · st = { prot (chave do golpe de proteção), wide, quick, crafty, mat }
+function protectionVerdict(mk, mv, st){
+  const ignoring = PROTECT_IGNORING.has(mk), breaker = PROTECT_BREAKING.has(mk);
+  const anyActive = !!(st.prot || st.wide || st.quick || st.mat);
+  const pm = st.prot ? PROTECT_MOVES[st.prot] : null;
+  if(!mv.status){
+    if(ignoring) return { blocked: false, lift: breaker && anyActive };
+    if(st.mat) return { blocked: true, by: 'mat block' };
+    if(pm) return { blocked: true, by: st.prot, contact: mv.contact ? pm.contact : null };
+    if(st.quick && mv.priority > 0) return { blocked: true, by: 'quick guard' };
+    if(st.wide && mv.spread) return { blocked: true, by: 'wide guard' };
+    return { blocked: false };
+  }
+  if(st.crafty && mv.foeStatus && !PROTECT_HAZARDS.has(mk)) return { blocked: true, by: 'crafty shield' };
+  if(ignoring) return { blocked: false };
+  if(pm && pm.scope === 'all') return { blocked: true, by: st.prot };
+  if(st.quick && mv.priority > 0 && mv.foeStatus) return { blocked: true, by: 'quick guard' };
+  return { blocked: false };
+}
+// Efeito de contato no atacante. A = { name, hpMax, hp(), setHp(v), status(), setStatus(st), t1, t2, ability, stage(stat, d) -> texto }
+function applyProtectContact(kind, A){
+  if(!kind) return '';
+  const nm = `<b>${A.name}</b>`;
+  if(kind === 'spiky'){
+    const d = Math.max(1, Math.floor(A.hpMax / 8)), b = A.hp(), a = Math.max(0, b - d);
+    A.setHp(a);
+    return ` ${nm} perdeu ${b - a} HP (${a}/${A.hpMax}).${a <= 0 ? ' ' + nm + ' foi nocauteado!' : ''}`;
+  }
+  if(kind === 'poison' || kind === 'burn'){
+    const ab = normKey(A.ability || ''), T = [A.t1, A.t2];
+    const imm = kind === 'poison' ? (T.includes('Poison') || T.includes('Steel') || ['immunity','pastel veil','comatose'].includes(ab))
+                                  : (T.includes('Fire') || ['water veil','water bubble','thermal exchange','comatose'].includes(ab));
+    if(imm || A.status() !== 'Healthy') return '';
+    const st = kind === 'poison' ? 'Poisoned' : 'Burned';
+    A.setStatus(st);
+    return ' ' + LF.statusGain({ name: A.name, newStatus: st, oldStatus: 'Healthy' });
+  }
+  if(kind.stat) return ` ${nm}: ${A.stage(kind.stat, kind.d)}.`;
+  return '';
+}
+function protectName(key){ const m = (typeof dStatusMove === 'function') ? dStatusMove(key) : null; return m ? m.Name : key; }
 const PRIORITY_GUARD_ABILITIES = new Set(['armor tail', 'queenly majesty']);
 function priorityGuardHolder(attacker, moveKey, sideMons){
   if(getMovePriority(moveKey) <= 0) return null;
@@ -2956,29 +3040,32 @@ function executeAction(action, ordered, actionIdx){
       const _tb = applyStageList(action.side, [['Atk',1],['Spe',1]]);
       return { side: action.side, type: 'status-boost', attackerName: attacker.name, moveName: 'Tidy Up', boostText: _tb + '; substitutos removidos' };
     }
-    if(moveNameKey === 'protect' || moveNameKey === 'detect'){
-      const _pn = moveNameKey === 'detect' ? 'Detect' : 'Protect';
-      let protectAcc;
-      if(attackerSideState.lastProtectTurn === battle.turn - 1){ protectAcc = Math.max(0, attackerSideState.lastProtectAcc / 3); }
-      else { protectAcc = 101; }
-      if(protectAcc < 101){
-        const pr = battleRandom() * 100;
-        if(pr >= protectAcc){
-          attackerSideState.lastProtectTurn = battle.turn;
-          attackerSideState.lastProtectAcc = protectAcc;
-          return { side: action.side, type: 'protect-failed', attackerName: attacker.name, moveName: _pn };
+    { const _pk = protectKind(moveNameKey);
+      if(_pk){
+        const _pn = action.move.Name;
+        if(moveNameKey === 'mat block' && battle.turn !== (attackerSideState.currentEntryTurn || 0) + 1)
+          return { side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: _pn, reason: 'não é o primeiro turno em campo' };
+        let _streak = 0;
+        if(_pk !== 'none'){
+          const _at = protectAttempt(_pk, { turn: attackerSideState.lastProtectTurn, streak: attackerSideState.lastProtectStreak }, battle.turn);
+          _streak = _at.streak;
+          if(_at.pct < 101 && battleRandom() * 100 >= _at.pct){
+            attackerSideState.lastProtectTurn = -10; attackerSideState.lastProtectStreak = 0;   // falhou: a sequência recomeça
+            return { side: action.side, type: 'protect-failed', attackerName: attacker.name, moveName: _pn };
+          }
+          attackerSideState.lastProtectTurn = battle.turn; attackerSideState.lastProtectStreak = _streak + 1;
         }
-      }
-      attackerSideState.lastProtectTurn = battle.turn;
-      attackerSideState.lastProtectAcc = protectAcc;
-      attackerSideState.protected = true;
-      return { side: action.side, type: 'status-protect', attackerName: attacker.name, moveName: _pn };
-    }
+        if(PROTECT_MOVES[moveNameKey]) attackerSideState.protected = moveNameKey;
+        else if(moveNameKey === 'endure') attackerSideState.endure = true;
+        else (attackerSideState.sideProt || (attackerSideState.sideProt = {}))[PROTECT_SIDE_FLAG[moveNameKey]] = true;
+        return { side: action.side, type: 'status-protect', attackerName: attacker.name, moveName: _pn };
+      } }
     {
       const _plan = statusMovePlan(action.move);
       if(_plan){
         if(_plan.target.length){
-          if(defenderSideState.protected) return { side: action.side, type: 'blocked', attackerName: attacker.name, moveName: action.move.Name, defenderName: defender.name };
+          { const _spv = protectionVerdict(moveNameKey, { status: true, foeStatus: true, priority: getMovePriority(action.move.Name), spread: false, contact: false }, Object.assign({ prot: defenderSideState.protected || null }, defenderSideState.sideProt || {}));
+            if(_spv.blocked) return { side: action.side, type: 'blocked', attackerName: attacker.name, moveName: action.move.Name, defenderName: defender.name, by: _spv.by }; }
           const _ds = getSemi(defSide);
           if(_ds && _ds.kind !== 'charge' && normKey(attacker.ability||'') !== 'no guard' && normKey(defender.ability||'') !== 'no guard')
             return { side: action.side, type: 'move-miss', attackerName: attacker.name, moveName: action.move.Name, semiDodge: defender.name };
@@ -3044,10 +3131,23 @@ function executeAction(action, ordered, actionIdx){
     const _dp = normKey(defender.ability || '') === 'damp' ? defender.name : attacker.name;
     return { side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.moveName, reason: 'Damp de ' + _dp + ' impede explosões' };
   }
-  if(defenderSideState.protected && moveNameKey !== 'phantom force' && moveNameKey !== 'shadow force'){
-    let _sk = false;
-    if(SELF_KO_MOVES.has(moveNameKey)){ attackerSideState.hp[attackerActiveIdx] = 0; _sk = true; }
-    return { side: action.side, type: 'blocked', attackerName: attacker.name, moveName: action.move.moveName, defenderName: defender.name, attackerFainted: _sk, selfKO: _sk };
+  { const _pInfo = findMoveInfo(baseMoveNameFromKey(action.move.moveKey));
+    const _pv = protectionVerdict(moveNameKey, { status: false, spread: !!(action.move.detail && action.move.detail.isSpreadCapable), priority: getMovePriority(action.move.moveKey), contact: !!(_pInfo && _pInfo.Contact) }, Object.assign({ prot: defenderSideState.protected || null }, defenderSideState.sideProt || {}));
+    if(_pv.blocked){
+      let _sk = false, _note = '', _fnt = false;
+      if(SELF_KO_MOVES.has(moveNameKey)){ attackerSideState.hp[attackerActiveIdx] = 0; _sk = true; }
+      else if(_pv.contact){
+        _note = applyProtectContact(_pv.contact, {
+          name: attacker.name, hpMax: attacker.hpMax, ability: attacker.ability, t1: attacker.type1, t2: attacker.type2,
+          hp: () => attackerSideState.hp[attackerActiveIdx], setHp: v => { attackerSideState.hp[attackerActiveIdx] = v; },
+          status: () => getStatusOf(action.side, attackerActiveIdx), setStatus: st => { attackerSideState.status[attackerActiveIdx] = st; },
+          stage: (stat, d) => fmtStageChange(changeStage(action.side, stat, d))
+        });
+        _fnt = attackerSideState.hp[attackerActiveIdx] <= 0;
+      }
+      return { side: action.side, type: 'blocked', attackerName: attacker.name, moveName: action.move.moveName, defenderName: defender.name, by: _pv.by, note: _note, attackerFainted: _sk || _fnt, selfKO: _sk };
+    }
+    if(_pv.lift){ defenderSideState.protected = false; defenderSideState.sideProt = null; preNote += ` A proteção de ${defender.name} foi quebrada por ${action.move.moveName}!`; }
   }
 
   { const _pg = priorityGuardHolder(attacker, action.move.moveKey, [defender]);
@@ -3147,7 +3247,7 @@ function executeAction(action, ordered, actionIdx){
   const nHits = battleMultiHitCount(moveNameKey, declaredHits, tripleBP, skillLink);
   const perHitAcc = battleMultiHitPerHitAcc(moveNameKey, tripleBP);
   const hits = [];
-  let subAbsorbed = 0, subBroken = false, focusSashConsumed = false, totalDamage = 0, hpDamageDone = 0, lastRes = null, missAt = 0;
+  let subAbsorbed = 0, subBroken = false, focusSashConsumed = false, endureHeld = false, totalDamage = 0, hpDamageDone = 0, lastRes = null, missAt = 0;
   for(let h = 0; h < nHits; h++){
     // Triple Axel/Kick e Population Bomb: checagem de precisão antes de cada hit. Skill Link: só a checagem inicial.
     if(h > 0 && perHitAcc && !skillLink && battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ missAt = h + 1; break; }
@@ -3164,6 +3264,7 @@ function executeAction(action, ordered, actionIdx){
     } else {
       let nh = hpPre - r.damage;
       if(nh <= 0 && hasFocusSash && !focusSashConsumed && hpPre === defender.hpMax && hpPre === hpBefore){ nh = 1; focusSashConsumed = true; }
+      else if(nh <= 0 && s.endure){ nh = 1; endureHeld = true; }
       nh = Math.max(0, nh);
       toHp = hpPre - nh; s.hp[s.activePokeIdx] = nh; hpDamageDone += toHp;
     }
@@ -3294,7 +3395,7 @@ function executeAction(action, ordered, actionIdx){
     defenderAfter: s.hp[s.activePokeIdx], defenderMax: defender.hpMax,
     fainted: s.hp[s.activePokeIdx] <= 0,
     rollIdx, causesRecharge, hits, multiStrike: nHits > 1 || !!tripleBP, missAt,
-    isCrit, focusSashConsumed, thawedDefender,
+    isCrit, focusSashConsumed, endureHeld, thawedDefender,
     drainHeal, drainApplicable, drainPct, drainHpBefore, drainHpAfter, drainDealt: dealt, attackerMaxHp: attacker.hpMax,
     hitNote, recoil: recoilDmg, recoilBlockedBy, attackerFainted, selfKO, isStruggle: isStruggleMove,
     _midSnap: (drainHeal > 0 || recoilDmg > 0) ? _midSnap : undefined,
@@ -3374,8 +3475,8 @@ function snapshotBattle(){
     weatherInfo: battle.weatherInfo ? JSON.parse(JSON.stringify(battle.weatherInfo)) : null,
     terrainInfo: battle.terrainInfo ? JSON.parse(JSON.stringify(battle.terrainInfo)) : null,
     sides: {
-      A: { roster: [...battle.sides.A.roster], hp: {...battle.sides.A.hp}, activePokeIdx: battle.sides.A.activePokeIdx, recharge: battle.sides.A.recharge, currentEntryTurn: battle.sides.A.currentEntryTurn || 0, flinched: battle.sides.A.flinched || false, pp: JSON.parse(JSON.stringify(battle.sides.A.pp || {})), stages: {...battle.sides.A.stages}, protected: battle.sides.A.protected, lastProtectTurn: battle.sides.A.lastProtectTurn, lastProtectAcc: battle.sides.A.lastProtectAcc, statusData: serializeSideStatus(battle.sides.A) },
-      B: { roster: [...battle.sides.B.roster], hp: {...battle.sides.B.hp}, activePokeIdx: battle.sides.B.activePokeIdx, recharge: battle.sides.B.recharge, currentEntryTurn: battle.sides.B.currentEntryTurn || 0, flinched: battle.sides.B.flinched || false, pp: JSON.parse(JSON.stringify(battle.sides.B.pp || {})), stages: {...battle.sides.B.stages}, protected: battle.sides.B.protected, lastProtectTurn: battle.sides.B.lastProtectTurn, lastProtectAcc: battle.sides.B.lastProtectAcc, statusData: serializeSideStatus(battle.sides.B) },
+      A: { roster: [...battle.sides.A.roster], hp: {...battle.sides.A.hp}, activePokeIdx: battle.sides.A.activePokeIdx, recharge: battle.sides.A.recharge, currentEntryTurn: battle.sides.A.currentEntryTurn || 0, flinched: battle.sides.A.flinched || false, pp: JSON.parse(JSON.stringify(battle.sides.A.pp || {})), stages: {...battle.sides.A.stages}, protected: battle.sides.A.protected, lastProtectTurn: battle.sides.A.lastProtectTurn, lastProtectAcc: battle.sides.A.lastProtectAcc, lastProtectStreak: battle.sides.A.lastProtectStreak || 0, sideProt: battle.sides.A.sideProt ? Object.assign({}, battle.sides.A.sideProt) : null, endure: !!battle.sides.A.endure, statusData: serializeSideStatus(battle.sides.A) },
+      B: { roster: [...battle.sides.B.roster], hp: {...battle.sides.B.hp}, activePokeIdx: battle.sides.B.activePokeIdx, recharge: battle.sides.B.recharge, currentEntryTurn: battle.sides.B.currentEntryTurn || 0, flinched: battle.sides.B.flinched || false, pp: JSON.parse(JSON.stringify(battle.sides.B.pp || {})), stages: {...battle.sides.B.stages}, protected: battle.sides.B.protected, lastProtectTurn: battle.sides.B.lastProtectTurn, lastProtectAcc: battle.sides.B.lastProtectAcc, lastProtectStreak: battle.sides.B.lastProtectStreak || 0, sideProt: battle.sides.B.sideProt ? Object.assign({}, battle.sides.B.sideProt) : null, endure: !!battle.sides.B.endure, statusData: serializeSideStatus(battle.sides.B) },
     },
     pendingAction: { A: serializeAction(battle.pendingAction.A), B: serializeAction(battle.pendingAction.B) },
     pendingReplacement: battle.pendingReplacement ? {...battle.pendingReplacement} : { A: null, B: null },
@@ -3401,8 +3502,8 @@ function restoreSnapshot(snap){
       p.moves = b.moves.slice(); p.item = b.item; p.ability = b.ability; p.abilityUsed = b.abilityUsed; p.evs = JSON.parse(JSON.stringify(b.evs || {})); });
   }
   refreshBattlePrepared();
-  battle.sides.A = { roster: [...snap.sides.A.roster], hp: {...snap.sides.A.hp}, activePokeIdx: snap.sides.A.activePokeIdx, recharge: snap.sides.A.recharge, currentEntryTurn: snap.sides.A.currentEntryTurn || 0, flinched: snap.sides.A.flinched || false, pp: JSON.parse(JSON.stringify(snap.sides.A.pp || {})), stages: {...(snap.sides.A.stages||{Atk:0,Def:0,SpA:0,SpD:0,Spe:0,Acc:0,Eva:0})}, protected: snap.sides.A.protected||false, lastProtectTurn: snap.sides.A.lastProtectTurn!==undefined?snap.sides.A.lastProtectTurn:-10, lastProtectAcc: snap.sides.A.lastProtectAcc||101 };
-  battle.sides.B = { roster: [...snap.sides.B.roster], hp: {...snap.sides.B.hp}, activePokeIdx: snap.sides.B.activePokeIdx, recharge: snap.sides.B.recharge, currentEntryTurn: snap.sides.B.currentEntryTurn || 0, flinched: snap.sides.B.flinched || false, pp: JSON.parse(JSON.stringify(snap.sides.B.pp || {})), stages: {...(snap.sides.B.stages||{Atk:0,Def:0,SpA:0,SpD:0,Spe:0,Acc:0,Eva:0})}, protected: snap.sides.B.protected||false, lastProtectTurn: snap.sides.B.lastProtectTurn!==undefined?snap.sides.B.lastProtectTurn:-10, lastProtectAcc: snap.sides.B.lastProtectAcc||101 };
+  battle.sides.A = { roster: [...snap.sides.A.roster], hp: {...snap.sides.A.hp}, activePokeIdx: snap.sides.A.activePokeIdx, recharge: snap.sides.A.recharge, currentEntryTurn: snap.sides.A.currentEntryTurn || 0, flinched: snap.sides.A.flinched || false, pp: JSON.parse(JSON.stringify(snap.sides.A.pp || {})), stages: {...(snap.sides.A.stages||{Atk:0,Def:0,SpA:0,SpD:0,Spe:0,Acc:0,Eva:0})}, protected: snap.sides.A.protected||false, lastProtectTurn: snap.sides.A.lastProtectTurn!==undefined?snap.sides.A.lastProtectTurn:-10, lastProtectAcc: snap.sides.A.lastProtectAcc||101, lastProtectStreak: snap.sides.A.lastProtectStreak||0, sideProt: snap.sides.A.sideProt||null, endure: !!snap.sides.A.endure };
+  battle.sides.B = { roster: [...snap.sides.B.roster], hp: {...snap.sides.B.hp}, activePokeIdx: snap.sides.B.activePokeIdx, recharge: snap.sides.B.recharge, currentEntryTurn: snap.sides.B.currentEntryTurn || 0, flinched: snap.sides.B.flinched || false, pp: JSON.parse(JSON.stringify(snap.sides.B.pp || {})), stages: {...(snap.sides.B.stages||{Atk:0,Def:0,SpA:0,SpD:0,Spe:0,Acc:0,Eva:0})}, protected: snap.sides.B.protected||false, lastProtectTurn: snap.sides.B.lastProtectTurn!==undefined?snap.sides.B.lastProtectTurn:-10, lastProtectAcc: snap.sides.B.lastProtectAcc||101, lastProtectStreak: snap.sides.B.lastProtectStreak||0, sideProt: snap.sides.B.sideProt||null, endure: !!snap.sides.B.endure };
   if (snap.sides.A.statusData) restoreSideStatus(battle.sides.A, snap.sides.A.statusData);
   if (snap.sides.B.statusData) restoreSideStatus(battle.sides.B, snap.sides.B.statusData);
   battle.awaitingReplacement = snap.awaitingReplacement ? {...snap.awaitingReplacement} : null;
@@ -3861,6 +3962,8 @@ function runTurn(ctx, startIdx){
   battle.sides.B.flinched = false;
   battle.sides.A.protected = false;
   battle.sides.B.protected = false;
+  battle.sides.A.sideProt = null; battle.sides.B.sideProt = null;
+  battle.sides.A.endure = false; battle.sides.B.endure = false;
 
   applyEndOfTurnStatusDamage(turnLog);
   applyEndOfTurnCurse(turnLog);
@@ -4434,10 +4537,19 @@ const LF = {
   moveFail: (n, mv, reason) => `<b>${n}</b> usou <b>${mv}</b>, mas falhou!${reason ? ' (' + reason + ')' : ''}`,
   nop: (n, mv, reason) => `<b>${n}</b> tentou usar <b>${mv}</b>, mas ${reason}!`,
   miss: a => `<b>${a.attackerName}</b> usou <b>${a.moveName}</b>, mas ${a.semiDodge ? a.semiDodge + ' está invulnerável' : 'errou'}!${a.selfKO ? ' ' + a.attackerName + ' se autodestruiu!' : ''}`,
-  blocked: a => `<b>${a.attackerName}</b> usou <b>${a.moveName}</b>, mas <b>${a.defenderName}</b> se protegeu!${a.selfKO ? ` ${a.attackerName} se autodestruiu!` : ''}`,
+  blocked: a => {
+    const side = a.by && PROTECT_SIDE_FLAG[a.by];
+    const base = side
+      ? `<b>${a.attackerName}</b> usou <b>${a.moveName}</b>, mas <b>${a.defenderName}</b> foi protegido por <b>${protectName(a.by)}</b>!`
+      : `<b>${a.attackerName}</b> usou <b>${a.moveName}</b>, mas <b>${a.defenderName}</b> se protegeu!`;
+    return base + (a.note || '') + (a.selfKO ? ` ${a.attackerName} se autodestruiu!` : (a.attackerFainted && !(a.note || '').includes('nocauteado') ? ` <b>${a.attackerName}</b> foi nocauteado!` : ''));
+  },
   sub: (n, mv, cost, hp) => `<b>${n}</b> usou <b>${mv}</b>! Criou um substituto (−${cost} HP, substituto com ${hp} HP).`,
   pivot: (n, mv) => `<b>${n}</b> usou <b>${mv}</b>!`,
-  protect: (n, mv) => `<b>${n}</b> usou <b>${mv || 'Protect'}</b>! Está protegido.`,
+  protect: (n, mv) => {
+    const T = { 'wide guard': 'O time está protegido de golpes em área.', 'quick guard': 'O time está protegido de golpes de prioridade.', 'crafty shield': 'O time está protegido de golpes de status.', 'mat block': 'O time está protegido de golpes de dano.', 'endure': 'Vai resistir a qualquer golpe com 1 HP.' };
+    return `<b>${n}</b> usou <b>${mv || 'Protect'}</b>! ${T[normKey(mv || 'protect')] || 'Está protegido.'}`;
+  },
   protectFail: (n, mv) => `<b>${n}</b> usou <b>${mv || 'Protect'}</b>, mas falhou!`,
   boost: (n, mv, txt) => `<b>${n}</b> usou <b>${mv}</b>! (${txt})`,
   curse: a => `<b>${a.attackerName}</b> usou <b>${a.moveName}</b>! Cortou ${a.cost} do próprio HP (${a.hpAfter}/${a.hpMax}) e amaldiçoou <b>${a.defenderName}</b>!${a.fainted ? ' <b>' + a.attackerName + '</b> desmaiou!' : ''}`,
@@ -4472,7 +4584,7 @@ function fmtDamageHtml(a, opt){
       const rechargeTag = a.causesRecharge ? ' 🔋' : '';
       const critStr = (!_multi && a.isCrit) ? ' CRIT!' : '';
       const multiStr = _multi ? ` <span style="color:var(--amber);">(${a.hits.length} hits: ${a.hits.map(h => (battleShowDamageAsPercent ? (a.defenderMax > 0 ? Math.round(h.damage / a.defenderMax * 100) + '%' : '0%') : h.damage) + (h.isCrit ? ' CRIT' : '') + (battleShowRolls ? ' R' + (h.rollIdx + 1) : '')).join(' + ')})</span>` : '';
-      const focusSashStr = a.focusSashConsumed ? ` ${a.defenderName} sobreviveu com Focus Sash!` : '';
+      const focusSashStr = (a.focusSashConsumed ? ` ${a.defenderName} sobreviveu com Focus Sash!` : '') + (a.endureHeld ? ` ${a.defenderName} resistiu com Endure!` : '');
       const thawStr = a.thawedDefender ? ` ${a.defenderName} descongelou!` : '';
       let recoilStr = '';
       if(a.recoil && a.recoil > 0){
@@ -5487,6 +5599,59 @@ function showMoveDetail(side, moveKey){
   ov.addEventListener('click', () => ov.remove());
   document.body.appendChild(ov);
 }
+// Descrições dos golpes de status (mostradas ao segurar o golpe). Golpes sem descrição aqui usam o texto da planilha / os stages.
+const STATUS_MOVE_DESC = {
+  'protect': 'Protege o usuário de todos os golpes neste turno. Prioridade +4. Usar em turnos seguidos: chance de sucesso ÷3 a cada uso.',
+  'detect': 'Protege o usuário de todos os golpes neste turno. Prioridade +4. Usar em turnos seguidos: chance de sucesso ÷3 a cada uso.',
+  'baneful bunker': 'Protege de todos os golpes (+4). Golpes de contato envenenam o atacante.',
+  'baneful banker': 'Protege de todos os golpes (+4). Golpes de contato envenenam o atacante.',
+  'burning bulwark': 'Protege de golpes físicos e especiais (+4). Golpes de contato queimam o atacante.',
+  "king's shield": "Protege de golpes físicos e especiais (+4). Golpes de contato baixam o Atk do atacante em 1 estágio.",
+  'obstruct': 'Protege de golpes físicos e especiais (+4). Golpes de contato baixam a Def do atacante em 2 estágios.',
+  'silk trap': 'Protege de golpes físicos e especiais (+4). Golpes de contato baixam a Spe do atacante em 1 estágio.',
+  'spiky shield': 'Protege de todos os golpes (+4). Golpes de contato tiram 1/8 do HP máximo do atacante.',
+  'crafty shield': 'Protege o usuário e o aliado de golpes de status dos oponentes (+3). Não protege de golpes que afetam o próprio usuário, o time ou o campo.',
+  'mat block': 'Protege o usuário e o aliado de golpes de dano (prioridade 0). Só funciona no primeiro turno em campo.',
+  'quick guard': 'Protege o usuário e o aliado de golpes de prioridade (+3).',
+  'wide guard': 'Protege o usuário e o aliado de golpes em área (+3).',
+  'endure': 'O usuário sobrevive a qualquer golpe com 1 HP neste turno (+4). Compartilha a chance de falha da proteção.',
+  'helping hand': 'Aumenta o poder do golpe do aliado em ×1,5 neste turno.',
+  'follow me': 'Atrai os golpes de um só alvo dos oponentes para o usuário neste turno.',
+  'rage powder': 'Atrai os golpes de um só alvo dos oponentes para o usuário neste turno.',
+  'trick room': 'Inverte a ordem de velocidade por 5 turnos. Usar de novo desfaz o efeito.',
+  'tailwind': 'Dobra a Speed do time por 4 turnos.',
+  'substitute': 'Gasta 1/4 do HP máximo para criar um substituto que absorve dano.',
+  'shed tail': 'Gasta 1/2 do HP máximo, cria um substituto e troca de Pokémon passando-o ao próximo.',
+  'baton pass': 'Troca de Pokémon passando os stages e o substituto ao próximo.',
+};
+function statusMoveDescription(m){
+  if(!m) return '';
+  const k = normKey(m.Name || '');
+  if(STATUS_MOVE_DESC[k]) return STATUS_MOVE_DESC[k];
+  const plan = statusMovePlan(m);
+  if(plan){
+    const f = l => l.map(([st, d]) => `${st} ${d > 0 ? '+' : '−'}${Math.abs(d)}`).join(', ');
+    const parts = [];
+    if(plan.self.length) parts.push(`Usuário: ${f(plan.self)}`);
+    if(plan.team.length) parts.push(`Usuário e aliado: ${f(plan.team)}`);
+    if(plan.target.length) parts.push(`Alvo: ${f(plan.target)}`);
+    if(parts.length) return parts.join(' · ');
+  }
+  return (m.Effect || '').trim();
+}
+function showStatusMoveDetail(name){
+  const m = dStatusMove(name); if(!m) return;
+  const acc = m.Accuracy ?? 101, desc = statusMoveDescription(m);
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.innerHTML = `<div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;max-width:380px;width:100%;font-family:var(--font-mono);font-size:12px;color:var(--text-dim);line-height:1.75;max-height:85vh;overflow:auto;">
+    <div style="font-family:var(--font-display);font-size:16px;font-weight:700;color:var(--text);margin-bottom:2px;">${m.Name}</div>
+    <div style="margin-bottom:${desc ? 8 : 0}px;">Status${m.Type ? ' · ' + m.Type : ''} · Acc ${acc >= 101 ? '—' : acc}</div>
+    ${desc ? `<div style="color:var(--text);">${desc}</div>` : ''}
+    <div style="margin-top:10px;text-align:center;opacity:.6;">toque para fechar</div></div>`;
+  ov.addEventListener('click', () => ov.remove());
+  document.body.appendChild(ov);
+}
 function showBenchInfo(idx){
   const p = battle.sharedPrepared[idx]; if(!p) return;
   const S = battle.sides.A.roster.includes(idx) ? battle.sides.A : battle.sides.B;
@@ -5754,9 +5919,11 @@ function renderBattleInner(){
     });
     ['A','B'].forEach((k, i) => { const r = document.getElementById('dblRow' + k); if(r) r.scrollLeft = _scr[i]; });
     if(dblPresScrollReq){
-      const q = dblPresScrollReq; dblPresScrollReq = null;
-      const row = document.getElementById('dblRow' + q.sd), el = row && row.querySelector(`.dbl-slot[data-dbl-slot="${q.slot}"]`);
-      if(row && el && row.scrollWidth > row.clientWidth + 2){ const x = el.offsetLeft - row.firstElementChild.offsetLeft; if(Math.abs(row.scrollLeft - x) > 2) setTimeout(() => row.scrollTo({ left: x, behavior: 'smooth' }), 30); }
+      const qs = dblPresScrollReq; dblPresScrollReq = null;
+      qs.forEach(q => {
+        const row = document.getElementById('dblRow' + q.sd), el = row && row.querySelector(`.dbl-slot[data-dbl-slot="${q.slot}"]`);
+        if(row && el && row.scrollWidth > row.clientWidth + 2){ const x = el.offsetLeft - row.firstElementChild.offsetLeft; if(Math.abs(row.scrollLeft - x) > 2) setTimeout(() => row.scrollTo({ left: x, behavior: 'smooth' }), 30); }
+      });
     }
     if(dblScrollReq && !presActive()){
       const q = dblScrollReq; dblScrollReq = null;
@@ -5797,6 +5964,14 @@ function renderBattleInner(){
     let t = null, fired = false;
     const sd = btn.dataset.side || btn.dataset.cpuSide, key = btn.dataset.actionValue || btn.dataset.cpuMove;
     btn.addEventListener('pointerdown', () => { fired = false; t = setTimeout(() => { fired = true; dWithSlot(sd, btn.dataset.slot, () => showMoveDetail(sd, key)); }, 500); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => btn.addEventListener(ev, () => clearTimeout(t)));
+    btn.addEventListener('click', e => { if(fired){ e.stopImmediatePropagation(); e.preventDefault(); fired = false; } }, true);
+    btn.addEventListener('contextmenu', e => e.preventDefault());
+  });
+  document.querySelectorAll('.battle-action-btn[data-action-type="status-move"], [data-cpu-status]').forEach(btn => {
+    let t = null, fired = false;
+    const name = btn.dataset.actionValue || btn.dataset.cpuStatus;
+    btn.addEventListener('pointerdown', () => { fired = false; t = setTimeout(() => { fired = true; showStatusMoveDetail(name); }, 500); });
     ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => btn.addEventListener(ev, () => clearTimeout(t)));
     btn.addEventListener('click', e => { if(fired){ e.stopImmediatePropagation(); e.preventDefault(); fired = false; } }, true);
     btn.addEventListener('contextmenu', e => e.preventDefault());
@@ -7243,8 +7418,9 @@ function dStatusMove(name){ const k = normKey(name); return STATUS_MOVES[k] || H
 function dLog(html, head){
   if(!battle._tl){ battle._tl = dNewTL(battle.turn); battle.log.push(battle._tl); }
   battle._tl.lines.push(html); battle._tl.heads.push(head || null); battle._tl.snaps.push(dViewSnap()); battle._dpend = battle._tl;
+  (battle._tl.atts || (battle._tl.atts = [])).length = battle._tl.lines.length - 1; battle._tl.atts.push(battle._curAtt ? { sd: battle._curAtt.sd, slot: battle._curAtt.slot } : null);   // quem está agindo nesta linha (para deslizar o card no celular)
 }
-function dNewTL(turn){ return { turn, lines: [], heads: [], snaps: [], actions: [], hp0: dViewSnap() }; }
+function dNewTL(turn){ return { turn, lines: [], heads: [], snaps: [], atts: [], actions: [], hp0: dViewSnap() }; }
 function dViewSnap(){
   const o = {};
   ['A','B'].forEach(sd => {
@@ -7305,9 +7481,13 @@ function dPresStep(token){
     const changed = JSON.stringify(nv) !== JSON.stringify(p.view);
     const d = dHpDelta(p.view, nv);
     // Celular: o card desliza sozinho até o Pokémon que está recebendo o dano (só quando UM Pokémon em campo perde HP).
+    // Também desliza até o Pokémon que está USANDO o golpe (atacante). Se atacante e alvo estão na mesma fileira (golpe no aliado), vale o alvo.
     { const hit = [];
       ['A','B'].forEach(k => (nv[k].a || []).forEach((i, slot) => { if(i == null) return; const x = p.view[k].hp[i], y = nv[k].hp[i]; if(x !== undefined && y !== undefined && y < x) hit.push({ sd: k, slot }); }));
-      if(hit.length === 1) dblPresScrollReq = hit[0]; }
+      const att = (tl.atts && tl.atts[p.shown]) || null, reqs = [];
+      if(att) reqs.push(att);
+      if(hit.length === 1) reqs.push(hit[0]);
+      if(reqs.length) dblPresScrollReq = reqs; }
     p.view = nv; p.phase = 'text';
     if(changed){ renderBattle(); delay = d > 0 ? hpAnimDur(d) + 300 : 250; }
   } else { p.shown++; p.phase = 'hp'; renderBattle(); delay = 700; }
@@ -7390,7 +7570,7 @@ function dNewSide(valid, shared, active){
   const S = { roster: valid.slice(), hp: {}, pp: {}, status: {}, sleepCounter: {}, frozenCounter: {}, toxicCounter: {},
     active, activePokeIdx: active[0], stages: dEmptyStg(), stg: {}, itemUsed: {}, faintCount: 0, prevAlive: {}, currentEntryTurn: 0,
     revealed: {}, subs: {}, flinch: {}, rech: {}, semis: {}, prot: {}, lastProtectTurn: {}, lastProtectAcc: {}, lastMove: {}, entry: {}, ff: {}, hh: {}, rageN: {},
-    wide: false, recharge: false, flinched: false, semi: null, sub: 0, protected: false };
+    wide: false, quick: false, crafty: false, mat: false, protStreak: {}, endure: {}, recharge: false, flinched: false, semi: null, sub: 0, protected: false };
   for(const idx of valid){
     S.hp[idx] = shared[idx].hpMax; S.pp[idx] = {};
     for(const m of shared[idx].moveResults){ const k = baseMoveNameFromKey(m.moveKey); if(k in S.pp[idx]) continue; const info = findMoveInfo(k); S.pp[idx][k] = info ? (info.PP ?? 20) : 20; }
@@ -7451,7 +7631,7 @@ function dEnter(sd, slot, idx, afterFaint, initial){
   if(S.active[slot] != null) setCursed(S, S.active[slot], false);
   setCursed(S, idx, false);
   S.active[slot] = idx; dSyncActive(sd);
-  S.stg[idx] = dEmptyStg(); S.prot[idx] = false; S.flinch[idx] = false; S.rech[idx] = false; S.semis[idx] = null; S.subs[idx] = 0;
+  S.stg[idx] = dEmptyStg(); S.prot[idx] = false; if(S.protStreak) S.protStreak[idx] = 0; if(S.endure) S.endure[idx] = false; S.flinch[idx] = false; S.rech[idx] = false; S.semis[idx] = null; S.subs[idx] = 0;
   S.lastMove[idx] = null; S.toxicCounter[idx] = 0; S.lastProtectTurn[idx] = -10; S.lastProtectAcc[idx] = 101; S.ff[idx] = false; S.hh[idx] = false; S.rageN[idx] = 0;
   S.entry[idx] = initial ? 0 : battle.turn; S.currentEntryTurn = S.entry[idx];
   const p = dP(idx);
@@ -7586,7 +7766,9 @@ function dExec(a, order){
     if(S.frozenCounter[idx] >= 3 || battleRandom() < 0.25 || thawMove){ S.status[idx] = 'Healthy'; S.frozenCounter[idx] = 0; dLog(LF.thaw(dP(idx).name)); }
     else { dLog(LF.stillFrozen(dP(idx).name)); S.semis[idx] = null; _sp(); return null; }
   } else if(st === 'Paralyzed' && battleRandom() < 0.25){ dLog(LF.paraSkip(dP(idx).name)); S.semis[idx] = null; _sp(); return null; }
-  return a.type === 'status-move' ? dStatusAct(a) : dMoveAct(a, order);
+  battle._curAtt = { sd, slot: a.slot };
+  try { return a.type === 'status-move' ? dStatusAct(a) : dMoveAct(a, order); }
+  finally { battle._curAtt = null; }
 }
 
 /* ---------- golpes de dano ---------- */
@@ -7719,8 +7901,24 @@ function dHit(a, tSd, tIdx, o){
   const mv = (o.spread && att.sprMap && att.sprMap[m.moveKey]) ? att.sprMap[m.moveKey] : m;
   const nm = dNm(sd, idx), dn = dNm(tSd, tIdx), res = { dealt: 0, hit: false };
   const sp = !!o.spread, flushHead = () => { if(o.headTxt && !o.headDone) dLog(o.headTxt); o.headDone = true; };
-  if(T.prot[tIdx] && tSd !== sd && mk !== 'phantom force' && mk !== 'shadow force'){ dLog(sp ? `↳ <b>${def.name}</b> se protegeu!` : LF.blocked({ attackerName: att.name, moveName: m.moveName, defenderName: def.name })); o.headDone = true; return res; }
-  if(o.spread && T.wide && tSd !== sd){ dLog(`Wide Guard protegeu ${dn}!`); return res; }
+  { const _pv = protectionVerdict(mk, { status: false, spread: dMoveKind(m, false) === 'spread', priority: getMovePriority(m.moveKey), contact: !!(info && info.Contact) }, { prot: T.prot[tIdx] || null, wide: T.wide, quick: T.quick, crafty: false, mat: T.mat });
+    if(_pv.blocked){
+      let note = '', fnt = false;
+      if(_pv.contact && S.hp[idx] > 0){
+        note = applyProtectContact(_pv.contact, {
+          name: att.name, hpMax: att.hpMax, ability: att.ability, t1: att.type1, t2: att.type2,
+          hp: () => S.hp[idx], setHp: v => { S.hp[idx] = v; },
+          status: () => getStatusOf(sd, idx), setStatus: st => { S.status[idx] = st; S.toxicCounter[idx] = 0; },
+          stage: (stat, d) => dWith(sd, idx, () => fmtStageChange(changeStage(sd, stat, d)))
+        });
+        fnt = S.hp[idx] <= 0;
+      }
+      const side = PROTECT_SIDE_FLAG[_pv.by];
+      dLog(sp ? (side ? `↳ <b>${protectName(_pv.by)}</b> protegeu <b>${def.name}</b>!${note}` : `↳ <b>${def.name}</b> se protegeu!${note}`) : LF.blocked({ attackerName: att.name, moveName: m.moveName, defenderName: def.name, by: _pv.by, note, attackerFainted: fnt }));
+      o.headDone = true; return res;
+    }
+    if(_pv.lift){ T.prot[tIdx] = false; T.wide = false; T.quick = false; T.mat = false; dLog(`A proteção de <b>${def.name}</b> foi quebrada por <b>${m.moveName}</b>!`); }
+  }
   const noGuard = normKey(att.ability || '') === 'no guard' || normKey(def.ability || '') === 'no guard';
   const dsemi = T.semis[tIdx];
   if(dsemi && dsemi.kind !== 'charge' && !noGuard && !SEMI_HITTERS[dsemi.kind].has(mk)){ dLog(sp ? `↳ <b>${def.name}</b> está invulnerável!` : LF.miss({ attackerName: att.name, moveName: m.moveName, semiDodge: def.name })); o.headDone = true; return res; }
@@ -7757,7 +7955,7 @@ function dHit(a, tSd, tIdx, o){
   const nHits = battleMultiHitCount(mk, declared, tripleBP, skillLink);
   const perHitAcc = battleMultiHitPerHitAcc(mk, tripleBP);
   const hpBefore = T.hp[tIdx], atkStatus = getStatusOf(sd, idx);
-  let subAbs = 0, hpDone = 0, totalDmg = 0, lastRes = null, sash = false, crit = false, lastRoll = 1, hitsDone = 0, missAt = 0;
+  let subAbs = 0, hpDone = 0, totalDmg = 0, lastRes = null, sash = false, endured = false, crit = false, lastRoll = 1, hitsDone = 0, missAt = 0;
   const hitRecs = [];
   for(let h = 0; h < nHits; h++){
     // Triple Axel/Kick e Population Bomb: precisão antes de cada hit (Skill Link: só a inicial).
@@ -7773,6 +7971,7 @@ function dHit(a, tSd, tIdx, o){
     else {
       const pre = T.hp[tIdx]; let nh = pre - r.damage;
       if(nh <= 0 && hasSash && !sash && pre === def.hpMax && pre === hpBefore){ nh = 1; sash = true; }
+      else if(nh <= 0 && T.endure && T.endure[tIdx]){ nh = 1; endured = true; }
       nh = Math.max(0, nh); hpDone += pre - nh; T.hp[tIdx] = nh;
     }
     totalDmg += r.damage;
@@ -7791,7 +7990,7 @@ function dHit(a, tSd, tIdx, o){
   const eff = lastRes.typeEff;
   const _rec = { attackerName: att.name, defenderName: def.name, moveName: m.moveName, defenderMax: def.hpMax, damage: dealt, typeEff: eff,
     rollIdx: hitRecs[hitRecs.length - 1].rollIdx, isCrit: crit, defenderAfter: T.hp[tIdx], subHit: subbed, subAbsorbed: subAbs,
-    subBroken: (T.subs[tIdx] || 0) <= 0, subRemain: T.subs[tIdx] || 0, fainted: T.hp[tIdx] <= 0 && !subbed, focusSashConsumed: sash,
+    subBroken: (T.subs[tIdx] || 0) <= 0, subRemain: T.subs[tIdx] || 0, fainted: T.hp[tIdx] <= 0 && !subbed, focusSashConsumed: sash, endureHeld: endured,
     hitNote: (!sp && !o.headDone) ? (o.noteTxt || '') : '' };
   if(nHits > 1 || tripleBP){ _rec.hits = hitRecs.map(h => ({ damage: h.damage, isCrit: h.isCrit, rollIdx: h.rollIdx })); _rec.multiStrike = true; _rec.missAt = missAt; }
   { const _fo = { nohead: sp || !!o.headDone }; dLog(fmtDamageHtml(_rec, _fo), fmtDamageHtml(Object.assign({}, _rec, { _headOnly: true, _hitsShown: 0 }), _fo)); } o.headDone = true;   // MESMO formatador do Singles
@@ -7857,14 +8056,22 @@ function dStatusAct(a){
     return null;
   }
   if(mk === 'tidy up'){ ['A','B'].forEach(x => dS(x).active.forEach(i => { if(i != null) dS(x).subs[i] = 0; })); dWith(sd, idx, () => dLog(LF.boost(att.name, m.Name, applyStageList(sd, [['Atk',1],['Spe',1]]) + '; substitutos removidos'))); return null; }
-  if(mk === 'protect' || mk === 'detect' || mk === 'wide guard'){
-    let acc = 101;
-    if(mk !== 'wide guard' && S.lastProtectTurn[idx] === battle.turn - 1) acc = Math.max(0, (S.lastProtectAcc[idx] ?? 101) / 3);
-    if(acc < 101 && battleRandom() * 100 >= acc){ S.lastProtectTurn[idx] = battle.turn; S.lastProtectAcc[idx] = acc; return fail('Protect consecutivo'); }
-    if(mk !== 'wide guard'){ S.lastProtectTurn[idx] = battle.turn; S.lastProtectAcc[idx] = acc; S.prot[idx] = true; dLog(LF.protect(att.name, m.Name)); }
-    else { S.wide = true; dLog(`${H}! Protege o time de golpes em área.`); }
-    return null;
-  }
+  { const pk = protectKind(mk);
+    if(pk){
+      if(mk === 'mat block' && battle.turn !== (S.entry[idx] || 0) + 1) return fail('não é o primeiro turno em campo');
+      let streak = 0;
+      if(pk !== 'none'){
+        if(!S.protStreak) S.protStreak = {};
+        const at = protectAttempt(pk, { turn: S.lastProtectTurn[idx], streak: S.protStreak[idx] }, battle.turn);
+        streak = at.streak;
+        if(at.pct < 101 && battleRandom() * 100 >= at.pct){ S.lastProtectTurn[idx] = -10; S.protStreak[idx] = 0; dLog(LF.protectFail(att.name, m.Name)); return null; }   // falhou: a sequência recomeça
+        S.lastProtectTurn[idx] = battle.turn; S.protStreak[idx] = streak + 1;
+      }
+      if(PROTECT_MOVES[mk]) S.prot[idx] = mk;
+      else if(mk === 'endure'){ if(!S.endure) S.endure = {}; S.endure[idx] = true; }
+      else S[PROTECT_SIDE_FLAG[mk]] = true;
+      dLog(LF.protect(att.name, m.Name)); return null;
+    } }
   {
     const plan = statusMovePlan(m);
     if(plan){
@@ -7878,7 +8085,8 @@ function dStatusAct(a){
         if(t.sd === o){ const rd = battle.redir && battle.redir[o]; if(rd != null && dAlive(o, rd)) tIdx = rd; }
         tg = { sd: t.sd, idx: tIdx };
         const T = dS(tg.sd), tp = dP(tg.idx);
-        if(T.prot[tg.idx]){ dLog(LF.blocked({ attackerName: att.name, moveName: m.Name, defenderName: tp.name })); return null; }
+        { const spv = protectionVerdict(mk, { status: true, foeStatus: tg.sd !== sd, priority: getMovePriority(m.Name), spread: false, contact: false }, { prot: T.prot[tg.idx] || null, wide: T.wide, quick: T.quick, crafty: T.crafty, mat: T.mat });
+          if(spv.blocked){ dLog(LF.blocked({ attackerName: att.name, moveName: m.Name, defenderName: tp.name, by: spv.by })); return null; } }
         const tsm = T.semis[tg.idx];
         if(tsm && tsm.kind !== 'charge' && normKey(att.ability || '') !== 'no guard' && normKey(tp.ability || '') !== 'no guard'){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name, semiDodge: tp.name })); return null; }
         if((T.subs[tg.idx] || 0) > 0 && tg.sd !== sd && !SOUND_STAT_MOVES.has(mk)) return fail('o substituto de ' + tp.name + ' bloqueou');
@@ -7932,7 +8140,7 @@ function dPivotPick(to){
 
 /* ---------- fim do turno ---------- */
 function dEndTurn(){
-  ['A','B'].forEach(sd => { const S = dS(sd); S.wide = false; S.active.forEach(i => { if(i != null){ S.prot[i] = false; S.flinch[i] = false; S.hh[i] = false; } }); });
+  ['A','B'].forEach(sd => { const S = dS(sd); S.wide = false; S.quick = false; S.crafty = false; S.mat = false; S.active.forEach(i => { if(i != null){ S.prot[i] = false; if(S.endure) S.endure[i] = false; S.flinch[i] = false; S.hh[i] = false; } }); });
   battle.redir = { A: null, B: null };
   // dano de status e habilidades
   ['A','B'].forEach(sd => dActives(sd).forEach(({ idx }) => {
@@ -8102,7 +8310,7 @@ function dCpuChoose(sd, slot){
     if(!hasPP(sm.Name)) continue;
     const k = normKey(sm.Name), first = battle.turn === (S.entry[idx] || 0) + 1;
     let sc = 0;
-    if(k === 'protect' || k === 'detect'){ if(S.lastProtectTurn[idx] !== battle.turn - 1) sc = threat > 0.55 ? 0.5 : 0.08; }
+    if(PROTECT_MOVES[k]){ if(S.lastProtectTurn[idx] !== battle.turn - 1) sc = threat > 0.55 ? 0.5 : 0.08; }
     else if(k === 'wide guard'){ const sp = foes.some(f => (dP(f.idx).moveResults || []).some(fm => fm.detail && fm.detail.isSpreadCapable)); sc = sp && !S.wide ? 0.3 : 0; }
     else if(k === 'helping hand'){ sc = ally.length ? 0.3 : 0; if(sc) cand(sc, { type: 'status-move', key: sm.Name, tgt: { sd, slot: ally[0].slot } }); continue; }
     else if(k === 'follow me' || k === 'rage powder'){ sc = ally.length && first ? 0.38 : (ally.length ? 0.15 : 0); }
