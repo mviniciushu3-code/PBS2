@@ -418,6 +418,11 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   .battle-status-row{ display:flex; justify-content:center; align-items:center; gap:6px; margin:6px 0; font-family:var(--font-mono); font-size:11px; }
   .battle-status-row label{ color:var(--text-dim); text-transform:uppercase; font-size:10px; }
   .battle-status-row select{ background:var(--panel); border:1px solid var(--line); color:var(--text); font-family:var(--font-mono); font-size:11px; padding:3px 6px; border-radius:4px; }
+  .battle-status-row select:disabled{ opacity:1; cursor:default; color:var(--text); }
+  .battle-gear-panel{ width:100%; display:flex; flex-direction:column; gap:8px; margin-top:6px; }
+  .battle-gear-group{ border:1px solid var(--line); border-radius:8px; padding:8px; background:var(--panel); }
+  .battle-gear-title{ font-family:var(--font-mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-dim); margin-bottom:6px; }
+  .battle-gear-btns{ display:flex; gap:6px; flex-wrap:wrap; }
   .battle-status-row .status-badge{ font-family:var(--font-mono); font-size:11px; padding:2px 8px; border-radius:4px; font-weight:600; }
 
   .battle-setup-team{ margin-bottom:12px; }
@@ -493,9 +498,7 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   .battle-dbl-layout.log-right{display:grid;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:auto auto;gap:12px;align-items:start;}
   .battle-dbl-layout.log-right>.dbl-cpu{grid-column:1;grid-row:1;}
   .battle-dbl-layout.log-right>.dbl-me{grid-column:1;grid-row:2;}
-  .battle-dbl-layout.log-right>.dbl-log{grid-column:2;grid-row:1 / span 2;position:sticky;top:8px;}
-  .battle-dbl-layout.log-right .battle-log-scroll,
-  .battle-dbl-layout.log-right .battle-log-scroll.compact{max-height:calc(100vh - 220px);min-height:360px;}
+  .battle-dbl-layout.log-right>.dbl-log{grid-column:2;grid-row:1 / span 2;}
   /* SLOTS: nos cards de cima (CPU/outro player) o slot 1 fica à DIREITA e o slot 2 à ESQUERDA */
   .dbl-cpu .dbl-slot[data-dbl-slot="0"]{order:2;}
   .dbl-cpu .dbl-slot[data-dbl-slot="1"]{order:1;}
@@ -506,9 +509,7 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   .battle-dbl-layout.is-singles.log-right{display:grid;grid-template-columns:minmax(0,520px) 340px;grid-template-rows:auto auto;gap:12px;align-items:start;justify-content:center;}
   .battle-dbl-layout.is-singles.log-right>.dbl-cpu{grid-column:1;grid-row:1;}
   .battle-dbl-layout.is-singles.log-right>.dbl-me{grid-column:1;grid-row:2;}
-  .battle-dbl-layout.is-singles.log-right>.dbl-log{grid-column:2;grid-row:1 / span 2;position:sticky;top:8px;}
-  .battle-dbl-layout.is-singles.log-right .battle-log-scroll,
-  .battle-dbl-layout.is-singles.log-right .battle-log-scroll.compact{max-height:calc(100vh - 220px);min-height:360px;}
+  .battle-dbl-layout.is-singles.log-right>.dbl-log{grid-column:2;grid-row:1 / span 2;}
   .battle-dbl-layout.is-singles.log-mid{align-items:center;}
   .battle-dbl-layout.is-singles.log-mid>*{width:100%;max-width:520px;}
 }
@@ -521,6 +522,32 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   .battle-action-sub{font-size:11px;}
   button.primary.battle-lutar-inline{width:100%;max-width:340px;margin-top:10px;padding:10px 14px;font-size:14px;}
 }
+/* LOG À DIREITA (desktop): a coluna do log nunca passa do fim do card do Player 1.
+   height:0 + min-height:100% → o log não participa da altura da grade; ocupa exatamente a altura dos cards. */
+@media (min-width:900px){
+  .battle-dbl-layout.is-singles.log-right>.dbl-log{align-self:stretch;height:0;min-height:100%;display:flex;flex-direction:column;}
+  .battle-dbl-layout.is-singles.log-right .battle-log-col{flex:1 1 auto;min-height:0;}
+  .battle-dbl-layout.is-singles.log-right .battle-log-scroll{flex:1 1 auto;min-height:0;max-height:none;}
+  .battle-dbl-layout.is-singles.log-right .battle-log-scroll.compact{flex:0 1 auto;max-height:200px;}
+}
+@media (min-width:1100px){
+  .battle-dbl-layout.log-right>.dbl-log{align-self:stretch;height:0;min-height:100%;display:flex;flex-direction:column;}
+  .battle-dbl-layout.log-right .battle-log-col{flex:1 1 auto;min-height:0;}
+  .battle-dbl-layout.log-right .battle-log-scroll{flex:1 1 auto;min-height:0;max-height:none;}
+  .battle-dbl-layout.log-right .battle-log-scroll.compact{flex:0 1 auto;max-height:200px;}
+  /* LOG NO MEIO (Doubles): os cards mantêm a MESMA largura do modo "log à direita" (não esticam). */
+  .battle-dbl-layout.log-mid:not(.is-singles){align-items:center;}
+  .battle-dbl-layout.log-mid:not(.is-singles)>*{width:100%;max-width:calc(100% - 352px);}
+}
+/* Botão Lutar (e Confirmar / Continuar / Pular) sempre centralizado */
+button.primary.battle-lutar-inline{display:block;margin-left:auto;margin-right:auto;}
+/* Cards de golpes: todos com as MESMAS proporções (player, CPU e Player 2); Acc no canto esquerdo e PP no direito */
+.battle-actions-grid.moves-grid > .battle-action-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;height:84px;padding:6px 8px 16px;overflow:hidden;position:relative;}
+.battle-actions-grid.moves-grid > .battle-action-btn .battle-action-title{width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.battle-actions-grid.moves-grid > .battle-action-btn .btn-foot{position:absolute;left:7px;right:7px;bottom:4px;margin:0;min-height:0;width:auto;}
+.battle-actions-grid.moves-grid > .battle-action-btn .btn-foot > span:first-child{text-align:left;}
+.battle-actions-grid.moves-grid > .battle-action-btn .btn-foot > span:last-child{text-align:right;margin-left:auto;}
+.battle-actions-grid.moves-grid > .battle-action-btn .btn-foot + .battle-action-sub{margin-top:4px !important;}
 </style>
 </head>
 <body>
@@ -654,7 +681,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 31; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 32; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
 const ICON_TRASH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
@@ -893,12 +920,12 @@ function syncArceusBtn(){
   b.style.borderColor = arceusMode ? 'var(--amber)' : ''; b.style.color = arceusMode ? 'var(--amber)' : '';
 }
 let battleSecEffects = true;
-let battleManual = { weather:false, terrain:false, item:false, ability:false, build:false };
+let battleManual = { weather:false, terrain:false, item:false, ability:false, build:false, status:false }; // status manual: desligado por padrão
 let battleCalcView = false;
 let openPreviewRolls = new Set();
 let openHpDamage = new Set();
 let battleUndoReroll = true;
-let battleSwapPD = true;
+let battleSwapPD = false; // false = PD decrescente (PD+ · PD-), padrão; true = PD crescente (PD- · PD+)
 let battleHideMyMoves = false, battleHideCpuMoves = false;
 let lastReplacementClick = null;
 let battleEditMoves = false;
@@ -2050,6 +2077,14 @@ function baseMoveNameFromKey(moveKey){
 function getMovePriority(moveKey){
   return MOVE_PRIORITY_TABLE[normKey(baseMoveNameFromKey(moveKey))] || 0;
 }
+// Armor Tail / Queenly Majesty: protegem TODO o lado aliado de golpes de prioridade (Singles e Doubles).
+// Recebe os Pokémon em campo do lado atingido; retorna o portador da habilidade (ou null).
+const PRIORITY_GUARD_ABILITIES = new Set(['armor tail', 'queenly majesty']);
+function priorityGuardHolder(attacker, moveKey, sideMons){
+  if(getMovePriority(moveKey) <= 0) return null;
+  if(attacker && attackerIgnoresAbility(attacker)) return null;
+  return (sideMons || []).find(p => p && PRIORITY_GUARD_ABILITIES.has(normKey(p.ability || ''))) || null;
+}
 
 function buildStruggleMove(poke, pr){
   const ab = normKey(poke.abilityUsed || '');
@@ -2134,7 +2169,25 @@ function battleMoveAccuracy(moveNameKey, moveInfo){
   if(k === 'blizzard' && battle && battle.weather === 'snow') acc = 101;
   return acc;
 }
-const MULTI_RANDOM_2_5 = new Set(['bullet seed', 'rock blast']); // 2-5 hits aleatórios (uniforme). Demais multistrikes: nº fixo da calculadora.
+// MULTISTRIKE NA BATALHA (Singles e Doubles usam as mesmas funções):
+//  · Fixos: MULTIHIT_FIXO_2 (2 hits) e MULTIHIT_FIXO_3 (Surging Strikes / Triple Dive, 3 hits).
+//  · Variáveis 2-5 (SKILL_LINK_MOVES): 2 = 7/20, 3 = 7/20, 4 = 3/20, 5 = 3/20. Skill Link = sempre 5.
+//  · Dependentes de precisão: Triple Kick / Triple Axel (até 3) e Population Bomb (até 10):
+//    checagem de precisão antes de cada hit; com Skill Link só a checagem inicial.
+const POPULATION_BOMB_KEY = normKey('Population Bomb');
+function rollMultiVariableHits(){
+  const r = Math.floor(battleRandom() * 20);
+  return r < 7 ? 2 : r < 14 ? 3 : r < 17 ? 4 : 5;
+}
+function battleMultiHitCount(mk, declared, tripleBP, skillLink){
+  if(tripleBP) return tripleBP.length;
+  if(mk === POPULATION_BOMB_KEY) return 10;
+  if(MULTIHIT_FIXO_3.has(mk)) return 3;
+  if(MULTIHIT_FIXO_2.has(mk)) return 2;
+  if(SKILL_LINK_MOVES.has(mk)) return skillLink ? 5 : rollMultiVariableHits();
+  return declared > 1 ? declared : 1;
+}
+function battleMultiHitPerHitAcc(mk, tripleBP){ return !!tripleBP || mk === POPULATION_BOMB_KEY; }
 function battleSideOfPrepared(p){
   if(!battle || !battle.sides) return null;
   for(const sd of ['A','B']){ const st = battle.sides[sd]; if(battle.sharedPrepared && battle.sharedPrepared[st.activePokeIdx] === p) return sd; }
@@ -2170,7 +2223,17 @@ function computeBattleDamage(attacker, defender, moveResult, roll, isCrit, atkSt
   const isPhysical = d.isPhysical !== undefined ? d.isPhysical : (d.statName === 'Atk' || d.statName === 'Def');
   let atkVal = moveResult.atkFinal;
   let defVal = isPhysical ? defender.defFinal : defender.spdFinal;
-  if(atkStages){
+  // Foul Play: usa o Atk final do ALVO (com os stages de Atk do alvo); itens/habilidades do usuário (Choice Band etc.) continuam valendo.
+  const _isFoulPlay = FOUL_PLAY_MOVES.has(normKey(baseMoveNameFromKey(moveResult.moveKey || '')));
+  if(_isFoulPlay && defender && defender.atkFinalClean){
+    let fpAtk = defender.atkFinalClean;
+    const fpStage = defStages ? (defStages.Atk || 0) : 0;
+    if(fpStage !== 0) fpAtk = Math.floor(fpAtk * STAGE_MULT[fpStage]);
+    const fpChain = (d.attackChainLabels || []).reduce((a, l) => a * ((l && l.mult) || 1), 1);
+    if(fpChain !== 1) fpAtk = pokeRound(fpAtk * fpChain);
+    atkVal = Math.max(1, fpAtk);
+  }
+  if(atkStages && !_isFoulPlay){
     const atkStageKey = isPhysical ? 'Atk' : 'SpA';
     const stage = atkStages[atkStageKey] || 0;
     if(stage !== 0) atkVal = Math.floor(atkVal * STAGE_MULT[stage]);
@@ -2259,7 +2322,7 @@ function computeBattleDamage(attacker, defender, moveResult, roll, isCrit, atkSt
   if(semiDoubleMult(defender, moveResult) === 2) ap('Alvo semi-invulnerável', 2);
   if(d.zMult && d.zMult !== 1) ap('Z-Move', d.zMult); // Z-Move ainda não existe no jogo, mas já está no algoritmo
   if(!noMulti && d.multiHits > 1){ val *= d.multiHits; steps.push({ label: 'Multi', mult: d.multiHits, result: val }); }
-  const calc = { atkBase: moveResult.atkFinal, atkStage: atkStages ? (atkStages[isPhysical?'Atk':'SpA']||0) : 0, atkVal,
+  const calc = { atkBase: _isFoulPlay ? (defender.atkFinalClean || moveResult.atkFinal) : moveResult.atkFinal, atkStage: _isFoulPlay ? (defStages ? (defStages.Atk || 0) : 0) : (atkStages ? (atkStages[isPhysical?'Atk':'SpA']||0) : 0), atkVal, foulPlay: _isFoulPlay,
     defBase: isPhysical ? defender.defFinal : defender.spdFinal, defStage: defStages ? (defStages[isPhysical?'Def':'SpD']||0) : 0, defVal,
     statName: isPhysical ? 'Atk/Def' : 'SpA/SpD', bpBase: moveResult.bpFinal, bpVal, bpLabels: _bpLabels, atkLabels: d.attackChainLabels || [],
     dmodReal: moveResult.dmodReal, otherMult: otherTotal, otherDetail, otherComps: otherAll.map(c => `${c.nome} ×${c.mult}`),
@@ -2987,9 +3050,8 @@ function executeAction(action, ordered, actionIdx){
     return { side: action.side, type: 'blocked', attackerName: attacker.name, moveName: action.move.moveName, defenderName: defender.name, attackerFainted: _sk, selfKO: _sk };
   }
 
-  if(['armor tail', 'queenly majesty'].includes(normKey(defender.ability||'')) && getMovePriority(action.move.moveKey) > 0){
-    return { side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.moveName, reason: defender.ability + ' de ' + defender.name };
-  }
+  { const _pg = priorityGuardHolder(attacker, action.move.moveKey, [defender]);
+    if(_pg) return { side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.moveName, reason: _pg.ability + ' de ' + _pg.name }; }
 
   const dSemi = getSemi(defSide);
   if(dSemi && dSemi.kind !== 'charge'){
@@ -3082,18 +3144,13 @@ function executeAction(action, ordered, actionIdx){
   const declaredHits = (action.move.detail && action.move.detail.multiHits) || 1;
   const tripleBP = (action.move.detail && action.move.detail.tripleHitsBP) || null;   // Triple Axel / Triple Kick
   const skillLink = normKey(attacker.ability || '') === 'skill link';
-  let nHits = 1;
-  if(tripleBP) nHits = tripleBP.length;
-  else if(declaredHits > 1){
-    if(skillLink) nHits = 5;
-    else if(MULTI_RANDOM_2_5.has(moveNameKey)) nHits = 2 + Math.floor(battleRandom() * 4);
-    else nHits = declaredHits;
-  }
+  const nHits = battleMultiHitCount(moveNameKey, declaredHits, tripleBP, skillLink);
+  const perHitAcc = battleMultiHitPerHitAcc(moveNameKey, tripleBP);
   const hits = [];
   let subAbsorbed = 0, subBroken = false, focusSashConsumed = false, totalDamage = 0, hpDamageDone = 0, lastRes = null, missAt = 0;
   for(let h = 0; h < nHits; h++){
-    // Triple Axel/Kick: cada hit tem checagem de precisão própria (acertar um não garante o próximo). Skill Link garante todos.
-    if(h > 0 && tripleBP && !skillLink && battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ missAt = h + 1; break; }
+    // Triple Axel/Kick e Population Bomb: checagem de precisão antes de cada hit. Skill Link: só a checagem inicial.
+    if(h > 0 && perHitAcc && !skillLink && battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ missAt = h + 1; break; }
     const hitCrit = battleCritEnabled && Math.floor(battleRandom() * 24) < 1;
     const hitRollIdx = Math.floor(battleRandom() * 16);
     const hitBP = tripleBP ? calcBpFinal(tripleBP[h], action.move.detail.bpMods || []) : overrideBP;
@@ -3236,7 +3293,7 @@ function executeAction(action, ordered, actionIdx){
     defenderName: defender.name,
     defenderAfter: s.hp[s.activePokeIdx], defenderMax: defender.hpMax,
     fainted: s.hp[s.activePokeIdx] <= 0,
-    rollIdx, causesRecharge, hits, multiStrike: declaredHits > 1 || !!tripleBP, missAt,
+    rollIdx, causesRecharge, hits, multiStrike: nHits > 1 || !!tripleBP, missAt,
     isCrit, focusSashConsumed, thawedDefender,
     drainHeal, drainApplicable, drainPct, drainHpBefore, drainHpAfter, drainDealt: dealt, attackerMaxHp: attacker.hpMax,
     hitNote, recoil: recoilDmg, recoilBlockedBy, attackerFainted, selfKO, isStruggle: isStruggleMove,
@@ -4958,7 +5015,7 @@ function battleSideCardInner(side){
   const statusColors = {Healthy:'#6FE3B4', Poisoned:'#A855F7', 'Badly Poisoned':'#7C3AED', Burned:'#FF6B5C', Paralyzed:'#FFB454', Asleep:'#9198AA', Frozen:'#60A5FA'};
   const statusVal = currentStatus;
   const statusOptionsHtml = availableStatuses.map(st => `<option value="${st}" ${st===statusVal?'selected':''}>${st}</option>`).join('');
-  const statusHtml = `<div class="battle-status-row"><label>Status</label><select data-status-side="${side}" data-status-idx="${s.activePokeIdx}" style="border-color:${statusColors[statusVal]||'#6FE3B4'}55;">${statusOptionsHtml}</select></div>`;
+  const statusHtml = `<div class="battle-status-row"><label>Status</label><select data-status-side="${side}" data-status-idx="${s.activePokeIdx}" ${battleManual.status ? '' : 'disabled title="Ative ⚙️ → Arceus → Status manual para editar"'} style="border-color:${statusColors[statusVal]||'#6FE3B4'}55;">${statusOptionsHtml}</select></div>`;
 
   const _hk = side + ':' + s.activePokeIdx;
   const _hf = hpAnimPrev[_hk] !== undefined ? hpAnimPrev[_hk] : hp;
@@ -5616,10 +5673,9 @@ function renderBattleInner(){
     <button type="button" class="battle-toolbar-btn" id="battleTypeColorToggle" style="${battleTypeColors?'border-color:var(--mint);color:var(--mint);':''}" title="Colorir os golpes com a cor do tipo (Struggle e golpes sem tipo não têm cor)">🎨 Cores ${battleTypeColors?'ON':'OFF'}</button>
     <button type="button" class="battle-toolbar-btn" id="battleSecToggle" style="${battleSecEffects?'border-color:var(--mint);color:var(--mint);':''}" title="Efeitos secundários dos golpes">Efeitos 2º ${battleSecEffects?'ON':'OFF'}</button>
     <button type="button" class="battle-toolbar-btn" id="battleUndoRerollBtn" style="${battleUndoReroll?'border-color:var(--mint);color:var(--mint);':''}" title="Ao voltar o turno (Undo), gera novos valores aleatórios (rolls, crit, precisão, efeitos)">🎲 Undo novo RNG ${battleUndoReroll?'ON':'OFF'}</button>
-    ${battle.mode === 'pvc' ? `<button type="button" class="battle-toolbar-btn" id="battleHideMyBtn" style="${battleHideMyMoves?'border-color:var(--mint);color:var(--mint);':''}" title="A CPU só considera os meus golpes que ela já viu">🙈 Ocultar meus moves ${battleHideMyMoves?'ON':'OFF'}</button>
-    <button type="button" class="battle-toolbar-btn" id="battleHideCpuBtn" style="${battleHideCpuMoves?'border-color:var(--mint);color:var(--mint);':''}" title="Os golpes da CPU só aparecem depois de usados">🕵️ Ocultar moves da CPU ${battleHideCpuMoves?'ON':'OFF'}</button>` : ''}
     <button type="button" class="battle-toolbar-btn" id="battleGearBtn" style="${battleGearOpen?'border-color:var(--mint);color:var(--mint);':''}" title="Opções avançadas">⚙️</button>
-    ${battleGearOpen ? `<div style="width:100%;display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">${[['weather','Clima manual'],['terrain','Terreno manual'],['item','Item manual'],['ability','Habilidade manual'],['build','Build manual']].map(([k,l]) => `<button type="button" class="battle-toolbar-btn" data-manual="${k}" style="${battleManual[k]?'border-color:var(--mint);color:var(--mint);':''}">${l} ${battleManual[k]?'ON':'OFF'}</button>`).join('')}<button type="button" class="battle-toolbar-btn" id="battleEditMovesBtn" style="${battleEditMoves?'border-color:var(--mint);color:var(--mint);':''}" title="Mostra um ✕ em cada golpe para excluir e um + para adicionar golpes">✏️ Editar moves ${battleEditMoves?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleSwapPDBtn" title="Ordem dos valores de PD nos golpes">PD: ${battleSwapPD ? 'PD- · PD+' : 'PD+ · PD-'}</button>${battle.mode === 'pvc' ? `<button type="button" class="battle-toolbar-btn" id="battleCpuKnowsBtn" style="${!battleSetup.hideMyLead?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: ao escolher o próximo Pokémon, a CPU escolhe DEPOIS de mim e vê a minha escolha. Desligado: ela escolhe sem saber qual será o meu. (Não funciona junto com a opção ao lado.)">🧠 CPU sabe minha escolha ${!battleSetup.hideMyLead?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleIKnowBtn" style="${!battleSetup.hideCpuLead?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: a CPU escolhe ANTES e eu vejo o Pokémon dela antes de escolher o meu. Desligado: ela só entra depois que eu escolher. (Não funciona junto com a opção ao lado.)">👁 Eu sei a escolha da CPU ${!battleSetup.hideCpuLead?'ON':'OFF'}</button>` : ''}</div>` : ''}
+    ${battleGearOpen ? `<div class="battle-gear-panel"><div class="battle-gear-group"><div class="battle-gear-title">Geral</div><div class="battle-gear-btns"><button type="button" class="battle-toolbar-btn" id="battleSwapPDBtn" title="Ordem dos valores de PD nos golpes">${battleSwapPD ? 'PD crescente' : 'PD decrescente'}</button>${battle.mode === 'pvc' ? `<button type="button" class="battle-toolbar-btn" id="battleHideMyBtn" style="${battleHideMyMoves?'border-color:var(--mint);color:var(--mint);':''}" title="A CPU só considera os meus golpes que ela já viu">🙈 Ocultar meus moves ${battleHideMyMoves?'ON':'OFF'}</button>
+    <button type="button" class="battle-toolbar-btn" id="battleHideCpuBtn" style="${battleHideCpuMoves?'border-color:var(--mint);color:var(--mint);':''}" title="Os golpes da CPU só aparecem depois de usados">🕵️ Ocultar moves da CPU ${battleHideCpuMoves?'ON':'OFF'}</button>` : ''}${battle.mode === 'pvc' ? `<button type="button" class="battle-toolbar-btn" id="battleCpuKnowsBtn" style="${!battleSetup.hideMyLead?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: ao escolher o próximo Pokémon, a CPU escolhe DEPOIS de mim e vê a minha escolha. Desligado: ela escolhe sem saber qual será o meu. (Não funciona junto com a opção ao lado.)">🧠 CPU sabe minha escolha ${!battleSetup.hideMyLead?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleIKnowBtn" style="${!battleSetup.hideCpuLead?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: a CPU escolhe ANTES e eu vejo o Pokémon dela antes de escolher o meu. Desligado: ela só entra depois que eu escolher. (Não funciona junto com a opção ao lado.)">👁 Eu sei a escolha da CPU ${!battleSetup.hideCpuLead?'ON':'OFF'}</button>` : ''}</div></div><div class="battle-gear-group"><div class="battle-gear-title">🔱 Arceus</div><div class="battle-gear-btns">${[['weather','Clima manual'],['terrain','Terreno manual'],['item','Item manual'],['ability','Habilidade manual'],['build','Build manual'],['status','Status manual']].map(([k,l]) => `<button type="button" class="battle-toolbar-btn" data-manual="${k}" style="${battleManual[k]?'border-color:var(--mint);color:var(--mint);':''}">${l} ${battleManual[k]?'ON':'OFF'}</button>`).join('')}<button type="button" class="battle-toolbar-btn" id="battleEditMovesBtn" style="${battleEditMoves?'border-color:var(--mint);color:var(--mint);':''}" title="Mostra um ✕ em cada golpe para excluir e um + para adicionar golpes">✏️ Editar moves ${battleEditMoves?'ON':'OFF'}</button></div></div></div>` : ''}
   </div>`;
 
   const _dbl = battle.format === 'doubles';
@@ -5697,6 +5753,11 @@ function renderBattleInner(){
       w.querySelectorAll('[data-side],[data-cpu-side],[data-del-side],[data-manual-stage],[data-move-add-toggle],[data-move-add-input],[data-move-add-ok],[data-status-side],[data-heal-sd],[data-dbl-lutar]').forEach(el => { el.dataset.slot = w.dataset.dblSlot; });
     });
     ['A','B'].forEach((k, i) => { const r = document.getElementById('dblRow' + k); if(r) r.scrollLeft = _scr[i]; });
+    if(dblPresScrollReq){
+      const q = dblPresScrollReq; dblPresScrollReq = null;
+      const row = document.getElementById('dblRow' + q.sd), el = row && row.querySelector(`.dbl-slot[data-dbl-slot="${q.slot}"]`);
+      if(row && el && row.scrollWidth > row.clientWidth + 2){ const x = el.offsetLeft - row.firstElementChild.offsetLeft; if(Math.abs(row.scrollLeft - x) > 2) setTimeout(() => row.scrollTo({ left: x, behavior: 'smooth' }), 30); }
+    }
     if(dblScrollReq && !presActive()){
       const q = dblScrollReq; dblScrollReq = null;
       const row = document.getElementById('dblRow' + q.sd), el = row && row.querySelector(`.dbl-slot[data-dbl-slot="${q.slot}"]`);
@@ -6567,7 +6628,15 @@ function renderResults(teamResults){
             if(v){
               foulPlayTargetNameState[wsKey] = v;
               const found = DEX[normKey(v)];
-              if(found && typeof found.Atk === 'number'){ foulPlayBaseState[wsKey] = found.Atk; delete foulPlayFinalState[wsKey]; syncFoulPlayFinal(found.Atk); }
+              if(found && typeof found.Atk === 'number'){
+                // Se o alvo está no time carregado, usa a build dele (SPs + nature) para chegar ao Atk final do alvo.
+                const tb = currentPokemons.find(p => p && normKey(p.name || '') === normKey(v));
+                const tSP = tb ? Math.max(0, Math.min(32, Number((tb.evs || {}).Atk) || 0)) : undefined;
+                const tNat = tb ? (tb.nature || 'Serious') : undefined;
+                foulPlayBaseState[wsKey] = found.Atk; delete foulPlayFinalState[wsKey];
+                if(tb){ foulPlaySPState[wsKey] = tSP; foulPlayNatureState[wsKey] = tNat; const nEl = row.querySelector('.fp-nature-select'); if(nEl) nEl.value = tNat; if(fpSPValEl) fpSPValEl.textContent = tSP; }
+                syncFoulPlayFinal(found.Atk, tSP, tNat);
+              }
             } else { delete foulPlayTargetNameState[wsKey]; }
             computeAndRender();
           });
@@ -7235,6 +7304,10 @@ function dPresStep(token){
     const nv = tl.snaps[p.shown] || p.view;
     const changed = JSON.stringify(nv) !== JSON.stringify(p.view);
     const d = dHpDelta(p.view, nv);
+    // Celular: o card desliza sozinho até o Pokémon que está recebendo o dano (só quando UM Pokémon em campo perde HP).
+    { const hit = [];
+      ['A','B'].forEach(k => (nv[k].a || []).forEach((i, slot) => { if(i == null) return; const x = p.view[k].hp[i], y = nv[k].hp[i]; if(x !== undefined && y !== undefined && y < x) hit.push({ sd: k, slot }); }));
+      if(hit.length === 1) dblPresScrollReq = hit[0]; }
     p.view = nv; p.phase = 'text';
     if(changed){ renderBattle(); delay = d > 0 ? hpAnimDur(d) + 300 : 250; }
   } else { p.shown++; p.phase = 'hp'; renderBattle(); delay = 700; }
@@ -7283,6 +7356,7 @@ function dRenderPres(){
   const cont1 = document.getElementById('battleContent'); if(cont1) cont1.classList.add('pres-lock');
 }
 let lastTgtClick = null;
+let dblPresScrollReq = null; // pedido de deslizar o card (celular) durante a animação do turno
 function dSyncActive(sd){ const S = dS(sd); const a = S.active.find(i => i != null && S.hp[i] > 0); S.activePokeIdx = a != null ? a : (S.active.find(i => i != null) ?? S.activePokeIdx); }
 // Executa fn com o Pokémon (sd, idx) como "ativo" do lado: os helpers do Singles (changeStage, setBattleWeather, applyEntryWeather...) passam a agir nele.
 function dWith(sd, idx, fn){
@@ -7544,6 +7618,12 @@ function dMoveAct(a, order){
   if(mk === 'fake out' && battle.turn !== (S.entry[idx] || 0) + 1){ dLog(LF.moveFail(att.name, 'Fake Out', 'não é o primeiro turno em campo')); return null; }
   const tg = dResolveTargets(a, m, mk);
   if(!tg.list.length){ dLog(`${nm} usou <b>${mn}</b>, mas não havia alvo!`); return null; }
+  // Armor Tail / Queenly Majesty: um portador em campo protege a si e ao aliado de golpes de prioridade.
+  { const _foeSides = [...new Set(tg.list.filter(t => t.sd !== sd).map(t => t.sd))];
+    for(const _fs of _foeSides){
+      const _pg = priorityGuardHolder(att, m.moveKey, dActives(_fs).filter(x => dAlive(_fs, x.idx)).map(x => dP(x.idx)));
+      if(_pg){ dLog(LF.moveFail(att.name, mn, _pg.ability + ' de ' + _pg.name)); return null; }
+    } }
   const spread = tg.spread && tg.list.length > 1;
   let obp = dWith(sd, idx, () => { S.rage = { idx, entry: S.currentEntryTurn || 0, n: S.rageN[idx] || 0 }; return moveOverrideBP(sd, m.moveKey); });
   let hhNote = '';
@@ -7554,10 +7634,23 @@ function dMoveAct(a, order){
   const ho = { spread, obp, hhMult, order, mk, info, headTxt: spread ? null : _hd, headDone: !!spread, noteTxt: note + hhNote };
   if(spread) dLog(`${_hd}${note}${hhNote} <span style="color:var(--text-dim)">[área ×0,75]</span>`);
   let total = 0, anyHit = false;
+  const _spStart = (spread && battle._tl) ? battle._tl.lines.length : -1;
   for(const t of tg.list){
     if(battle.finished) break;
     const r = dHit(a, t.sd, t.idx, ho);
     total += r.dealt || 0; if(r.hit) anyHit = true;
+  }
+  // Golpe em área: o HP de todos os alvos cai AO MESMO TEMPO (a 1ª linha "↳" já anima todas as barras).
+  if(_spStart >= 0 && battle._tl){
+    const _tl = battle._tl, _end = _tl.lines.length - 1;
+    if(_end >= _spStart){
+      const _fin = _tl.snaps[_end];
+      for(let i = _spStart; i <= _end; i++){
+        const sn = JSON.parse(JSON.stringify(_tl.snaps[i]));
+        ['A','B'].forEach(k => { sn[k].hp = Object.assign({}, _fin[k].hp); sn[k].sub = Object.assign({}, _fin[k].sub); });
+        _tl.snaps[i] = sn;
+      }
+    }
   }
   if(!ho.headDone && ho.headTxt) dLog(ho.headTxt);
   const out = {};
@@ -7661,15 +7754,14 @@ function dHit(a, tSd, tIdx, o){
   const declared = (m.detail && m.detail.multiHits) || 1;
   const tripleBP = (m.detail && m.detail.tripleHitsBP) || null;   // Triple Axel / Triple Kick
   const skillLink = normKey(att.ability || '') === 'skill link';
-  let nHits = 1;
-  if(tripleBP) nHits = tripleBP.length;
-  else if(declared > 1){ if(skillLink) nHits = 5; else if(MULTI_RANDOM_2_5.has(mk)) nHits = 2 + Math.floor(battleRandom() * 4); else nHits = declared; }
+  const nHits = battleMultiHitCount(mk, declared, tripleBP, skillLink);
+  const perHitAcc = battleMultiHitPerHitAcc(mk, tripleBP);
   const hpBefore = T.hp[tIdx], atkStatus = getStatusOf(sd, idx);
   let subAbs = 0, hpDone = 0, totalDmg = 0, lastRes = null, sash = false, crit = false, lastRoll = 1, hitsDone = 0, missAt = 0;
   const hitRecs = [];
   for(let h = 0; h < nHits; h++){
-    // Triple Axel/Kick: precisão independente por hit (Skill Link garante todos).
-    if(h > 0 && tripleBP && !skillLink && battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ missAt = h + 1; break; }
+    // Triple Axel/Kick e Population Bomb: precisão antes de cada hit (Skill Link: só a inicial).
+    if(h > 0 && perHitAcc && !skillLink && battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ missAt = h + 1; break; }
     const hc = battleCritEnabled && Math.floor(battleRandom() * 24) < 1;
     const ri = Math.floor(battleRandom() * 16);
     const hbp = tripleBP ? Math.trunc(calcBpFinal(tripleBP[h], m.detail.bpMods || []) * (o.hhMult || 1)) : o.obp;
@@ -7692,7 +7784,7 @@ function dHit(a, tSd, tIdx, o){
   res.dealt = hpDone; res.hit = true;
   if(battle._tl && hitRecs.length){
     const rec = { _dblCalc: true, type: 'move', attackerName: att.name, defenderName: def.name, moveName: m.moveName, defenderMax: def.hpMax };
-    if(declared > 1 || tripleBP){ rec.hits = hitRecs; rec.multiStrike = true; rec.missAt = missAt; rec.calc = Object.assign({}, hitRecs[0].calc, { multi: hitRecs.length, damage: totalDmg }); }
+    if(nHits > 1 || tripleBP){ rec.hits = hitRecs; rec.multiStrike = true; rec.missAt = missAt; rec.calc = Object.assign({}, hitRecs[0].calc, { multi: hitRecs.length, damage: totalDmg }); }
     else { rec.calc = hitRecs[0].calc; rec.rollIdx = hitRecs[0].rollIdx; rec.hpBefore = hitRecs[0].hpBefore; rec.defenderAfter = hitRecs[0].hpAfter; }
     battle._tl.actions.push(rec);
   }
@@ -7701,7 +7793,7 @@ function dHit(a, tSd, tIdx, o){
     rollIdx: hitRecs[hitRecs.length - 1].rollIdx, isCrit: crit, defenderAfter: T.hp[tIdx], subHit: subbed, subAbsorbed: subAbs,
     subBroken: (T.subs[tIdx] || 0) <= 0, subRemain: T.subs[tIdx] || 0, fainted: T.hp[tIdx] <= 0 && !subbed, focusSashConsumed: sash,
     hitNote: (!sp && !o.headDone) ? (o.noteTxt || '') : '' };
-  if(declared > 1 || tripleBP){ _rec.hits = hitRecs.map(h => ({ damage: h.damage, isCrit: h.isCrit, rollIdx: h.rollIdx })); _rec.multiStrike = true; _rec.missAt = missAt; }
+  if(nHits > 1 || tripleBP){ _rec.hits = hitRecs.map(h => ({ damage: h.damage, isCrit: h.isCrit, rollIdx: h.rollIdx })); _rec.multiStrike = true; _rec.missAt = missAt; }
   { const _fo = { nohead: sp || !!o.headDone }; dLog(fmtDamageHtml(_rec, _fo), fmtDamageHtml(Object.assign({}, _rec, { _headOnly: true, _hitsShown: 0 }), _fo)); } o.headDone = true;   // MESMO formatador do Singles
   if(dealt > 0 && !subbed){ T.rageN[tIdx] = (T.rageN[tIdx] || 0) + Math.max(1, hitsDone); }
   if(dealt > 0 && !subbed){
