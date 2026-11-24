@@ -420,6 +420,7 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   .battle-status-row select{ background:var(--panel); border:1px solid var(--line); color:var(--text); font-family:var(--font-mono); font-size:11px; padding:3px 6px; border-radius:4px; }
   .battle-status-row select:disabled{ opacity:1; cursor:default; color:var(--text); }
   .battle-gear-panel{ width:100%; display:flex; flex-direction:column; gap:8px; margin-top:6px; }
+  .battle-gear-tabs{ display:flex; gap:6px; flex-wrap:wrap; }
   .battle-gear-group{ border:1px solid var(--line); border-radius:8px; padding:8px; background:var(--panel); }
   .battle-gear-title{ font-family:var(--font-mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-dim); margin-bottom:6px; }
   .battle-gear-btns{ display:flex; gap:6px; flex-wrap:wrap; }
@@ -604,6 +605,7 @@ Adamant Nature
           <option value="psychic">Psychic Terrain</option>
           <option value="misty">Misty Terrain</option>
         </select>
+        <select id="auraSelect" style="display:none;" title="Aura (BP Mod): Fairy/Dark ×5448/4096 · Break ×3072/4096"></select>
       </div>
       <div class="sort-toggle">
         <span class="sort-label">Ordem PD:</span>
@@ -681,7 +683,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 33; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 34; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
 const ICON_TRASH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
@@ -905,7 +907,7 @@ const battleUsePDR = true;
 let battleShowDamageAsPercent = true;
 let openStatsPanels = new Set();
 let cpuPreviewMove = {};
-let battleGearOpen = false;
+let battleGearOpen = false, battleGearSub = null;   // battleGearSub: 'geral' | 'arceus' | null (sanfona: só o grupo clicado fica aberto)
 // Modo Arceus: liga todas as opções de edição (desligado por padrão). Guarda o estado anterior para restaurar ao desligar.
 let arceusMode = false, _arceusPrev = null;
 function setArceusMode(on){
@@ -932,7 +934,7 @@ function syncArceusBtn(){
 }
 let battleSecEffects = true;
 let battleManual = { weather:false, terrain:false, item:false, ability:false, build:false, status:false }; // status manual: desligado por padrão
-let battleCalcView = false;
+let battleCalcView = false, battleCalcAll = false;   // battleCalcAll: no log de cálculo mostra TODAS as etapas (inclusive as ×1)
 let openPreviewRolls = new Set();
 let openHpDamage = new Set();
 let battleUndoReroll = true;
@@ -958,7 +960,7 @@ const ROLL_MULTS = []; for(let i=0;i<16;i++) ROLL_MULTS.push((85 + i)/100);
 
 const MOVE_PRIORITY_TABLE = {
   'helping hand': 5,
-  'baneful bunker': 4, 'baneful banker': 4, 'burning bulwark': 4, 'detect': 4, 'endure': 4, 'crafty shield': 3,
+  'baneful bunker': 4, 'burning bulwark': 4, 'detect': 4, 'endure': 4, 'crafty shield': 3,
   "king's shield": 4, 'obstruct': 4, 'protect': 4, 'detect': 4, 'silk trap': 4, 'spiky shield': 4,
   'fake out': 3, 'quick guard': 3, 'upper hand': 3, 'wide guard': 3,
   'ally switch': 2, 'extreme speed': 2, 'feint': 2, 'first impression': 2, 'follow me': 2, 'rage powder': 2,
@@ -1182,6 +1184,7 @@ document.getElementById('fileInput').addEventListener('change', async (e)=>{
         const accV = legacy ? getCell(statusSheet,Es,r) : getCell(statusSheet,Fs,r);
         const catV = legacy ? rawD : getCell(statusSheet,Gs,r);
         const key = normKey(mv);
+        if(key === 'baneful banker') continue;   // nome errado na planilha: o site só aceita "Baneful Bunker"
         const effStr = String(effV == null ? '' : effV).trim();
         const fx = STATUS_SPECIAL[key] ? null : parseStageEffects(effStr);
         const mvObj = {
@@ -1750,11 +1753,7 @@ function calcularTime(pokemons, opts){
       if(poke.item && TYPE_BOOST_ITEMS[moveType] && normKey(poke.item) === normKey(TYPE_BOOST_ITEMS[moveType])){ bpModifiers.push(1.2); bpModifierLabels.push(`${poke.item} (×1.2)`); }
       if(helpingHandState[wsKey]){ bpModifiers.push(1.5); bpModifierLabels.push('Helping Hand (×1.5)'); }
       if((moveNameKey === normKey('Solar Beam') || moveNameKey === normKey('Solar Blade')) && ['rain','sand','snow','hail','fog','heavyrain'].includes(climaGolpe)){ bpModifiers.push(0.5); bpModifierLabels.push(moveInfo.Name + ' sob clima ruim (×0.5)'); } // BP Mod ×0,5 (Strong Winds não afeta)
-      const auraDefault = abilityDano==='Fairy Aura'?'fairy':abilityDano==='Dark Aura'?'dark':abilityDano==='Aura Break'?'break':'none';
-      const auraSel = auraState[wsKey] !== undefined ? auraState[wsKey] : auraDefault;
-      if(auraSel==='fairy' && moveType==='Fairy'){ bpModifiers.push(5448/4096); bpModifierLabels.push('Fairy Aura (×5448/4096)'); }
-      if(auraSel==='dark' && moveType==='Dark'){ bpModifiers.push(5448/4096); bpModifierLabels.push('Dark Aura (×5448/4096)'); }
-      if(auraSel==='break' && (moveType==='Fairy' || moveType==='Dark')){ bpModifiers.push(0.75); bpModifierLabels.push('Aura Break (×0.75)'); }
+      if(!__auraDynamic){ const _au = auraEffect(moveType, 'calc'); if(_au){ bpModifiers.push(_au.mult); bpModifierLabels.push(_au.label); } }
       if(abilityDano==='Water Bubble' && moveType==='Water'){ bpModifiers.push(2); bpModifierLabels.push('Water Bubble (×2)'); }
       if(abilityDano==='Strong Jaw' && STRONG_JAW_MOVES.has(moveNameKey)){ bpModifiers.push(1.5); bpModifierLabels.push('Strong Jaw (×1.5)'); }
       if(abilityDano==='Sharpness' && SHARPNESS_MOVES.has(moveNameKey)){ bpModifiers.push(1.5); bpModifierLabels.push('Sharpness (×1.5)'); }
@@ -2094,7 +2093,7 @@ function getMovePriority(moveKey){
 //  Protegem só o usuário (+4):  scope 'all' = bloqueia todos os golpes · 'dmg' = só golpes físicos/especiais. contact = efeito no atacante que usa golpe de contato.
 const PROTECT_MOVES = {
   'protect': { scope: 'all' }, 'detect': { scope: 'all' },
-  'baneful bunker': { scope: 'all', contact: 'poison' }, 'baneful banker': { scope: 'all', contact: 'poison' },
+  'baneful bunker': { scope: 'all', contact: 'poison' },
   'burning bulwark': { scope: 'dmg', contact: 'burn' },
   "king's shield": { scope: 'dmg', contact: { stat: 'Atk', d: -1 } },
   'obstruct': { scope: 'dmg', contact: { stat: 'Def', d: -2 } },
@@ -2163,6 +2162,64 @@ function applyProtectContact(kind, A){
   return '';
 }
 function protectName(key){ const m = (typeof dStatusMove === 'function') ? dStatusMove(key) : null; return m ? m.Name : key; }
+// ================== AURA (Fairy / Dark / Break / Fairy-Dark) — BP Mod. Vale para a Calculadora, Singles e Doubles ==================
+//  Fairy = golpes Fairy ×5448/4096 · Dark = golpes Dark ×5448/4096 · Fairy/Dark = os dois
+//  Break = golpes Fairy/Dark ×3072/4096, mas só o Fairy se houver Fairy Aura em campo e só o Dark se houver Dark Aura em campo.
+//  As habilidades Fairy Aura / Dark Aura / Aura Break ativam a barra sozinhas (modo "auto"). A barra fica oculta se não houver nenhuma delas,
+//  a não ser que a opção "Barra de Aura" do modo Arceus seja ligada à mão (ligar o modo Arceus, por si só, NÃO liga a barra).
+let auraBarEnabled = false;
+let auraSelCalc = null, auraSelBattle = null;   // null = automático (pelas habilidades em campo)
+let __auraDynamic = false;                       // true dentro de prepareBattleSide: na batalha a aura é aplicada ao vivo (o campo muda a cada troca)
+const AURA_BOOST = 5448 / 4096, AURA_BREAK = 3072 / 4096;
+const AURA_LABELS = { none: 'Sem aura', fairy: 'Fairy', dark: 'Dark', break: 'Break', both: 'Fairy/Dark' };
+function auraFieldAbilities(ctx){
+  const out = new Set();
+  const add = ab => { if(ab) out.add(normKey(ab)); };
+  if(ctx === 'battle' && battle && battle.sides){
+    if(battle.format === 'doubles'){ ['A','B'].forEach(sd => dActives(sd).filter(x => dAlive(sd, x.idx)).forEach(x => { const p = dP(x.idx); add(p && p.ability); })); }
+    else ['A','B'].forEach(sd => { const s = battle.sides[sd]; if(s && s.hp[s.activePokeIdx] > 0){ const p = getSidePrepared(sd); add(p && p.ability); } });
+  } else {
+    (currentPokemons || []).forEach(p => { if(p && !p.battleOnly) add(p.abilityUsed || p.ability); });
+  }
+  return out;
+}
+function auraResolve(ctx){
+  const f = auraFieldAbilities(ctx);
+  const fa = f.has('fairy aura'), da = f.has('dark aura'), ab = f.has('aura break');
+  const sel = ctx === 'battle' ? auraSelBattle : auraSelCalc;
+  const mode = sel != null ? sel : ((ab && (fa || da)) ? 'break' : (fa && da) ? 'both' : fa ? 'fairy' : da ? 'dark' : 'none');
+  return { mode, fa, da, ab, present: fa || da || ab, auto: sel == null };
+}
+function auraEffect(moveType, ctx){
+  if(moveType !== 'Fairy' && moveType !== 'Dark') return null;
+  const r = auraResolve(ctx);
+  if(moveType === 'Fairy' && (r.mode === 'fairy' || r.mode === 'both')) return { mult: AURA_BOOST, label: 'Fairy Aura (×5448/4096)' };
+  if(moveType === 'Dark' && (r.mode === 'dark' || r.mode === 'both')) return { mult: AURA_BOOST, label: 'Dark Aura (×5448/4096)' };
+  if(r.mode === 'break'){
+    if(moveType === 'Fairy' && r.fa) return { mult: AURA_BREAK, label: 'Aura Break: Fairy (×3072/4096)' };
+    if(moveType === 'Dark' && r.da) return { mult: AURA_BREAK, label: 'Aura Break: Dark (×3072/4096)' };
+  }
+  return null;
+}
+function auraBarVisible(ctx){ return auraBarEnabled || auraResolve(ctx).present; }
+function auraSelectHtml(ctx, attrs, extraStyle){
+  const r = auraResolve(ctx);
+  const cur = r.auto ? 'auto' : r.mode;
+  const opts = [['auto', 'Aura: auto · ' + AURA_LABELS[r.auto ? r.mode : 'none']], ...['none','fairy','dark','break','both'].map(k => [k, AURA_LABELS[k]])];
+  return `<select ${attrs} title="Aura (BP Mod): Fairy/Dark ×5448/4096 · Break ×3072/4096" style="${extraStyle || ''}">${opts.map(([v, l]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
+}
+// BP de um golpe com a aura ao vivo (batalha). wasOverride = o bp recebido já é um BP dinâmico (não o BP do detalhe).
+function auraAdjBP(bp, d, wasOverride){
+  const au = (battle && d) ? auraEffect(d.moveType, 'battle') : null;
+  if(!au) return bp;
+  return (wasOverride || d.basePower === undefined) ? calcBpFinal(bp, [au.mult]) : calcBpFinal(d.basePower, (d.bpMods || []).concat([au.mult]));
+}
+function syncAuraBarCalc(){
+  const el = document.getElementById('auraSelect'); if(!el) return;
+  const show = auraBarVisible('calc');
+  el.style.display = show ? '' : 'none';
+  if(show){ const html = auraSelectHtml('calc', '').replace(/^<select[^>]*>/, '').replace(/<\/select>$/, ''); el.innerHTML = html; el.value = auraResolve('calc').auto ? 'auto' : auraResolve('calc').mode; }
+}
 const PRIORITY_GUARD_ABILITIES = new Set(['armor tail', 'queenly majesty']);
 function priorityGuardHolder(attacker, moveKey, sideMons){
   if(getMovePriority(moveKey) <= 0) return null;
@@ -2202,8 +2259,8 @@ function prepareBattleSide(pokeIdx, env){
   try{
     const opts = { weather: document.getElementById('weatherSelect').value, terrain: document.getElementById('terrainSelect').value };
     if(env){ opts.weather = env.weather; opts.terrain = env.terrain; poke.pokemonWeather = env.weather; poke.pokemonTerrain = env.terrain; }
-    __seedsDisabled = true;
-    let teamResults; try{ ({ teamResults } = calcularTime([poke], opts)); } finally { __seedsDisabled = false; }
+    __seedsDisabled = true; __auraDynamic = true;
+    let teamResults; try{ ({ teamResults } = calcularTime([poke], opts)); } finally { __seedsDisabled = false; __auraDynamic = false; }
     if(!teamResults[0]) return null;
     const pr = teamResults[0];
     const dex = findDexEntry(pr.pokeName);
@@ -2335,6 +2392,8 @@ function computeBattleDamage(attacker, defender, moveResult, roll, isCrit, atkSt
   if(_immAb) t1 = 0; // Levitate / Flash Fire / Water Absorb / Dry Skin: imunidade
   const _bpLabels = (d.bpModifierLabels || []).slice();
   let bpVal = overrideBP !== undefined ? overrideBP : moveResult.bpFinal;
+  { const _au = (battle && d) ? auraEffect(d.moveType, 'battle') : null;   // Aura ao vivo (campo atual)
+    if(_au){ bpVal = auraAdjBP(bpVal, d, overrideBP !== undefined); if(!_bpLabels.includes(_au.label)) _bpLabels.push(_au.label); } }
   if(d.moveType === 'Fire' && normKey(attacker.ability || '') === 'flash fire' && !_bpLabels.some(l => /flash fire/i.test(l))){
     const _asd = battleSideOfPrepared(attacker);
     if(_asd && flashFireActive(_asd)){ bpVal = Math.trunc(bpVal * 1.5); _bpLabels.push('Flash Fire (×1.5)'); }
@@ -2342,25 +2401,26 @@ function computeBattleDamage(attacker, defender, moveResult, roll, isCrit, atkSt
   let val = Math.trunc((atkVal * bpVal / defVal) * 0.44) + 2;
   const baseVal = val; let burned = false;
   const steps = [];
+  const allSteps = [];   // TODAS as etapas do cálculo, inclusive as ×1 (botão "Todas as etapas" do log de cálculo)
   const ap = (label, mult, half) => {
     const br = val * mult;
     val = half ? ((br - Math.floor(br)) > 0.5 ? Math.ceil(br) : Math.floor(br)) : Math.trunc(br + 1e-9);
     steps.push({ label, mult, result: val });
+    allSteps.push({ label, mult, result: val });
   };
+  const sk = label => allSteps.push({ label, mult: 1, result: val, skipped: true });
   // Ordem dos Dmods: Spread, Parental Bond, Weather, Glaive Rush, Critical, Random, STAB/Adaptability, Type 1, Type 2, Burn, Other, Z-Move
-  if(d.spreadMult && d.spreadMult !== 1) ap('Spread', d.spreadMult);
-  if(d.parentalMult && d.parentalMult !== 1) ap('Parental Bond', d.parentalMult);
-  if(d.weatherMult !== 1) ap('Weather', d.weatherMult);
-  if(d.glaiveMult && d.glaiveMult !== 1) ap('Glaive Rush', d.glaiveMult);
-  if(isCrit) ap('Critical', 1.5);
+  if(d.spreadMult && d.spreadMult !== 1) ap('Spread', d.spreadMult); else sk('Spread');
+  if(d.parentalMult && d.parentalMult !== 1) ap('Parental Bond', d.parentalMult); else sk('Parental Bond');
+  if(d.weatherMult !== 1) ap('Weather', d.weatherMult); else sk('Weather');
+  if(d.glaiveMult && d.glaiveMult !== 1) ap('Glaive Rush', d.glaiveMult); else sk('Glaive Rush');
+  if(isCrit) ap('Critical', 1.5); else sk('Critical');
   ap('Roll', roll);
-  if(d.stabMult !== 1) ap(d.stabMult === 2 ? 'Adaptability' : 'STAB', d.stabMult);
-  if(t1 !== 1) ap('Type 1', t1);
-  if(t2 !== 1) ap('Type 2', t2);
-  if (isPhysical && atkStatus === 'Burned') {
-    const ehTipoFogo = attacker.type1 === 'Fire' || attacker.type2 === 'Fire';
-    if (!ehTipoFogo && !BURN_IMMUNE_ABILITIES.has(attacker.ability)) { ap('Burn', 0.5); burned = true; }
-  }
+  if(d.stabMult !== 1) ap(d.stabMult === 2 ? 'Adaptability' : 'STAB', d.stabMult); else sk('STAB');
+  if(t1 !== 1) ap('Type 1', t1); else sk('Type 1');
+  if(t2 !== 1) ap('Type 2', t2); else sk('Type 2');
+  if (isPhysical && atkStatus === 'Burned' && !(attacker.type1 === 'Fire' || attacker.type2 === 'Fire') && !BURN_IMMUNE_ABILITIES.has(attacker.ability)) { ap('Burn', 0.5); burned = true; }
+  else sk('Burn');
   // Other: todos os multiplicadores (inclusive Multiscale/Shadow Shield/Fluffy/Aura Guard) entram juntos num único passo.
   const otherAll = (d.otherComps || []).filter(c => c && c.nome).map(c => ({ nome: c.nome, mult: c.mult }));
   { const _dab0 = normKey(defender.ability || '');
@@ -2381,9 +2441,9 @@ function computeBattleDamage(attacker, defender, moveResult, roll, isCrit, atkSt
   if(normKey(defender.ability || '') === 'dry skin' && d.moveType === 'Fire' && !attackerIgnoresAbility(attacker) && !otherAll.some(c => /dry skin/i.test(c.nome))) otherAll.push({ nome: 'Dry Skin (Fogo)', mult: 1.25 });
   const otherTotal = otherAll.reduce((acc, c) => acc * c.mult, 1);
   let otherDetail = null;
-  if(otherTotal !== 1){
+  {
     const before = val;
-    ap('Other', otherTotal, true);
+    if(otherTotal !== 1) ap('Other', otherTotal, true); else sk('Other');
     let run = before;
     const OTHER_CANDIDATES = [
       ['Aurora Veil', n => /aurora veil/i.test(n)], ['Collision Course / Electro Drift', n => /collision course|electro drift/i.test(n)],
@@ -2403,14 +2463,14 @@ function computeBattleDamage(attacker, defender, moveResult, roll, isCrit, atkSt
     otherAll.forEach((c, i) => { if(!used.has(i)){ run *= c.mult; items.push({ nome: c.nome, mult: c.mult, applied: true, running: run }); } });
     otherDetail = { before, items, total: otherTotal, result: val };
   }
-  if(semiDoubleMult(defender, moveResult) === 2) ap('Alvo semi-invulnerável', 2);
-  if(d.zMult && d.zMult !== 1) ap('Z-Move', d.zMult); // Z-Move ainda não existe no jogo, mas já está no algoritmo
-  if(!noMulti && d.multiHits > 1){ val *= d.multiHits; steps.push({ label: 'Multi', mult: d.multiHits, result: val }); }
+  if(semiDoubleMult(defender, moveResult) === 2) ap('Alvo semi-invulnerável', 2); else sk('Alvo semi-invulnerável');
+  if(d.zMult && d.zMult !== 1) ap('Z-Move', d.zMult); else sk('Z-Move'); // Z-Move ainda não existe no jogo, mas já está no algoritmo
+  if(!noMulti && d.multiHits > 1){ val *= d.multiHits; steps.push({ label: 'Multi', mult: d.multiHits, result: val }); allSteps.push({ label: 'Multi', mult: d.multiHits, result: val }); }
   const calc = { atkBase: _isFoulPlay ? (defender.atkFinalClean || moveResult.atkFinal) : moveResult.atkFinal, atkStage: _isFoulPlay ? (defStages ? (defStages.Atk || 0) : 0) : (atkStages ? (atkStages[isPhysical?'Atk':'SpA']||0) : 0), atkVal, foulPlay: _isFoulPlay,
     defBase: isPhysical ? defender.defFinal : defender.spdFinal, defStage: defStages ? (defStages[isPhysical?'Def':'SpD']||0) : 0, defVal,
     statName: isPhysical ? 'Atk/Def' : 'SpA/SpD', bpBase: moveResult.bpFinal, bpVal, bpLabels: _bpLabels, atkLabels: d.attackChainLabels || [],
     dmodReal: moveResult.dmodReal, otherMult: otherTotal, otherDetail, otherComps: otherAll.map(c => `${c.nome} ×${c.mult}`),
-    baseVal, steps, weatherMult: d.weatherMult, isCrit, roll, stab: d.stabMult, t1, t2, burned, multi: d.multiHits, damage: Math.max(0, val) };
+    baseVal, steps, allSteps, weatherMult: d.weatherMult, isCrit, roll, stab: d.stabMult, t1, t2, burned, multi: d.multiHits, damage: Math.max(0, val) };
   return { damage: Math.max(0, val), typeEff: t1 * t2, calc };
 }
 function estimateDamageRange(attacker, defender, moveResult, atkStages, defStages, overrideBP, atkStatus){
@@ -2600,10 +2660,23 @@ function solarNoCharge(p){ return !!battle && (['sun','harshsun'].includes(battl
 // Impedido de atacar (flinch/sono/gelo/paralisia) com Solar sem carga: o PP é gasto mesmo assim (golpe de 2 turnos).
 function solarPrevented(side, idx, mv){
   if(!mv) return;
-  const bn = baseMoveNameFromKey(mv.moveKey || mv.Name || ''); if(!SOLAR_MOVES.has(normKey(bn))) return;
-  const p = battle.sharedPrepared[idx]; if(p && solarNoCharge(p)) consumePP(side, idx, bn);
+  const bn = baseMoveNameFromKey(mv.moveKey || mv.Name || ''); const bk = normKey(bn); if(!SOLAR_MOVES.has(bk) && bk !== 'electro shot') return;
+  const p = battle.sharedPrepared[idx]; if(p && chargeSkipActive(bk, p)) consumePP(side, idx, bn);
 }
-const SEMI_MOVES = { 'solar beam':'charge', 'solar blade':'charge', 'fly':'sky','bounce':'sky','sky drop':'sky','dig':'underground','dive':'submerged','phantom force':'concealed','shadow force':'concealed' };
+// Golpes de DOIS TURNOS. 'charge' = só carrega (o usuário NÃO fica invulnerável); os outros tipos = turno semi-invulnerável.
+// Semi-invulneráveis: Fly, Bounce, Sky Drop (no ar) · Dig (enterrado) · Dive (mergulhado) · Phantom Force, Shadow Force (oculto).
+// Power Herb pula o turno de carga de todos eles, exceto Sky Drop.
+const SEMI_MOVES = { 'solar beam':'charge', 'solar blade':'charge', 'electro shot':'charge', 'freeze shock':'charge', 'ice burn':'charge', 'meteor beam':'charge', 'razor wind':'charge', 'skull bash':'charge', 'sky attack':'charge',
+  'fly':'sky','bounce':'sky','sky drop':'sky','dig':'underground','dive':'submerged','phantom force':'concealed','shadow force':'concealed' };
+// Efeito do turno de carga (acontece também quando o turno de carga é pulado por Power Herb / chuva)
+const CHARGE_BOOST = { 'electro shot': [['SpA', 1]], 'meteor beam': [['SpA', 1]], 'skull bash': [['Def', 1]] };
+const SEMI_CHARGE_TEXT = { 'solar beam': 'absorveu a luz do sol', 'solar blade': 'absorveu a luz do sol', 'electro shot': 'absorveu eletricidade', 'freeze shock': 'está envolto em uma luz gélida',
+  'ice burn': 'está envolto em ar gélido', 'meteor beam': 'está cercado de energia cósmica', 'razor wind': 'criou um redemoinho de vento', 'skull bash': 'abaixou a cabeça', 'sky attack': 'está cercado de uma luz forte' };
+// Turno de carga pulado sem gastar o Power Herb: Solar Beam/Blade sob Sol (ou Mega Sol) e Electro Shot na chuva
+function chargeSkipActive(mk, p){
+  if(SOLAR_MOVES.has(mk)) return solarNoCharge(p);
+  return mk === 'electro shot' && !!battle && (battle.weather === 'rain' || battle.weather === 'heavyrain');
+}
 const SEMI_HITTERS = {
   sky: new Set(['gust','thunder','twister','sky uppercut','smack down','hurricane','thousand arrows']),
   underground: new Set(['earthquake','magnitude','fissure']),
@@ -3108,17 +3181,21 @@ function executeAction(action, ordered, actionIdx){
   let preNote = '';
   if(action.semiAttack){ attackerSideState.semi = null; }
   else if(SEMI_MOVES[moveNameKey]){
-    const _sunSkip = SOLAR_MOVES.has(moveNameKey) && solarNoCharge(attacker);
+    const _sunSkip = chargeSkipActive(moveNameKey, attacker);
     const hasHerb = !_sunSkip && moveNameKey !== 'sky drop' && normKey(attacker.item || '') === 'power herb' && !(attackerSideState.itemUsed || {})[attackerActiveIdx];
-    if(_sunSkip){ /* sob Sun/Mega Sol: sem turno de carga e o Power Herb NÃO é consumido */ }
+    const _cb = CHARGE_BOOST[moveNameKey];   // Electro Shot / Meteor Beam: SpA +1 · Skull Bash: Def +1 (também quando o turno de carga é pulado)
+    if(_sunSkip){ /* sob Sun/Mega Sol (Solar) ou chuva (Electro Shot): sem turno de carga e o Power Herb NÃO é consumido */
+      if(_cb) preNote += ` ${attacker.name}: ${applyStageList(action.side, _cb)}.`;
+    }
     else if(hasHerb){
       if(!attackerSideState.itemUsed) attackerSideState.itemUsed = {};
       attackerSideState.itemUsed[attackerActiveIdx] = true;
       preNote = ` ${attacker.name} usou Power Herb e pulou o turno de carga!`;
+      if(_cb) preNote += ` ${attacker.name}: ${applyStageList(action.side, _cb)}.`;
     } else {
       attackerSideState.semi = { idx: attackerActiveIdx, moveKey: action.move.moveKey, kind: SEMI_MOVES[moveNameKey], base: moveNameKey, name: action.move.moveName };
       markRevealed(action.side, attackerActiveIdx, baseMoveNameFromKey(action.move.moveKey));
-      return { side: action.side, type: 'semi-charge', attackerName: attacker.name, moveName: action.move.moveName, kind: SEMI_MOVES[moveNameKey] };
+      return { side: action.side, type: 'semi-charge', attackerName: attacker.name, moveName: action.move.moveName, kind: SEMI_MOVES[moveNameKey], boost: _cb ? applyStageList(action.side, _cb) : '' };
     }
   }
   if(!consumePP(action.side, attackerActiveIdx, baseMoveNameFromKey(action.move.moveKey))){
@@ -4165,6 +4242,8 @@ function keepOrDefaultAction(side){
 }
 function resetPendingActions(){
   const sA = battle.sides.A, sB = battle.sides.B;
+  // PvP: NENHUM lado escolhe sozinho. Cada player precisa selecionar o próprio golpe/ação em todo turno (o Lutar só habilita depois dos dois).
+  if(battle.mode === 'pvp'){ battle.pendingAction.A = null; battle.pendingAction.B = null; return; }
   battle.pendingAction.A = (sA.recharge || getSemi('A')) ? null : keepOrDefaultAction('A');
   battle.pendingAction.B = (sB.recharge || getSemi('B')) ? null : keepOrDefaultAction('B');
 }
@@ -4199,6 +4278,7 @@ function pickCpuLead(shared, aLeadIdx, validB, validA){
 }
 
 function initBattle(){
+  auraSelBattle = null;
   if(battleSetup.format === 'doubles'){ return dblInit(); }
   hpAnimPrev = {}; cancelPresentation(); presClearDeferred();
   currentPokemons.forEach((p, i) => { if(p && p.battleOnly) currentPokemons[i] = null; });
@@ -4351,7 +4431,7 @@ function battleDynPD(side, m, overrideBP){
   let atk = m.atkFinal;
   const stg = st.stages[isPhys ? 'Atk' : 'SpA'] || 0;
   if(stg) atk = Math.floor(atk * STAGE_MULT[stg]);
-  const bp = overrideBP !== undefined ? overrideBP : m.bpFinal;
+  const bp = auraAdjBP(overrideBP !== undefined ? overrideBP : m.bpFinal, d, overrideBP !== undefined);
   let dm = m.dmodReal;
   if(isPhys && getStatusOf(side, st.activePokeIdx) === 'Burned' && p.type1 !== 'Fire' && p.type2 !== 'Fire' && !BURN_IMMUNE_ABILITIES.has(p.ability)) dm *= 0.5;
   const pd = calcPDS(atk, bp, dm, DEFESA_PADRAO_DR, d.tripleHitsBP ? 1 : (d.multiHits || 1));
@@ -4384,12 +4464,14 @@ function koChanceText(rolls, hp){
 }
 
 const openOtherCalc = new Set();
+// Formata sem zeros à direita: 1.0000 → 1 · 0.7500 → 0.75
+function fmtN(x, dec){ const n = Number(Number(x).toFixed(dec === undefined ? 4 : dec)); return String(n); }
 function otherStepHtml(key, st, od){
   const open = openOtherCalc.has(key);
   const rows = od.items.map(it => it.applied
-    ? `<div style="color:var(--mint);">✓ ${it.nome} ×${Number(it.mult.toFixed(10))} → ${it.running.toFixed(3)}</div>`
+    ? `<div style="color:var(--mint);">✓ ${it.nome} ×${fmtN(it.mult, 10)} → ${fmtN(it.running, 3)}</div>`
     : `<div style="color:var(--text-dim);opacity:.6;">✗ ${it.nome} — não</div>`).join('');
-  return `<span class="other-toggle" data-other-key="${key}" style="cursor:pointer;user-select:none;"><span class="other-arrow">${open ? '▾' : '▸'}</span> Other ×${Number(od.total.toFixed(10))} → <b>${st.result}</b></span>
+  return `<span class="other-toggle" data-other-key="${key}" style="cursor:pointer;user-select:none;"><span class="other-arrow">${open ? '▾' : '▸'}</span> Other ×${fmtN(od.total, 10)} → <b>${st.result}</b></span>
     <div class="other-steps" data-other-box="${key}" style="display:${open ? 'block' : 'none'};margin:3px 0 3px 14px;padding-left:8px;border-left:1px solid var(--line);font-size:11px;">
       <div>Valor antes: ${od.before}</div>${rows}<div>Resultado final: <b>${od.result}</b></div></div>`;
 }
@@ -4398,13 +4480,30 @@ function battleCalcLogHtml(){
   const sg = n => (n > 0 ? '+' : '') + n;
   return battle.log.map(t => {
     const mkRow = (a, c, rollIdxV, hpB, hpA, hitTag, isLast) => {
+      const ALL = battleCalcAll;
+      const okey = t.turn + '-' + a.attackerName + '-' + a.moveName + '-' + (hpB ?? '') + hitTag;
+      const stepsList = (ALL && c.allSteps) ? c.allSteps : c.steps;
+      const stepHtml = st => {
+        if(st.label === 'Roll') return `Random <b>R${(rollIdxV ?? 0) + 1}</b> ×${c.roll.toFixed(2).replace('.', ',')} → <b>${st.result}</b>`;
+        if(st.label === 'Other' && c.otherDetail) return otherStepHtml(okey, st, c.otherDetail);
+        return st.skipped ? `<span style="opacity:.55;">${st.label} ×1 → <b>${st.result}</b></span>` : `${st.label} ×${fmtN(st.mult, 6)} → <b>${st.result}</b>`;
+      };
+      const otherHdr = c.otherDetail
+        ? `<span class="other-toggle" data-other-key="${okey}|h" style="cursor:pointer;user-select:none;"><span class="other-arrow">${openOtherCalc.has(okey + '|h') ? '▾' : '▸'}</span> Other ×${fmtN(c.otherMult)}</span>`
+        : `Other ×${fmtN(c.otherMult)}`;
+      const otherBox = c.otherDetail
+        ? `<div class="other-steps" data-other-box="${okey}|h" style="display:${openOtherCalc.has(okey + '|h') ? 'block' : 'none'};margin:3px 0 3px 14px;padding-left:8px;border-left:1px solid var(--line);font-size:11px;"><div>Valor antes: ${c.otherDetail.before}</div>${c.otherDetail.items.map(it => it.applied ? `<div style="color:var(--mint);">✓ ${it.nome} ×${fmtN(it.mult, 10)} → ${fmtN(it.running, 3)}</div>` : `<div style="color:var(--text-dim);opacity:.6;">✗ ${it.nome} — não</div>`).join('')}<div>Resultado final: <b>${c.otherDetail.result}</b></div></div>`
+        : '';
+      const atkLbl = c.atkLabels.length ? ' [' + c.atkLabels.join(', ') + ']' : (ALL ? ' [nenhum]' : '');
+      const bpLbl = c.bpLabels.length ? ' [' + c.bpLabels.join(', ') + ']' : (ALL ? ' [nenhum]' : '');
+      const compsL = c.otherComps.filter(Boolean);
       return `<div class="calc-line"><b>${a.attackerName}</b> → <b>${a.defenderName}</b> · <b>${a.moveName}</b>${hitTag}<br>
-        Atk final: ${c.atkBase}${c.atkStage ? ` (stage ${sg(c.atkStage)})` : ''} → <b>${c.atkVal}</b>${c.atkLabels.length ? ' [' + c.atkLabels.join(', ') + ']' : ''}<br>
-        Def final: ${c.defBase}${c.defStage ? ` (stage ${sg(c.defStage)})` : ''} → <b>${c.defVal}</b><br>
-        BP: ${c.bpBase}${c.bpVal !== c.bpBase ? ' → ' + c.bpVal : ''}${c.bpLabels.length ? ' [' + c.bpLabels.join(', ') + ']' : ''}<br>
-        DMod: ${Number(c.dmodReal).toFixed(4)} · Other ×${Number(c.otherMult).toFixed(4)}${c.otherComps.filter(Boolean).length ? ' [' + c.otherComps.filter(Boolean).join(', ') + ']' : ''}<br>
+        Atk Final: ${c.atkBase}${(c.atkStage || ALL) ? ` (stage ${sg(c.atkStage)})` : ''} → <b>${c.atkVal}</b>${atkLbl}<br>
+        Def Final: ${c.defBase}${(c.defStage || ALL) ? ` (stage ${sg(c.defStage)})` : ''} → <b>${c.defVal}</b><br>
+        BP Final: ${c.bpBase}${(c.bpVal !== c.bpBase || ALL) ? ' → ' + c.bpVal : ''}${bpLbl}<br>
+        DMod: ${fmtN(c.dmodReal)} · ${otherHdr}${compsL.length ? ' [' + compsL.join(', ') + ']' : (ALL ? ' [nenhum]' : '')}<br>${otherBox}
         Base = ⌊${c.atkVal}×${c.bpVal}/${c.defVal}×0,44⌋+2 = <b>${c.baseVal}</b><br>
-        ${c.steps.map(st => st.label === 'Roll' ? `Random <b>R${(rollIdxV ?? 0) + 1}</b> ×${c.roll.toFixed(2).replace('.', ',')} → <b>${st.result}</b>` : st.label === 'Other' && c.otherDetail ? otherStepHtml(t.turn + '-' + a.attackerName + '-' + a.moveName + '-' + (hpB ?? '') + hitTag, st, c.otherDetail) : `${st.label} ×${st.mult} → <b>${st.result}</b>`).join('<br>')}<br>
+        ${stepsList.map(stepHtml).join('<br>')}<br>
         Dano: <b>${c.damage}</b> HP (${hpB} → ${hpA}/${a.defenderMax})${(isLast && a.drainApplicable) ? (a.drainHeal > 0
           ? `<br><span style="color:var(--mint);">HP recuperado (dreno): <b>+${a.drainHeal}</b> HP = ⌊${a.drainDealt} × ${Math.round(a.drainPct * 100)}%⌋ = ${Math.max(1, Math.floor(a.drainDealt * a.drainPct))}${a.drainHeal < Math.max(1, Math.floor(a.drainDealt * a.drainPct)) ? ' (limitado ao HP máx)' : ''} · ${a.attackerName}: ${a.drainHpBefore} → ${a.drainHpAfter}/${a.attackerMaxHp}</span>`
           : `<br><span style="color:var(--text-dim);">HP recuperado (dreno): <b>0</b> (HP cheio)</span>`) : ''}</div>`;
@@ -4451,7 +4550,7 @@ function battleFixPendingAfterMoveEdit(){
     if(a.type === 'move') r = buildAction(sd, 'move', a.move.moveKey);
     else if(a.type === 'status-move') r = buildAction(sd, 'status-move', a.move.Name);
     else if(a.type === 'switch') r = buildAction(sd, 'switch', a.targetIdx);
-    battle.pendingAction[sd] = r || ((battle.sides[sd].recharge || getSemi(sd)) ? null : defaultActionFor(sd));
+    battle.pendingAction[sd] = r || ((battle.sides[sd].recharge || getSemi(sd) || battle.mode === 'pvp') ? null : defaultActionFor(sd));
   });
 }
 function battleSyncPP(side){
@@ -4531,9 +4630,9 @@ const LF = {
   thawByMove: n => `<b>${n}</b> descongelou pelo calor do move!`,
   stillFrozen: n => `<b>${n}</b> está congelado e não pode agir.`,
   paraSkip: n => `<b>${n}</b> está paralisado e não pode agir!`,
-  semiCharge: (n, mv, kind) => kind === 'charge'
-    ? `<b>${n}</b> usou <b>${mv}</b>! ${n} ${SEMI_TEXT.charge}.`
-    : `<b>${n}</b> usou <b>${mv}</b>! ${n} ${SEMI_TEXT[kind] || 'está se preparando'} (invulnerável).`,
+  semiCharge: (n, mv, kind, boost) => (kind === 'charge'
+    ? `<b>${n}</b> usou <b>${mv}</b>! ${n} ${SEMI_CHARGE_TEXT[normKey(mv)] || SEMI_TEXT.charge}.`
+    : `<b>${n}</b> usou <b>${mv}</b>! ${n} ${SEMI_TEXT[kind] || 'está se preparando'} (invulnerável).`) + (boost ? ` ${n}: ${boost}.` : ''),
   moveFail: (n, mv, reason) => `<b>${n}</b> usou <b>${mv}</b>, mas falhou!${reason ? ' (' + reason + ')' : ''}`,
   nop: (n, mv, reason) => `<b>${n}</b> tentou usar <b>${mv}</b>, mas ${reason}!`,
   miss: a => `<b>${a.attackerName}</b> usou <b>${a.moveName}</b>, mas ${a.semiDodge ? a.semiDodge + ' está invulnerável' : 'errou'}!${a.selfKO ? ' ' + a.attackerName + ' se autodestruiu!' : ''}`,
@@ -4632,7 +4731,7 @@ function battleLogHtml(){
       if(a.type === 'skip') return '';
       if(a.type === 'sucker-fail') return `<div class="action-line">${LF.moveFail(a.attackerName, a.moveName)}</div>`;
       if(a.type === 'move-fail') return `<div class="action-line">${LF.moveFail(a.attackerName, a.moveName, a.reason)}</div>`;
-      if(a.type === 'semi-charge') return `<div class="action-line">${LF.semiCharge(a.attackerName, a.moveName, a.kind)}</div>`;
+      if(a.type === 'semi-charge') return `<div class="action-line">${LF.semiCharge(a.attackerName, a.moveName, a.kind, a.boost)}</div>`;
       if(a.type === 'move-miss') return `<div class="action-line">${LF.miss(a)}</div>`;
       if(a.type === 'move-nop') return `<div class="action-line">${LF.nop(a.attackerName, a.moveName, a.reason)}</div>`;
       if(a.type === 'flinch') return `<div class="action-line">${LF.flinch(a.name)}</div>`;
@@ -5550,7 +5649,7 @@ function showMoveDetail(side, moveKey){
   const st = battle.sides[side], d = m.detail || {};
   const isPhys = d.isPhysical !== undefined ? d.isPhysical : (d.statName === 'Atk' || d.statName === 'Def');
   const ob = moveOverrideBP(side, m.moveKey);
-  const bp = ob !== undefined ? ob : m.bpFinal;
+  const bp = auraAdjBP(ob !== undefined ? ob : m.bpFinal, d, ob !== undefined);
   const stg = st.stages[isPhys ? 'Atk' : 'SpA'] || 0;
   const atk = stg ? Math.floor(m.atkFinal * STAGE_MULT[stg]) : m.atkFinal;
   let dm = m.dmodReal;
@@ -5604,7 +5703,6 @@ const STATUS_MOVE_DESC = {
   'protect': 'Protege o usuário de todos os golpes neste turno. Prioridade +4. Usar em turnos seguidos: chance de sucesso ÷3 a cada uso.',
   'detect': 'Protege o usuário de todos os golpes neste turno. Prioridade +4. Usar em turnos seguidos: chance de sucesso ÷3 a cada uso.',
   'baneful bunker': 'Protege de todos os golpes (+4). Golpes de contato envenenam o atacante.',
-  'baneful banker': 'Protege de todos os golpes (+4). Golpes de contato envenenam o atacante.',
   'burning bulwark': 'Protege de golpes físicos e especiais (+4). Golpes de contato queimam o atacante.',
   "king's shield": "Protege de golpes físicos e especiais (+4). Golpes de contato baixam o Atk do atacante em 1 estágio.",
   'obstruct': 'Protege de golpes físicos e especiais (+4). Golpes de contato baixam a Def do atacante em 2 estágios.',
@@ -5839,8 +5937,8 @@ function renderBattleInner(){
     <button type="button" class="battle-toolbar-btn" id="battleSecToggle" style="${battleSecEffects?'border-color:var(--mint);color:var(--mint);':''}" title="Efeitos secundários dos golpes">Efeitos 2º ${battleSecEffects?'ON':'OFF'}</button>
     <button type="button" class="battle-toolbar-btn" id="battleUndoRerollBtn" style="${battleUndoReroll?'border-color:var(--mint);color:var(--mint);':''}" title="Ao voltar o turno (Undo), gera novos valores aleatórios (rolls, crit, precisão, efeitos)">🎲 Undo novo RNG ${battleUndoReroll?'ON':'OFF'}</button>
     <button type="button" class="battle-toolbar-btn" id="battleGearBtn" style="${battleGearOpen?'border-color:var(--mint);color:var(--mint);':''}" title="Opções avançadas">⚙️</button>
-    ${battleGearOpen ? `<div class="battle-gear-panel"><div class="battle-gear-group"><div class="battle-gear-title">Geral</div><div class="battle-gear-btns"><button type="button" class="battle-toolbar-btn" id="battleSwapPDBtn" title="Ordem dos valores de PD nos golpes">${battleSwapPD ? 'PD crescente' : 'PD decrescente'}</button>${battle.mode === 'pvc' ? `<button type="button" class="battle-toolbar-btn" id="battleHideMyBtn" style="${battleHideMyMoves?'border-color:var(--mint);color:var(--mint);':''}" title="A CPU só considera os meus golpes que ela já viu">🙈 Ocultar meus moves ${battleHideMyMoves?'ON':'OFF'}</button>
-    <button type="button" class="battle-toolbar-btn" id="battleHideCpuBtn" style="${battleHideCpuMoves?'border-color:var(--mint);color:var(--mint);':''}" title="Os golpes da CPU só aparecem depois de usados">🕵️ Ocultar moves da CPU ${battleHideCpuMoves?'ON':'OFF'}</button>` : ''}${battle.mode === 'pvc' ? `<button type="button" class="battle-toolbar-btn" id="battleCpuKnowsBtn" style="${!battleSetup.hideMyLead?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: ao escolher o próximo Pokémon, a CPU escolhe DEPOIS de mim e vê a minha escolha. Desligado: ela escolhe sem saber qual será o meu. (Não funciona junto com a opção ao lado.)">🧠 CPU sabe minha escolha ${!battleSetup.hideMyLead?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleIKnowBtn" style="${!battleSetup.hideCpuLead?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: a CPU escolhe ANTES e eu vejo o Pokémon dela antes de escolher o meu. Desligado: ela só entra depois que eu escolher. (Não funciona junto com a opção ao lado.)">👁 Eu sei a escolha da CPU ${!battleSetup.hideCpuLead?'ON':'OFF'}</button>` : ''}</div></div><div class="battle-gear-group"><div class="battle-gear-title">🔱 Arceus</div><div class="battle-gear-btns">${[['weather','Clima manual'],['terrain','Terreno manual'],['item','Item manual'],['ability','Habilidade manual'],['build','Build manual'],['status','Status manual']].map(([k,l]) => `<button type="button" class="battle-toolbar-btn" data-manual="${k}" style="${battleManual[k]?'border-color:var(--mint);color:var(--mint);':''}">${l} ${battleManual[k]?'ON':'OFF'}</button>`).join('')}<button type="button" class="battle-toolbar-btn" id="battleEditMovesBtn" style="${battleEditMoves?'border-color:var(--mint);color:var(--mint);':''}" title="Mostra um ✕ em cada golpe para excluir e um + para adicionar golpes">✏️ Editar moves ${battleEditMoves?'ON':'OFF'}</button></div></div></div>` : ''}
+    ${battleGearOpen ? `<div class="battle-gear-panel"><div class="battle-gear-tabs"><button type="button" class="battle-toolbar-btn" data-gear-sub="geral" style="${battleGearSub==='geral'?'border-color:var(--mint);color:var(--mint);':''}">Geral ${battleGearSub==='geral'?'▾':'▸'}</button><button type="button" class="battle-toolbar-btn" data-gear-sub="arceus" style="${battleGearSub==='arceus'?'border-color:var(--amber);color:var(--amber);':''}">🔱 Arceus ${battleGearSub==='arceus'?'▾':'▸'}</button></div>${battleGearSub==='geral' ? `<div class="battle-gear-group"><div class="battle-gear-btns"><button type="button" class="battle-toolbar-btn" id="battleSwapPDBtn" title="Ordem dos valores de PD nos golpes">${battleSwapPD ? 'PD crescente' : 'PD decrescente'}</button>${battle.mode === 'pvc' ? `<button type="button" class="battle-toolbar-btn" id="battleHideMyBtn" style="${battleHideMyMoves?'border-color:var(--mint);color:var(--mint);':''}" title="A CPU só considera os meus golpes que ela já viu">🙈 Ocultar meus moves ${battleHideMyMoves?'ON':'OFF'}</button>
+    <button type="button" class="battle-toolbar-btn" id="battleHideCpuBtn" style="${battleHideCpuMoves?'border-color:var(--mint);color:var(--mint);':''}" title="Os golpes da CPU só aparecem depois de usados">🕵️ Ocultar moves da CPU ${battleHideCpuMoves?'ON':'OFF'}</button>` : ''}${battle.mode === 'pvc' ? `<button type="button" class="battle-toolbar-btn" id="battleCpuKnowsBtn" style="${!battleSetup.hideMyLead?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: ao escolher o próximo Pokémon, a CPU escolhe DEPOIS de mim e vê a minha escolha. Desligado: ela escolhe sem saber qual será o meu. (Não funciona junto com a opção ao lado.)">🧠 CPU sabe minha escolha ${!battleSetup.hideMyLead?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleIKnowBtn" style="${!battleSetup.hideCpuLead?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: a CPU escolhe ANTES e eu vejo o Pokémon dela antes de escolher o meu. Desligado: ela só entra depois que eu escolher. (Não funciona junto com a opção ao lado.)">👁 Eu sei a escolha da CPU ${!battleSetup.hideCpuLead?'ON':'OFF'}</button>` : ''}</div></div>` : ''}${battleGearSub==='arceus' ? `<div class="battle-gear-group"><div class="battle-gear-btns">${[['weather','Clima manual'],['terrain','Terreno manual'],['item','Item manual'],['ability','Habilidade manual'],['build','Build manual'],['status','Status manual']].map(([k,l]) => `<button type="button" class="battle-toolbar-btn" data-manual="${k}" style="${battleManual[k]?'border-color:var(--mint);color:var(--mint);':''}">${l} ${battleManual[k]?'ON':'OFF'}</button>`).join('')}<button type="button" class="battle-toolbar-btn" id="battleEditMovesBtn" style="${battleEditMoves?'border-color:var(--mint);color:var(--mint);':''}" title="Mostra um ✕ em cada golpe para excluir e um + para adicionar golpes">✏️ Editar moves ${battleEditMoves?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleAuraBarBtn" style="${auraBarEnabled?'border-color:var(--mint);color:var(--mint);':''}" title="Mostra a barra de Aura ao lado do terreno mesmo sem Fairy Aura / Dark Aura / Aura Break em campo (ligar o modo Arceus não liga esta opção)">🌟 Barra de Aura ${auraBarEnabled?'ON':'OFF'}</button></div></div>` : ''}</div>` : ''}
   </div>`;
 
   const _dbl = battle.format === 'doubles';
@@ -5865,8 +5963,10 @@ function renderBattleInner(){
       <div class="battle-log-title" style="cursor:pointer;" data-toggle-log>📜 Log de turnos ${battleLogCollapsed ? '▸' : '▾'}</div>
       ${battleManual.weather ? envSelectHtml('weather') : weatherChip}
       ${battleManual.terrain ? envSelectHtml('terrain') : terrainChip}
+      ${auraBarVisible('battle') ? auraSelectHtml('battle', 'data-aura-sel="battle" class="aura-sel-battle"', 'font-family:var(--font-mono);font-size:11px;') : ''}
       ${_dbl ? dblFieldChips() : ''}
       ${true ? `<button type="button" class="battle-toolbar-btn log-pos-btn" data-toggle-log-pos title="Mover o log: coluna à direita ou no meio, entre os cards da CPU e do player" style="margin-left:auto;">${battleLogMid ? '➡ Log à direita' : '⬍ Log no meio'}</button>` : ''}
+      ${battleCalcView ? `<button type="button" class="battle-toolbar-btn" id="battleCalcAllBtn" style="${battleCalcAll?'border-color:var(--mint);color:var(--mint);':''}" title="Mostra TODO o processo do cálculo, inclusive as etapas ×1">🔬 Todas as etapas ${battleCalcAll?'ON':'OFF'}</button>` : ''}
       <button type="button" class="battle-toolbar-btn log-size-btn" data-toggle-log-size title="Reduzir/expandir a caixa do log">${battleLogCompact ? '⤢ Expandir' : '⤡ Reduzir'}</button>
     </div>
     <div class="battle-log battle-log-scroll${battleLogCompact ? ' compact' : ''}" id="battleLogScroll" style="${battleLogCollapsed ? 'display:none;' : ''}">${battleCalcView ? battleCalcLogHtml() : battleLogHtml()}</div>
@@ -5944,6 +6044,7 @@ function renderBattleInner(){
   }));
   document.getElementById('battleUndoBtn')?.addEventListener('click', battleUndo);
   document.getElementById('battleCalcBtn')?.addEventListener('click', () => { battleCalcView = !battleCalcView; renderBattle(); });
+  document.getElementById('battleCalcAllBtn')?.addEventListener('click', () => { battleCalcAll = !battleCalcAll; renderBattle(); });
   document.getElementById('battleRedoBtn')?.addEventListener('click', battleRedo);
   document.getElementById('battleRollsToggle')?.addEventListener('click', () => { battleShowRolls = !battleShowRolls; renderBattle(); });
   document.getElementById('battleCritToggle')?.addEventListener('click', () => { battleCritEnabled = !battleCritEnabled; renderBattle(); });
@@ -5995,6 +6096,9 @@ function renderBattleInner(){
   document.getElementById('battleCpuKnowsBtn')?.addEventListener('click', () => { battleSetup.hideMyLead = !battleSetup.hideMyLead; if(!battleSetup.hideMyLead) battleSetup.hideCpuLead = true; renderBattle(); });
   document.getElementById('battleIKnowBtn')?.addEventListener('click', () => { battleSetup.hideCpuLead = !battleSetup.hideCpuLead; if(!battleSetup.hideCpuLead) battleSetup.hideMyLead = true; renderBattle(); });
   document.getElementById('battleGearBtn')?.addEventListener('click', () => { battleGearOpen = !battleGearOpen; renderBattle(); });
+  document.querySelectorAll('[data-aura-sel]').forEach(sel => sel.addEventListener('change', e => { auraSelBattle = e.target.value === 'auto' ? null : e.target.value; renderBattle(); }));
+  document.querySelectorAll('[data-gear-sub]').forEach(b => b.addEventListener('click', () => { battleGearSub = battleGearSub === b.dataset.gearSub ? null : b.dataset.gearSub; renderBattle(); }));
+  document.getElementById('battleAuraBarBtn')?.addEventListener('click', () => { auraBarEnabled = !auraBarEnabled; syncAuraBarCalc(); renderBattle(); });
   document.querySelectorAll('[data-manual]').forEach(b => b.addEventListener('click', () => { battleManual[b.dataset.manual] = !battleManual[b.dataset.manual]; renderBattle(); }));
   document.querySelectorAll('[data-manual-env]').forEach(sel => sel.addEventListener('change', e => { const k = sel.dataset.manualEnv, v = e.target.value; presGateDefer(() => manualSetEnv(k, v)); }));
   document.querySelectorAll('[data-manual-stage]').forEach(sel => sel.addEventListener('change', e => {
@@ -6466,8 +6570,6 @@ function renderResults(teamResults){
         const efetKey = d.efetKey;
         const efetividadeAtual = d.efetividadeSel;
         const stageAtual = d.stageSel;
-        const auraDefaultUI = pr.ability==='Fairy Aura'?'fairy':pr.ability==='Dark Aura'?'dark':pr.ability==='Aura Break'?'break':'none';
-        const auraAtual = auraState[wsKey] !== undefined ? auraState[wsKey] : auraDefaultUI;
         const xBPAtual = bpCustomMultState[wsKey] !== undefined ? bpCustomMultState[wsKey] : 1;
         const xOtherAtual = otherMultState[wsKey] !== undefined ? otherMultState[wsKey] : 1;
         const defesaCustomAtual = defesaCustomState[wsKey] !== undefined ? defesaCustomState[wsKey] : 100;
@@ -6693,7 +6795,6 @@ function renderResults(teamResults){
                 <option value="psychic" ${terrenoAtual==='psychic'?'selected':''}>Psychic Terrain</option>
                 <option value="misty" ${terrenoAtual==='misty'?'selected':''}>Misty Terrain</option>
               </select></div>
-              ${(d.moveType==='Fairy' || d.moveType==='Dark') ? `<div class="control" style="max-width:170px;"><label>Aura</label><select class="aura-select" data-wskey="${wsKey}"><option value="none" ${auraAtual==='none'?'selected':''}>Nenhuma</option><option value="fairy" ${auraAtual==='fairy'?'selected':''}>Fairy Aura</option><option value="dark" ${auraAtual==='dark'?'selected':''}>Dark Aura</option><option value="break" ${auraAtual==='break'?'selected':''}>Aura Break</option></select></div>` : ''}
             </div>
           </div>`;
 
@@ -6919,8 +7020,6 @@ function renderResults(teamResults){
         }
         const stEl = row.querySelector('.stage-select');
         if(stEl){ stEl.addEventListener('click', (e)=>e.stopPropagation()); stEl.addEventListener('change', (e)=>{ stageState[wsKey] = Number(e.target.value); computeAndRender(); }); }
-        const auEl = row.querySelector('.aura-select');
-        if(auEl){ auEl.addEventListener('click', (e)=>e.stopPropagation()); auEl.addEventListener('change', (e)=>{ auraState[wsKey] = e.target.value; computeAndRender(); }); }
         const faEl = row.querySelector('.fallen-select');
         if(faEl){ faEl.addEventListener('click', (e)=>e.stopPropagation()); faEl.addEventListener('change', (e)=>{ fallenState[wsKey] = Number(e.target.value); computeAndRender(); }); }
         const efEl = row.querySelector('.effectiveness-select');
@@ -7203,10 +7302,12 @@ function renderResults(teamResults){
 }
 
 function _computeAndRenderNow(){
+  syncAuraBarCalc();
   if(!currentPokemons.length){ try { renderBattle(); document.getElementById('battlePanel').style.display = 'block'; } catch(e){ console.error(e); } return; }
   try {
     const opts = { weather: document.getElementById('weatherSelect').value, terrain: document.getElementById('terrainSelect').value };
     const { teamResults, warnings } = calcularTime(currentPokemons.map(p => p && p.battleOnly ? null : p), opts);
+    syncAuraBarCalc();
     const warnBox = document.getElementById('warnBox');
     if(warnings && warnings.length) warnBox.textContent = warnings.join(' ');
     renderResults(teamResults);
@@ -7227,6 +7328,7 @@ function computeAndRender(){
 }
 
 function resetAllState(){
+  auraSelCalc = null;
   critState = {}; weatherState = {}; terrainState = {};
   hpState = {}; hpPercentState = {}; hpMaxOverrideState = {}; hpUnlockedState = {}; evUnlockedState = {};
   hpResBonusState = {}; rageFistState = {}; foulPlayBaseState = {}; foulPlayNatureState = {}; foulPlayFinalState = {}; foulPlayTargetNameState = {}; foulPlaySPState = {};
@@ -7313,6 +7415,7 @@ document.getElementById('clearAllBtn').addEventListener('click', ()=>{
 
 document.getElementById('weatherSelect').addEventListener('change', ()=>{ if(currentPokemons.length) computeAndRender(); });
 document.getElementById('terrainSelect').addEventListener('change', ()=>{ if(currentPokemons.length) computeAndRender(); });
+document.getElementById('auraSelect').addEventListener('change', (e)=>{ auraSelCalc = e.target.value === 'auto' ? null : e.target.value; if(currentPokemons.length) computeAndRender(); else syncAuraBarCalc(); });
 document.getElementById('themeToggle').addEventListener('click', ()=>{
   document.body.classList.toggle('light');
   document.getElementById('themeToggle').textContent = document.body.classList.contains('light') ? '☀️' : '🌙';
@@ -7779,14 +7882,18 @@ function dMoveAct(a, order){
   let note = '';
   if(a.semiAttack){ S.semis[idx] = null; }
   else if(SEMI_MOVES[mk]){
-    const _sunSkip = SOLAR_MOVES.has(mk) && solarNoCharge(att);
+    const _sunSkip = chargeSkipActive(mk, att);
     const herb = !_sunSkip && mk !== 'sky drop' && normKey(att.item || '') === 'power herb' && !S.itemUsed[idx];
-    if(_sunSkip){ /* sob Sun/Mega Sol: sem turno de carga e o Power Herb NÃO é consumido */ }
-    else if(herb){ S.itemUsed[idx] = true; note = ` ${att.name} usou Power Herb e pulou o turno de carga!`; }
+    const _cb = CHARGE_BOOST[mk];   // Electro Shot / Meteor Beam: SpA +1 · Skull Bash: Def +1 (também quando o turno de carga é pulado)
+    const _boost = () => dWith(sd, idx, () => applyStageList(sd, _cb));
+    if(_sunSkip){ /* sob Sun/Mega Sol (Solar) ou chuva (Electro Shot): sem turno de carga e o Power Herb NÃO é consumido */
+      if(_cb) note += ` ${att.name}: ${_boost()}.`;
+    }
+    else if(herb){ S.itemUsed[idx] = true; note = ` ${att.name} usou Power Herb e pulou o turno de carga!`; if(_cb) note += ` ${att.name}: ${_boost()}.`; }
     else {
       S.semis[idx] = { idx, moveKey: m.moveKey, kind: SEMI_MOVES[mk], base: mk, name: mn, tgt: a.tgt };
       markRevealed(sd, idx, baseMoveNameFromKey(m.moveKey));
-      dLog(LF.semiCharge(att.name, mn, SEMI_MOVES[mk])); return null;
+      dLog(LF.semiCharge(att.name, mn, SEMI_MOVES[mk], _cb ? _boost() : '')); return null;
     }
   }
   if(!consumePP(sd, idx, baseMoveNameFromKey(m.moveKey))){ dLog(LF.nop(att.name, mn, 'sem PP')); return null; }
