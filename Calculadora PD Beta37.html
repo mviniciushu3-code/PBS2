@@ -689,7 +689,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 36; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 37; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
 const ICON_TRASH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
@@ -2315,7 +2315,7 @@ function applyEntryHazards(side){
       out.push({ type: 'hazard', text: LF.statusGain({ name: p.name, newStatus: st, oldStatus: 'Healthy' }) });
     }
   }
-  if(hz.web > 0 && grounded && !boots && s.hp[idx] > 0) out.push({ type: 'hazard', text: `Sticky Web: ${nm} ${fmtStageChange(changeStage(side, 'Spe', -1))}.` });
+  if(hz.web > 0 && grounded && !boots && s.hp[idx] > 0) out.push({ type: 'hazard', text: `Sticky Web: ${nm} ${fmtStageChange(changeStage(side, 'Spe', -1, { byFoe: true }))}.` });
   return out;
 }
 // Indicadores à ESQUERDA do nome do Pokémon: um por hazard presente no campo do lado
@@ -2334,10 +2334,12 @@ const GRAVITY_TURNS = 5, MAGNET_RISE_TURNS = 5, TELEKINESIS_TURNS = 3;
 const GRAVITY_ACC_MULT = 6840 / 4096;   // precisão de todos os golpes (exceto OHKO) sob Gravity
 const GRAVITY_BLOCKED = new Set(['bounce','fly','flying press','high jump kick','jump kick','magnet rise','sky drop','splash','telekinesis']);   // não podem ser escolhidos sob Gravity
 const GRAVITY_SEMI_CANCEL = new Set(['fly','bounce']);   // em andamento quando a Gravity é usada: cancelados na hora
+// Rock Head não impede: Struggle, Steel Beam e Mind Blown (custo de HP, não recuo). Crash/Life Orb também não (não são recuo).
+const ROCK_HEAD_NO_BLOCK = new Set(['steelbeam','mindblown']);
 const OHKO_MOVES = new Set(['fissure','sheer cold','guillotine','horn drill']);
 const GROUNDING_HIT_MOVES = new Set(['smack down','thousand arrows']);
 const FORCE_SWITCH_STATUS = new Set(['roar','whirlwind']);
-const VOL_TARGET_STATUS = new Set(['roar','whirlwind','telekinesis']);   // golpes de status com alvo (no Doubles o alvo é escolhido)
+const VOL_TARGET_STATUS = new Set(['roar','whirlwind','telekinesis','gastro acid']);   // golpes de status com alvo (no Doubles o alvo é escolhido)
 function telekinesisImmune(p){ const n = normKey((p && p.name) || ''); return n === 'gengar-mega' || n === 'mega gengar' || /^(diglett|dugtrio)(-|$)/.test(n) || n === 'sandygast' || n === 'palossand'; }
 function isMegaGengar(p){ const n = normKey((p && p.name) || ''); return n === 'gengar-mega' || n === 'mega gengar'; }
 function volOf(side, idx){ const S = battle.sides[side]; if(!S.vol) S.vol = {}; return S.vol[idx] || (S.vol[idx] = {}); }
@@ -2353,8 +2355,20 @@ function groundedRule(p, side, idx, noField){
   const v = side ? volPeek(side, idx) : {};
   if(v.ingrain || v.smacked) return true;
   if(v.magnetRise > 0 || v.tele > 0) return false;
+  if(normKey(p.item || '') === 'air balloon' && itemGoneIdx(idx, side)) return isGroundedPrep(Object.assign({}, p, { item: '' }));   // Air Balloon estourado
   return isGroundedPrep(p);
 }
+// Item já consumido/estourado (side.itemUsed). side null = procura nos dois lados.
+function itemGoneIdx(idx, side){
+  if(!battle || !battle.sides) return false;
+  return (side ? [side] : ['A','B']).some(sd => { const S = battle.sides[sd]; return !!(S && S.itemUsed && S.itemUsed[idx]); });
+}
+function heldItem(sd, idx){ const p = battle.sharedPrepared[idx]; return (!p || itemGoneIdx(idx, sd)) ? '' : normKey(p.item || ''); }
+function useItem(sd, idx){ const S = battle.sides[sd]; if(!S.itemUsed) S.itemUsed = {}; S.itemUsed[idx] = true; }
+function withMon(sd, idx, fn){ return battle.format === 'doubles' ? dWith(sd, idx, fn) : fn(); }
+function fieldMons(sd){ const S = battle.sides[sd]; return battle.format === 'doubles' ? (S.active || []).filter(i => i != null && S.hp[i] > 0) : (S.hp[S.activePokeIdx] > 0 ? [S.activePokeIdx] : []); }
+function subOf(sd, idx){ const S = battle.sides[sd]; return battle.format === 'doubles' ? ((S.subs || {})[idx] || 0) : (S.activePokeIdx === idx ? (S.sub || 0) : 0); }
+function sheerForceOn(att, info){ return normKey((att && att.ability) || '') === 'sheer force' && !!(info && info.SecondaryEffect); }
 function battleGroundedIdx(side, idx){ return groundedRule(battle && battle.sharedPrepared ? battle.sharedPrepared[idx] : null, side, idx); }
 // Lado em que o Pokémon (índice do time) está EM CAMPO, ou null.
 function fieldSideOf(idx){
@@ -2370,19 +2384,107 @@ function defLocOf(p){
   const sd = fieldSideOf(p.pokeIdx); return sd ? { side: sd, idx: p.pokeIdx } : null;
 }
 // Ao entrar em campo: quem sai perde os efeitos voláteis; com Baton Pass eles passam para quem entra.
+// Devolve o texto do Regenerator de quem saiu ('' se não houve).
 function volOnEnter(side, oldIdx, newIdx, batonPass){
   const S = battle.sides[side]; if(!S.vol) S.vol = {};
+  if(oldIdx === newIdx && oldIdx != null) return '';   // entrada inicial (já estava no lugar): não apaga nada
   const old = (oldIdx != null && oldIdx !== newIdx) ? (S.vol[oldIdx] || {}) : {};
+  // Regenerator: quem sai de campo VIVO recupera 1/3 do HP máx. (arredondado para baixo). Vale a habilidade EFETIVA
+  // (copiada por Trace conta; suprimida por Gastro Acid não). Heal Block não impede.
+  let regen = '';
+  if(oldIdx != null && oldIdx !== newIdx && S.hp[oldIdx] > 0){
+    const op = battle.sharedPrepared[oldIdx];
+    if(op && normKey(op.ability || '') === 'regenerator' && S.hp[oldIdx] < op.hpMax){
+      const b = S.hp[oldIdx]; S.hp[oldIdx] = Math.min(op.hpMax, b + Math.floor(op.hpMax / 3));
+      regen = LF.heal({ name: op.name, heal: S.hp[oldIdx] - b, label: 'Regenerator', hpAfter: S.hp[oldIdx], hpMax: op.hpMax });
+    }
+  }
   const nv = {};
   if(batonPass){
     if(old.ingrain) nv.ingrain = true;
     if(old.magnetRise > 0) nv.magnetRise = old.magnetRise;
     if(old.tele > 0 && !isMegaGengar(battle.sharedPrepared[newIdx])) nv.tele = old.tele;
   }
-  const changed = !!(old.ingrain || old.magnetRise > 0 || old.tele > 0 || old.smacked) || Object.keys(S.vol[newIdx] || {}).length > 0 || Object.keys(nv).length > 0;
+  const changed = !!(old.ingrain || old.magnetRise > 0 || old.tele > 0 || old.smacked || old.gastro || old.traced) || Object.keys(S.vol[newIdx] || {}).length > 0 || Object.keys(nv).length > 0;
   if(oldIdx != null && oldIdx !== newIdx) delete S.vol[oldIdx];
   S.vol[newIdx] = nv;
   if(changed) refreshBattlePrepared();
+  return regen;
+}
+// ===== Habilidade EFETIVA em campo (Trace copia, Gastro Acid suprime) =====
+// vol.traced = habilidade copiada · vol.gastro = suprimida. prepareBattleSide usa abilityOverrideFor(), então TODO o resto
+// (cálculo, imunidades, Intimidate, clima...) enxerga a habilidade efetiva. Some quando o Pokémon sai de campo.
+function abilityOverrideFor(pokeIdx){
+  if(!battle || !battle.sides || __battleInitPrep) return null;
+  const sd = fieldSideOf(pokeIdx); if(!sd) return null;
+  const v = volPeek(sd, pokeIdx);
+  if(v.gastro) return '';
+  if(v.traced) return v.traced;
+  return null;
+}
+const TRACE_UNCOPYABLE = new Set(['as one','battle bond','comatose','commander','disguise','embody aspect','flower gift','forecast','gulp missile','hunger switch','ice face','illusion','imposter','multitype','neutralizing gas','poison puppeteer','power construct','power of alchemy','protosynthesis','quark drive','receiver','rks system','schooling','shields down','stance change','teraform zero','tera shell','tera shift','trace','zen mode','zero to hero']);
+const GASTRO_FAIL = new Set(['multitype','stance change','schooling','comatose','shields down','disguise','rks system','battle bond','power construct','ice face','gulp missile','as one','zero to hero','commander']);
+// Trace: copia a habilidade de um oponente adjacente aleatório (que possa ser copiada). Devolve o texto ou ''.
+function tryTrace(sd, idx){
+  const p = battle.sharedPrepared[idx], S = battle.sides[sd];
+  if(!p || !(S.hp[idx] > 0) || normKey(p.ability || '') !== 'trace') return '';
+  const o = sd === 'A' ? 'B' : 'A';
+  const cands = fieldMons(o).filter(j => { const q = battle.sharedPrepared[j]; return q && q.ability && !TRACE_UNCOPYABLE.has(normKey(q.ability)); });
+  if(!cands.length) return '';
+  const j = cands[Math.floor(battleRandom() * cands.length)], q = battle.sharedPrepared[j];
+  volOf(sd, idx).traced = q.ability; refreshBattlePrepared();
+  return `<b>${p.name}</b> copiou a habilidade <b>${q.ability}</b> de <b>${q.name}</b> (Trace)!`;
+}
+// ===== Intimidate (Singles e Doubles) =====
+const INTIMIDATE_BLOCK = new Set(['clear body','white smoke','hyper cutter','full metal body','inner focus','oblivious','own tempo','scrappy']);
+function intimidateLines(sd, idx){
+  const user = battle.sharedPrepared[idx], o = sd === 'A' ? 'B' : 'A', out = [], un = `<b>${user.name}</b>`;
+  for(const j of fieldMons(o)){
+    const t = battle.sharedPrepared[j]; if(!t) continue;
+    const tn = `<b>${t.name}</b>`, ab = normKey(t.ability || '');
+    if(subOf(o, j) > 0) continue;                                    // substituto bloqueia
+    if(INTIMIDATE_BLOCK.has(ab)){ out.push(`${tn} não é afetado pela Intimidate de ${un} (${t.ability}).`); continue; }
+    if(heldItem(o, j) === 'clear amulet'){ out.push(`${tn} não é afetado pela Intimidate de ${un} (Clear Amulet).`); continue; }
+    if(ab === 'mirror armor'){                                        // devolve a queda para quem usou
+      out.push(`${tn} refletiu a Intimidate de ${un} com Mirror Armor!`);
+      if(subOf(sd, idx) <= 0 && battle.sides[sd].hp[idx] > 0) withMon(sd, idx, () => out.push(`${un} ${fmtStageChange(changeStage(sd, 'Atk', -1, { byFoe: true }))}.`));
+      continue;
+    }
+    withMon(o, j, () => {
+      if(ab === 'guard dog') out.push(`Intimidate de ${un}: ${tn} ${fmtStageChange(changeStage(o, 'Atk', 1))} (Guard Dog).`);
+      else out.push(`Intimidate de ${un}: ${tn} ${fmtStageChange(changeStage(o, 'Atk', -1, { byFoe: true }))}.`);
+      if(ab === 'rattled') out.push(`${tn} Rattled: ${fmtStageChange(changeStage(o, 'Spe', 1))}.`);
+      if(heldItem(o, j) === 'adrenaline orb' && canChangeStage(o, 'Spe', 1)){ useItem(o, j); out.push(`${tn} consumiu Adrenaline Orb: ${fmtStageChange(changeStage(o, 'Spe', 1))}.`); }
+      if(heldItem(o, j) === 'white herb'){
+        const st = battle.sides[o].stages, neg = Object.keys(st).filter(k => st[k] < 0);
+        if(neg.length){ neg.forEach(k => { st[k] = 0; }); useItem(o, j); out.push(`${tn} usou White Herb: ${neg.join(', ')} ${neg.length > 1 ? 'voltaram' : 'voltou'} a 0.`); }
+      }
+    });
+  }
+  return out;
+}
+// Efeitos de ENTRADA da habilidade (ao entrar ou ao ganhar a habilidade por Trace): clima, terreno e Intimidate.
+const ENTRY_WEATHER_AB = {'Drizzle':'rain','Drought':'sun','Orichalcum Pulse':'sun','Sand Stream':'sand','Snow Warning':'snow','Desolate Land':'harshsun','Primordial Sea':'heavyrain','Delta Stream':'strongwinds'};
+const ENTRY_TERRAIN_AB = {'Electric Surge':'electric','Hadron Engine':'electric','Grassy Surge':'grassy','Misty Surge':'misty','Psychic Surge':'psychic'};
+function abilityStartChanges(sd, idx, afterFaint){
+  const out = [], p = battle.sharedPrepared[idx]; if(!p || !(battle.sides[sd].hp[idx] > 0)) return out;
+  const v = volOf(sd, idx); if(v.started === p.ability) return out;   // essa habilidade já fez o efeito de entrada nesta estadia em campo
+  v.started = p.ability;
+  const ab = p.ability, startTurn = battle.turn + (afterFaint ? 1 : 0);
+  let env = false;
+  withMon(sd, idx, () => {
+    if(ENTRY_WEATHER_AB[ab]){ setBattleWeather(ENTRY_WEATHER_AB[ab], sd, startTurn); out.push({ type: 'weather-change', weather: ENTRY_WEATHER_AB[ab], name: p.name }); env = true; }
+    if(ENTRY_TERRAIN_AB[ab]){ setBattleTerrain(ENTRY_TERRAIN_AB[ab], sd, startTurn); out.push({ type: 'terrain-change', terrain: ENTRY_TERRAIN_AB[ab], name: p.name }); env = true; }
+  });
+  if(env) refreshBattlePrepared();
+  if(normKey(ab || '') === 'intimidate') intimidateLines(sd, idx).forEach(t => out.push({ type: 'note', text: t }));
+  return out;
+}
+// Um Pokémon entrou no lado sd: Trace dos OPONENTES que ainda não copiaram tenta de novo.
+function traceRecheck(sd, afterFaint){
+  const o = sd === 'A' ? 'B' : 'A', out = [];
+  fieldMons(o).forEach(j => { const t = tryTrace(o, j); if(t){ out.push({ type: 'note', text: t }); abilityStartChanges(o, j, afterFaint).forEach(c => out.push(c)); } });
+  return out;
 }
 // Gravity: liga por 5 turnos, cancela Fly/Bounce em andamento e tira a Telekinesis de todos. Devolve as linhas de log.
 function activateGravity(){
@@ -2441,15 +2543,43 @@ function switchLockText(side, idx){
   return null;
 }
 // Golpes que fixam o alvo no chão (Smack Down / Thousand Arrows): tiram Magnet Rise e Telekinesis. Devolve o texto do log ('' se nada mudou).
-function applyGroundingHit(side, idx){
+// Só aplica se o alvo estava FORA do chão (Flying, Levitate, Eelevate, Magnet Rise, Telekinesis). Não aplica no substituto
+// (quem chama já checa), em quem está no Sky Drop, nem com Iron Ball / Gravity / Ingrain (aí o alvo já está no chão).
+function applyGroundingHit(side, idx, semi){
   const p = battle.sharedPrepared[idx]; if(!p) return '';
-  const v = volOf(side, idx), wasAir = !battleGroundedIdx(side, idx), lost = [];
+  if(semi && semi.base === 'sky drop') return '';
+  if(battleGroundedIdx(side, idx)) return '';
+  const v = volOf(side, idx), lost = [];
   if(v.magnetRise > 0){ v.magnetRise = 0; lost.push('Magnet Rise'); }
   if(v.tele > 0){ v.tele = 0; lost.push('Telekinesis'); }
   v.smacked = true;
-  if(!wasAir && !lost.length) return '';
   refreshBattlePrepared();
   return `<b>${p.name}</b> foi derrubado ao chão!${lost.length ? ' (perdeu ' + lost.join(' e ') + ')' : ''}`;
+}
+// Gastro Acid: suprime a habilidade do alvo enquanto ele estiver em campo. Magic Bounce reflete (a menos que o usuário
+// ignore habilidades, ex. Mold Breaker). Devolve { text } ou { fail }.
+function gastroAcidApply(aSd, aIdx, tSd, tIdx, attIgnores){
+  let sd = tSd, i = tIdx, pre = '';
+  const tp = battle.sharedPrepared[tIdx];
+  if(normKey(tp.ability || '') === 'magic bounce' && !attIgnores){ sd = aSd; i = aIdx; pre = `<b>${tp.name}</b> refletiu o Gastro Acid com Magic Bounce! `; }
+  const q = battle.sharedPrepared[i], ab = normKey(q.ability || ''), v = volOf(sd, i);
+  if(!ab || v.gastro) return { fail: (pre ? 'refletido por Magic Bounce; ' : '') + q.name + ' já está sem habilidade' };
+  if(GASTRO_FAIL.has(ab)) return { fail: (pre ? 'refletido por Magic Bounce; ' : '') + q.name + ' tem ' + q.ability };
+  v.gastro = true; refreshBattlePrepared();
+  return { text: pre + `A habilidade <b>${q.ability}</b> de <b>${q.name}</b> foi suprimida!` };
+}
+// Singles: tira o Pokémon do lado `side` de campo e põe um aleatório do banco (Roar, Whirlwind, Red Card).
+function singlesDragOut(side){
+  const S = battle.sides[side], from = S.activePokeIdx, fromName = battle.sharedPrepared[from].name;
+  const c = getAvailableSwitchTargets(side); if(!c.length) return null;
+  const to = c[Math.floor(battleRandom() * c.length)];
+  setCursed(S, from, false); setCursed(S, to, false);
+  S.activePokeIdx = to; const regen = volOnEnter(side, from, to, false);
+  S.recharge = false; S.lastMoveKey = null; S.sub = 0; S.semi = null; S.flinched = false; S.currentEntryTurn = battle.turn;
+  S.stages = {Atk:0,Def:0,SpA:0,SpD:0,Spe:0,Acc:0,Eva:0}; S.protected = false; S.lastProtectTurn = -10; S.lastProtectAcc = 101; S.toxicCounter[to] = 0;
+  const snap = snapView();
+  const wc = applyEntryWeather(side, false, true).map(x => Object.assign({ side }, x));
+  return { text: LF.dragged(fromName, battle.sharedPrepared[to].name), snap, entries: (regen ? [{ side, type: 'note', text: regen, _snap: snap }] : []).concat(wc) };
 }
 // Telekinesis: motivo de falha contra o alvo, ou null.
 function telekinesisFail(tSide, tIdx){
@@ -2515,8 +2645,10 @@ function _sortRandomMoves(poke, arr){
 function prepareBattleSide(pokeIdx, env){
   const poke = currentPokemons[pokeIdx];
   if(!poke) return null;
-  const savedW = poke.pokemonWeather, savedT = poke.pokemonTerrain;
+  const savedW = poke.pokemonWeather, savedT = poke.pokemonTerrain, savedAb = poke.abilityUsed;
+  const _abOv = abilityOverrideFor(pokeIdx);   // Trace / Gastro Acid (só em campo, só na batalha)
   try{
+    if(_abOv !== null) poke.abilityUsed = _abOv;
     const opts = { weather: document.getElementById('weatherSelect').value, terrain: document.getElementById('terrainSelect').value };
     if(env){ opts.weather = env.weather; opts.terrain = env.terrain; poke.pokemonWeather = env.weather; poke.pokemonTerrain = env.terrain; }
     __seedsDisabled = true; __auraDynamic = true;
@@ -2555,6 +2687,7 @@ function prepareBattleSide(pokeIdx, env){
     };
   } catch(e){ console.error('[battle] prepare:', e); return null; }
   finally{
+    if(_abOv !== null) poke.abilityUsed = savedAb;
     if(env){
       if(savedW === undefined) delete poke.pokemonWeather; else poke.pokemonWeather = savedW;
       if(savedT === undefined) delete poke.pokemonTerrain; else poke.pokemonTerrain = savedT;
@@ -3187,10 +3320,18 @@ function changeStage(side, stat, delta, opts){
   const before = S.stages[stat] || 0;
   const after = Math.max(-6, Math.min(6, before + eff));
   S.stages[stat] = after;
-  return { stat, requested: delta, delta: eff, before, after, contrary, changed: after !== before };
+  const r = { stat, requested: delta, delta: eff, before, after, contrary, changed: after !== before };
+  // Defiant / Competitive: stat REDUZIDO por um oponente => Atk +2 / SpA +2
+  if(opts && opts.byFoe && r.changed && after < before){
+    const p = getSidePrepared(side), ab = normKey((p && p.ability) || ''), re = [];
+    if(ab === 'defiant') re.push('Defiant: ' + fmtStageChange(changeStage(side, 'Atk', 2)));
+    if(ab === 'competitive') re.push('Competitive: ' + fmtStageChange(changeStage(side, 'SpA', 2)));
+    if(re.length) r.react = re.join(', ');
+  }
+  return r;
 }
 function fmtStageChange(r){
-  return `${r.stat} ${r.delta > 0 ? '+' : ''}${r.delta}${r.contrary ? ' (Contrary)' : ''}${r.changed ? '' : ' (limite)'}`;
+  return `${r.stat} ${r.delta > 0 ? '+' : ''}${r.delta}${r.contrary ? ' (Contrary)' : ''}${r.changed ? '' : ' (limite)'}${r.react ? ' → ' + r.react : ''}`;
 }
 function applyStageList(side, list, opts){ return list.map(([st, d]) => fmtStageChange(changeStage(side, st, d, opts))).join(', '); }
 
@@ -3300,7 +3441,7 @@ function applySecondaryEffects(action, attacker, defender, moveInfo){
     if(m){
       const stat = STAT[m[1].toLowerCase()], n = Number(m[3]);
       if(toUser){ out.push(`${attacker.name} ${fmtStageChange(changeStage(aSide, stat, n))}`); }
-      else if(dS.hp[dIdx] > 0){ out.push(`${defender.name} ${fmtStageChange(changeStage(dSide, stat, -n, { ignoreAbility: attackerIgnoresAbility(attacker) }))}`); }
+      else if(dS.hp[dIdx] > 0){ out.push(`${defender.name} ${fmtStageChange(changeStage(dSide, stat, -n, { ignoreAbility: attackerIgnoresAbility(attacker), byFoe: true }))}`); }
       return;
     }
     if(dS.hp[dIdx] <= 0) return;
@@ -3323,7 +3464,7 @@ function executeAction(action, ordered, actionIdx){
     const _oldIdx = s.activePokeIdx;
     setCursed(s, s.activePokeIdx, false); setCursed(s, action.targetIdx, false);
     s.activePokeIdx = action.targetIdx;
-    volOnEnter(action.side, _oldIdx, action.targetIdx, false);
+    const _regen = volOnEnter(action.side, _oldIdx, action.targetIdx, false);
     s.recharge = false;
     s.lastMoveKey = null;
     s.sub = 0;
@@ -3335,6 +3476,7 @@ function executeAction(action, ordered, actionIdx){
     s.toxicCounter[action.targetIdx] = 0;
     const _snap = snapView();   // quadro da entrada (HP antes das armadilhas): a barra anima o dano de cada hazard depois
     const weatherChanges = applyEntryWeather(action.side, false, true);
+    if(_regen) weatherChanges.unshift({ type: 'note', text: _regen, _snap });
     const toName = getSidePrepared(action.side).name;
     return { side: action.side, type: 'switch', fromName, toName, weatherChanges, _snap };
   }
@@ -3377,11 +3519,12 @@ function executeAction(action, ordered, actionIdx){
     if(moveNameKey === 'magnet rise'){
       const _v = volOf(action.side, attackerActiveIdx);
       if(_v.ingrain) return _failS(attacker.name + ' está enraizado (Ingrain)');
+      if(_v.smacked) return _failS(attacker.name + ' foi derrubado ao chão (Smack Down)');
       if(_v.magnetRise > 0) return _failS('Magnet Rise já está ativo');
       _v.magnetRise = MAGNET_RISE_TURNS; refreshBattlePrepared();
       return _txtS(`${attacker.name} passou a flutuar com eletromagnetismo! (${MAGNET_RISE_TURNS} turnos)${battleGroundedIdx(action.side, attackerActiveIdx) ? ' (mas continua no chão)' : ''}`);
     }
-    if(moveNameKey === 'telekinesis' || FORCE_SWITCH_STATUS.has(moveNameKey)){
+    if(moveNameKey === 'telekinesis' || moveNameKey === 'gastro acid' || FORCE_SWITCH_STATUS.has(moveNameKey)){
       const _dIdx = defenderSideState.activePokeIdx;
       { const _spv = protectionVerdict(moveNameKey, { status: true, foeStatus: true, priority: getMovePriority(action.move.Name), spread: false, contact: false }, Object.assign({ prot: defenderSideState.protected || null }, defenderSideState.sideProt || {}));
         if(_spv.blocked) return { side: action.side, type: 'blocked', attackerName: attacker.name, moveName: action.move.Name, defenderName: defender.name, by: _spv.by }; }
@@ -3394,18 +3537,16 @@ function executeAction(action, ordered, actionIdx){
         volOf(defSide, _dIdx).tele = TELEKINESIS_TURNS; refreshBattlePrepared();
         return _txtS(`${defender.name} foi erguido no ar! (${TELEKINESIS_TURNS} turnos)${battleGroundedIdx(defSide, _dIdx) ? ' (mas continua no chão)' : ''}`);
       }
+      if(moveNameKey === 'gastro acid'){
+        if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
+        const _g = gastroAcidApply(action.side, attackerActiveIdx, defSide, _dIdx, attackerIgnoresAbility(attacker));
+        return _g.fail ? _failS(_g.fail) : _txtS(_g.text);
+      }
       // Roar / Whirlwind: o alvo sai e entra um Pokémon aleatório do banco (as armadilhas de entrada agem).
       if(volPeek(defSide, _dIdx).ingrain) return _failS(defender.name + ' está enraizado (Ingrain)');
-      const _cands = getAvailableSwitchTargets(defSide);
-      if(!_cands.length) return _failS('sem Pokémon para entrar');
-      const _to = _cands[Math.floor(battleRandom() * _cands.length)], ds = defenderSideState;
-      setCursed(ds, _dIdx, false); setCursed(ds, _to, false);
-      ds.activePokeIdx = _to; volOnEnter(defSide, _dIdx, _to, false);
-      ds.recharge = false; ds.lastMoveKey = null; ds.sub = 0; ds.semi = null; ds.flinched = false; ds.currentEntryTurn = battle.turn;
-      ds.stages = {Atk:0,Def:0,SpA:0,SpD:0,Spe:0,Acc:0,Eva:0}; ds.protected = false; ds.lastProtectTurn = -10; ds.lastProtectAcc = 101; ds.toxicCounter[_to] = 0;
-      const _snap = snapView();
-      const _wc = applyEntryWeather(defSide, false, true).map(c => Object.assign({ side: defSide }, c));
-      return Object.assign(_txtS(LF.dragged(defender.name, getSidePrepared(defSide).name)), { weatherChanges: _wc, _snap });
+      const _d = singlesDragOut(defSide);
+      if(!_d) return _failS('sem Pokémon para entrar');
+      return Object.assign(_txtS(_d.text), { weatherChanges: _d.entries, _snap: _d.snap });
     }
     if(moveNameKey === 'substitute' || moveNameKey === 'shed tail'){
       const isShed = moveNameKey === 'shed tail';
@@ -3491,7 +3632,7 @@ function executeAction(action, ordered, actionIdx){
         const _txt = applyStatusPlan(_plan, {
           user: { side: action.side, name: attacker.name, wrap: _wr },
           target: { side: defSide, name: defender.name, wrap: _wr },
-          targetOpts: { ignoreAbility: attackerIgnoresAbility(attacker) }
+          targetOpts: { ignoreAbility: attackerIgnoresAbility(attacker), byFoe: true }
         });
         const _dfg = moveNameKey === 'defog' && (clearHazards('A') | clearHazards('B'));   // Defog remove as armadilhas dos DOIS lados
         return { side: action.side, type: 'status-boost', attackerName: attacker.name, moveName: action.move.Name, boostText: _txt + (_dfg ? '; armadilhas removidas' : '') };
@@ -3721,6 +3862,9 @@ function executeAction(action, ordered, actionIdx){
     if(_da === 'sand spit'){ if(setBattleWeather('sand', defSide, battle.turn)){ hitNote = ` ${defender.name} levantou uma tempestade de areia!`; refreshBattlePrepared(); } }
     else if(_da === 'seed sower'){ if(setBattleTerrain('grassy', defSide, battle.turn)){ hitNote = ` ${defender.name} criou o Grassy Terrain!`; refreshBattlePrepared(); } }
   }
+  if((hpDamageDone > 0 || subAbsorbed > 0) && heldItem(defSide, s.activePokeIdx) === 'air balloon'){   // o Pokémon ou o substituto levou dano
+    useItem(defSide, s.activePokeIdx); refreshBattlePrepared(); hitNote += ` O Air Balloon de ${defender.name} estourou!`;
+  }
   const _midSnap = snapView();
   let drainHeal = 0, drainApplicable = false, drainPct = 0, drainHpBefore = 0, drainHpAfter = 0;
   if(dealt > 0 && (DRAIN_MOVES_50.has(moveNameKey) || DRAIN_MOVES_75.has(moveNameKey))){
@@ -3748,7 +3892,7 @@ function executeAction(action, ordered, actionIdx){
   }
   if(recoilBase > 0){
     const abK = normKey(attacker.ability || '');
-    if(abK === 'magic guard' || (!isStruggleMove && _rk !== 'steelbeam' && abK === 'rock head')){
+    if(abK === 'magic guard' || (!isStruggleMove && !ROCK_HEAD_NO_BLOCK.has(_rk) && abK === 'rock head')){
       recoilBlockedBy = attacker.ability;
     } else {
       const before = attackerSideState.hp[attackerActiveIdx];
@@ -3782,7 +3926,7 @@ function executeAction(action, ordered, actionIdx){
     secEffects.push(`${defender.name} ${fmtStageChange(changeStage(defSide, 'Def', 1))} (Stamina)`);
   }
   // Smack Down / Thousand Arrows: o alvo fica no chão (perde Magnet Rise e Telekinesis)
-  if(GROUNDING_HIT_MOVES.has(moveNameKey) && dealt > 0 && !subbed){ const _gt = applyGroundingHit(defSide, s.activePokeIdx); if(_gt && !_semiCut) hitNote += ' ' + _gt; }
+  if(GROUNDING_HIT_MOVES.has(moveNameKey) && dealt > 0 && !subbed){ const _gt = applyGroundingHit(defSide, s.activePokeIdx, dSemi); if(_gt && !_semiCut) hitNote += ' ' + _gt; }
   // Eelevate: nocauteou com golpe de dano => +1 no maior stat (não ativa se o nocaute encerra a batalha)
   if(!subbed && s.hp[s.activePokeIdx] <= 0 && attackerSideState.hp[attackerActiveIdx] > 0 && normKey(attacker.ability || '') === 'eelevate'
      && (singlesSideAlive(defSide) || (battle.mode === 'pvc' && Number(battle.infiniteMode) > 0))){
@@ -3814,6 +3958,17 @@ function executeAction(action, ordered, actionIdx){
   if(HAZARD_CLEAR_USER.has(moveNameKey) && dealt > 0 && clearHazards(action.side)) hitNote += ` As armadilhas do campo de ${sideTitle(action.side)} foram removidas!`;
   let pivot = null;
   if(PIVOT_DAMAGE_MOVES.has(moveNameKey) && attackerSideState.hp[attackerActiveIdx] > 0 && getAvailableSwitchTargets(action.side).length > 0) pivot = { passStages: false, passSub: false, via: action.move.moveName };
+  // Eject Button / Red Card: o portador levou dano (não o substituto), não caiu e o golpe não tem o boost do Sheer Force. Depois do último hit.
+  let ejectSide = null, redCard = null;
+  if(dealt > 0 && !subbed && s.hp[s.activePokeIdx] > 0 && !sheerForceOn(attacker, moveInfo)){
+    const _it = heldItem(defSide, s.activePokeIdx);
+    if(_it === 'eject button' && getAvailableSwitchTargets(defSide).length){
+      useItem(defSide, s.activePokeIdx); ejectSide = defSide; pivot = null; hitNote += ` ${defender.name} usou o Eject Button!`;
+    } else if(_it === 'red card' && attackerSideState.hp[attackerActiveIdx] > 0 && !volPeek(action.side, attackerActiveIdx).ingrain && getAvailableSwitchTargets(action.side).length){
+      useItem(defSide, s.activePokeIdx); pivot = null;
+      redCard = { pre: snapView(), note: `<b>${defender.name}</b> mostrou o Red Card para <b>${attacker.name}</b>!` };
+    }
+  }
   let inflicted = null;
   const defAbK = normKey(defender.ability || '');
   if(dealt > 0 && !subbed && attackerSideState.hp[attackerActiveIdx] > 0 && ((moveInfo && moveInfo.Contact && (defAbK === 'static' || defAbK === 'flame body')) || defAbK === 'spicy spray')){
@@ -3838,8 +3993,10 @@ function executeAction(action, ordered, actionIdx){
     drainHeal, drainApplicable, drainPct, drainHpBefore, drainHpAfter, drainDealt: dealt, attackerMaxHp: attacker.hpMax,
     hitNote, recoil: recoilDmg, recoilBlockedBy, attackerFainted, selfKO, isStruggle: isStruggleMove,
     _midSnap: (drainHeal > 0 || recoilDmg > 0) ? _midSnap : undefined,
-    subHit: subbed, subAbsorbed, subBroken, subRemain: s.sub || 0, pivot,
+    subHit: subbed, subAbsorbed, subBroken, subRemain: s.sub || 0, pivot, eject: ejectSide,
     doubleKO: attackerFainted && s.hp[s.activePokeIdx] <= 0,
+    ...(redCard ? (() => { const _rs = redCard.pre, _d = singlesDragOut(action.side);
+      return { _snap: _rs, weatherChanges: [{ side: defSide, type: 'note', text: redCard.note, _snap: _rs }, { side: action.side, type: 'note', text: _d.text, _snap: _d.snap }].concat(_d.entries) }; })() : {}),
   };
 }
 
@@ -4025,15 +4182,12 @@ function applyEntryWeather(side, afterFaint, withHazards){
   if(!prepared) return [];
   // Armadilhas de entrada agem ANTES das habilidades de entrada. Se o Pokémon cai, as habilidades dele não ativam.
   const hzChanges = withHazards ? applyEntryHazards(side) : [];
-  if(hzChanges.length && !(s.hp[s.activePokeIdx] > 0)) return hzChanges;
-  const ab = prepared.ability;
-  const weatherAbMap = {'Drizzle':'rain','Drought':'sun','Orichalcum Pulse':'sun','Sand Stream':'sand','Snow Warning':'snow','Desolate Land':'harshsun','Primordial Sea':'heavyrain','Delta Stream':'strongwinds'};
-  const terrainAbMap = {'Electric Surge':'electric','Hadron Engine':'electric','Grassy Surge':'grassy','Misty Surge':'misty','Psychic Surge':'psychic'};
-  const changes = hzChanges.slice();
-  const startTurn = battle.turn + (afterFaint ? 1 : 0);
-  if(weatherAbMap[ab]){ setBattleWeather(weatherAbMap[ab], side, startTurn); changes.push({ type: 'weather-change', weather: weatherAbMap[ab], name: prepared.name }); }
-  if(terrainAbMap[ab]){ setBattleTerrain(terrainAbMap[ab], side, startTurn); changes.push({ type: 'terrain-change', terrain: terrainAbMap[ab], name: prepared.name }); }
-  if(changes.length) refreshBattlePrepared();
+  if(hzChanges.length && !(s.hp[s.activePokeIdx] > 0)) return hzChanges;   // caiu nas armadilhas: nada de habilidade de entrada
+  const idx = s.activePokeIdx, changes = hzChanges.slice();
+  if(heldItem(side, idx) === 'air balloon') changes.push({ type: 'note', text: `<b>${prepared.name}</b> está flutuando com o Air Balloon!` });
+  { const t = tryTrace(side, idx); if(t) changes.push({ type: 'note', text: t }); }   // Trace copia antes dos efeitos de entrada
+  abilityStartChanges(side, idx, afterFaint).forEach(c => changes.push(c));
+  traceRecheck(side, afterFaint).forEach(c => changes.push(c));
   applySeedActivations().forEach(c => changes.push(c));
   return changes;
 }
@@ -4273,7 +4427,7 @@ function doPivotSwitch(side, idx, pv, turnLog){
   const _oldIdx = s.activePokeIdx;
   setCursed(s, s.activePokeIdx, false); setCursed(s, idx, false);
   s.activePokeIdx = idx;
-  volOnEnter(side, _oldIdx, idx, !!pv.passStages);   // Baton Pass transfere Ingrain / Magnet Rise / Telekinesis
+  const _regen = volOnEnter(side, _oldIdx, idx, !!pv.passStages);   // Baton Pass transfere Ingrain / Magnet Rise / Telekinesis · Regenerator
   if(keepCurse) setCursed(s, idx, true);
   s.recharge = false;
   s.lastMoveKey = null;
@@ -4287,6 +4441,7 @@ function doPivotSwitch(side, idx, pv, turnLog){
   const _snap = snapView();
   const wc = applyEntryWeather(side, false, true);
   turnLog.actions.push({ side, type: 'switch', fromName, toName: getSidePrepared(side).name, viaMove: pv.via, _snap });
+  if(_regen) turnLog.actions.push({ side, type: 'note', text: _regen, _snap });
   (wc || []).forEach(ch => turnLog.actions.push({ side, ...ch }));
 }
 function confirmPivot(side, idx){
@@ -4424,13 +4579,14 @@ function runTurn(ctx, startIdx){
     if(res.weatherChanges && res.weatherChanges.length){
       res.weatherChanges.forEach(ch => turnLog.actions.push({ side: action.side, ...ch }));
     }
-    if(res.pivot){
-      const pvSide = action.side;
+    if(res.pivot || res.eject){
+      // Pivô (U-turn, Baton Pass...) troca quem usou; Eject Button troca o portador (o dono escolhe quem entra)
+      const pvSide = res.eject || action.side, _pv = res.eject ? { passStages: false, passSub: false, via: 'Eject Button' } : res.pivot;
       if(battle.mode === 'pvc' && pvSide === 'B'){
         const pick = tryPickCpuReplacement('B');
-        if(pick !== null && pick !== undefined){ doPivotSwitch('B', pick, res.pivot, turnLog); diffStatus(turnLog); }
+        if(pick !== null && pick !== undefined){ doPivotSwitch('B', pick, _pv, turnLog); diffStatus(turnLog); }
       } else {
-        battle.pausedTurn = { ordered, turnLog, actionTargets, nextIdx: actIdx + 1, pivot: res.pivot };
+        battle.pausedTurn = { ordered, turnLog, actionTargets, nextIdx: actIdx + 1, pivot: _pv };
         battle.pausedTurn.pivot.side = pvSide;
         battle.awaitingReplacement = { A: pvSide === 'A', B: pvSide === 'B' };
         battle.pendingReplacement = { A: null, B: null };
@@ -8189,29 +8345,22 @@ function dEnter(sd, slot, idx, afterFaint, initial, batonPass){
   if(S.active[slot] != null) setCursed(S, S.active[slot], false);
   setCursed(S, idx, false);
   S.active[slot] = idx; dSyncActive(sd);
-  volOnEnter(sd, _old, idx, !!batonPass);   // Baton Pass transfere Ingrain / Magnet Rise / Telekinesis
-  S.stg[idx] = dEmptyStg(); S.prot[idx] = false; if(S.protStreak) S.protStreak[idx] = 0; if(S.endure) S.endure[idx] = false; S.flinch[idx] = false; S.rech[idx] = false; S.semis[idx] = null; S.subs[idx] = 0;
+  const _regen = volOnEnter(sd, _old, idx, !!batonPass);   // Baton Pass transfere Ingrain / Magnet Rise / Telekinesis · Regenerator de quem saiu
+  if(!initial) S.stg[idx] = dEmptyStg();   // na entrada inicial os stages já começam zerados (não apaga o Intimidate de quem entrou antes) S.prot[idx] = false; if(S.protStreak) S.protStreak[idx] = 0; if(S.endure) S.endure[idx] = false; S.flinch[idx] = false; S.rech[idx] = false; S.semis[idx] = null; S.subs[idx] = 0;
   S.lastMove[idx] = null; S.toxicCounter[idx] = 0; S.lastProtectTurn[idx] = -10; S.lastProtectAcc[idx] = 101; S.ff[idx] = false; S.hh[idx] = false; S.rageN[idx] = 0;
   S.entry[idx] = initial ? 0 : battle.turn; S.currentEntryTurn = S.entry[idx];
   { const L = battle._tl, mk = battle._entryMark; battle._entryMark = null;
     if(L && mk != null && mk === L.lines.length - 1) L.snaps[mk] = Object.assign({}, L.snaps[mk], { [sd]: dViewSnap()[sd] }); }
+  if(_regen) dLog(_regen);
   const p = dP(idx);
   const ch = dWith(sd, idx, () => applyEntryWeather(sd, afterFaint, !initial));
   ch.forEach(c => {
     if(c.type === 'hazard'){ dLog(c.text); if(c._dsnap) battle._tl.snaps[battle._tl.snaps.length - 1] = c._dsnap; }
-    else if(c.type === 'weather-change') dLog(LF.weatherChange(dP(idx).name, c.weather));
-    else if(c.type === 'terrain-change') dLog(LF.terrainChange(dP(idx).name, c.terrain));
+    else if(c.type === 'note') dLog(c.text);
+    else if(c.type === 'weather-change') dLog(LF.weatherChange(c.name || dP(idx).name, c.weather));
+    else if(c.type === 'terrain-change') dLog(LF.terrainChange(c.name || dP(idx).name, c.terrain));
     else if(c.type === 'seed-activate') dLog(LF.seed(Object.assign({}, c, { name: c.name || dP(idx).name })));
   });
-  if(S.hp[idx] > 0 && normKey(p.ability || '') === 'intimidate'){   // nocauteado pelas armadilhas de entrada: a habilidade não ativa
-    const o = dOpp(sd);
-    dActives(o).forEach(t => {
-      const ab = normKey(dP(t.idx).ability || '');
-      if(DBL_INTIMIDATE_BLOCK.includes(ab)){ dLog(`${dNm(o, t.idx)} não é afetado pela Intimidate (${dP(t.idx).ability}).`); return; }
-      if(dS(o).subs[t.idx] > 0) return;
-      dWith(o, t.idx, () => { if(canChangeStage(o, 'Atk', -1)){ const r = changeStage(o, 'Atk', -1); dLog(`Intimidate de ${dNm(sd, idx)}: ${dNm(o, t.idx)} ${fmtStageChange(r)}.`); } });
-    });
-  }
 }
 function dDoSwitch(sd, slot, to){
   const S = dS(sd), old = S.active[slot];
@@ -8299,6 +8448,7 @@ function dContinue(start){
     a.done = true;
     dTrackFaints();
     if(r && r.pivot && dPivot(a, i, r.pivot)) { renderBattle(); return; }
+    if(r && r.eject && dPivotAt(r.eject.sd, r.eject.slot, r.eject.idx, i, { pass: false, via: 'Eject Button' })) { renderBattle(); return; }
   }
   dEndTurn();
 }
@@ -8413,7 +8563,7 @@ function dMoveAct(a, order){
   else if(total > 0 && RECOIL_MOVES_N[rk]){ const rf = RECOIL_MOVES_N[rk]; recoilBase = Math.max(1, Math.round(total * rf[0] / rf[1])); }
   if(recoilBase > 0 && S.hp[idx] > 0){
     const ab = normKey(att.ability || '');
-    if(ab === 'magic guard' || (!m.isStruggle && rk !== 'steelbeam' && ab === 'rock head')) dLog(`${nm} não sofre recuo (${att.ability}).`);
+    if(ab === 'magic guard' || (!m.isStruggle && !ROCK_HEAD_NO_BLOCK.has(rk) && ab === 'rock head')) dLog(`${nm} não sofre recuo (${att.ability}).`);
     else { const b = S.hp[idx]; S.hp[idx] = Math.max(0, b - recoilBase); dLog(`${nm} sofreu <b>${b - S.hp[idx]}</b> de recuo (${b} → ${S.hp[idx]}/${att.hpMax}).${S.hp[idx] <= 0 ? ' Nocauteado!' : ''}`); }
   }
   if(SELF_KO_MOVES.has(mk) && S.hp[idx] > 0){ S.hp[idx] = 0; dLog(`${nm} se autodestruiu!`); }
@@ -8421,7 +8571,21 @@ function dMoveAct(a, order){
   if(total > 0 && S.hp[idx] > 0 && SELF_STAT_CHANGES[mk]){
     dWith(sd, idx, () => { const ch = SELF_STAT_CHANGES[mk]; const txt = Object.keys(ch).map(k => fmtStageChange(changeStage(sd, k, ch[k]))).join(', '); dLog(`${nm}: ${txt}.`); });
   }
-  if(PIVOT_DAMAGE_MOVES.has(mk) && S.hp[idx] > 0 && dBench(sd).length) out.pivot = { pass: false, via: mn };
+  // Red Card / Eject Button: com vários portadores atingidos, só o mais rápido de cada item ativa.
+  let carded = false;
+  { const its = (ho.items || []).filter(x => dAlive(x.sd, x.idx) && dS(x.sd).active.includes(x.idx) && heldItem(x.sd, x.idx) === x.it).sort((p, q) => q.spe - p.spe);
+    const rc = its.find(x => x.it === 'red card');
+    if(rc && S.hp[idx] > 0 && S.active[a.slot] === idx && !volPeek(sd, idx).ingrain && dBench(sd).length){
+      useItem(rc.sd, rc.idx); dLog(`<b>${dP(rc.idx).name}</b> mostrou o Red Card para <b>${att.name}</b>!`);
+      const bench = dBench(sd), to = bench[Math.floor(battleRandom() * bench.length)];
+      dLogEntry(LF.dragged(att.name, dP(to).name)); dEnter(sd, a.slot, to, false); carded = true;
+    }
+    const ej = its.find(x => x.it === 'eject button');
+    if(ej && dAlive(ej.sd, ej.idx) && dBench(ej.sd).length){
+      useItem(ej.sd, ej.idx); dLog(`<b>${dP(ej.idx).name}</b> usou o Eject Button!`);
+      out.eject = { sd: ej.sd, slot: dS(ej.sd).active.indexOf(ej.idx), idx: ej.idx };
+    } }
+  if(!carded && !out.eject && PIVOT_DAMAGE_MOVES.has(mk) && S.hp[idx] > 0 && dBench(sd).length) out.pivot = { pass: false, via: mn };
   return out;
 }
 function dSetStatus(tSd, tIdx, st, by){
@@ -8452,7 +8616,7 @@ function dSec(sd, idx, tSd, tIdx, info, mk){
     if(mm){
       const stat = STAT[mm[1].toLowerCase()], n = Number(mm[3]);
       if(toUser){ if(dS(sd).hp[idx] > 0) dWith(sd, idx, () => dLog(`${dNm(sd, idx)} ${fmtStageChange(changeStage(sd, stat, n))}.`)); }
-      else if(T.hp[tIdx] > 0) dWith(tSd, tIdx, () => dLog(`${dNm(tSd, tIdx)} ${fmtStageChange(changeStage(tSd, stat, -n, { ignoreAbility: attackerIgnoresAbility(att) }))}.`));
+      else if(T.hp[tIdx] > 0) dWith(tSd, tIdx, () => dLog(`${dNm(tSd, tIdx)} ${fmtStageChange(changeStage(tSd, stat, -n, { ignoreAbility: attackerIgnoresAbility(att), byFoe: tSd !== sd }))}.`));
       return;
     }
     if(T.hp[tIdx] <= 0) return;
@@ -8570,7 +8734,10 @@ function dHit(a, tSd, tIdx, o){
   if(HAZARD_CLEAR_USER.has(mk) && dealt > 0 && clearHazards(sd)) dLog(`As armadilhas do campo de <b>${sideTitle(sd)}</b> foram removidas!`);
   if(dealt > 0 && !subbed){ T.rageN[tIdx] = (T.rageN[tIdx] || 0) + Math.max(1, hitsDone); }
   // Smack Down / Thousand Arrows: o alvo fica no chão (perde Magnet Rise e Telekinesis)
-  if(GROUNDING_HIT_MOVES.has(mk) && dealt > 0 && !subbed){ const gt = applyGroundingHit(tSd, tIdx); if(gt && !semiCut) dLog(gt); }
+  if((hpDone > 0 || subAbs > 0) && heldItem(tSd, tIdx) === 'air balloon'){ useItem(tSd, tIdx); refreshBattlePrepared(); dLog(`O Air Balloon de ${dn} estourou!`); }
+  if(GROUNDING_HIT_MOVES.has(mk) && dealt > 0 && !subbed){ const gt = applyGroundingHit(tSd, tIdx, dsemi); if(gt && !semiCut) dLog(gt); }
+  // Eject Button / Red Card: decididos no fim do golpe (depois do último hit e de todos os alvos)
+  if(dealt > 0 && !subbed && T.hp[tIdx] > 0 && !sheerForceOn(att, info)){ const it = heldItem(tSd, tIdx); if(it === 'eject button' || it === 'red card') (o.items || (o.items = [])).push({ sd: tSd, idx: tIdx, it, spe: dSpeed(tSd, tIdx) }); }
   // Eelevate: nocauteou com golpe de dano => +1 no maior stat (não ativa se o nocaute encerra a batalha)
   if(!subbed && T.hp[tIdx] <= 0 && S.hp[idx] > 0 && tSd !== sd && normKey(att.ability || '') === 'eelevate' && !dSideDead(tSd)){
     const bst = beastBoostStat(att);
@@ -8625,11 +8792,12 @@ function dStatusAct(a){
   if(mk === 'magnet rise'){
     const v = volOf(sd, idx);
     if(v.ingrain) return fail(att.name + ' está enraizado (Ingrain)');
+    if(v.smacked) return fail(att.name + ' foi derrubado ao chão (Smack Down)');
     if(v.magnetRise > 0) return fail('Magnet Rise já está ativo');
     v.magnetRise = MAGNET_RISE_TURNS; refreshBattlePrepared();
     dLog(LF.moveText(att.name, m.Name, `${att.name} passou a flutuar com eletromagnetismo! (${MAGNET_RISE_TURNS} turnos)${battleGroundedIdx(sd, idx) ? ' (mas continua no chão)' : ''}`)); return null;
   }
-  if(mk === 'telekinesis' || FORCE_SWITCH_STATUS.has(mk)){
+  if(mk === 'telekinesis' || mk === 'gastro acid' || FORCE_SWITCH_STATUS.has(mk)){
     // alvo escolhido (nunca o próprio usuário); sem alvo válido => primeiro oponente em campo
     const foes = dActives(o);
     let t = (a.tgt && !(a.tgt.sd === sd && S.active[a.tgt.slot] === idx)) ? a.tgt : null;
@@ -8650,6 +8818,12 @@ function dStatusAct(a){
     }
     const acc = teleSureHit(t.sd, tIdx, mk, tsm) ? 101 : battleMoveAccuracy(mk, m);
     if(battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name })); return null; }
+    if(mk === 'gastro acid'){
+      if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
+      const g = gastroAcidApply(sd, idx, t.sd, tIdx, attackerIgnoresAbility(att));
+      if(g.fail) return fail(g.fail);
+      dLog(LF.moveText(att.name, m.Name, g.text)); return null;
+    }
     // Roar / Whirlwind: o alvo sai e entra um Pokémon aleatório do banco (as armadilhas de entrada agem).
     if(volPeek(t.sd, tIdx).ingrain) return fail(tp.name + ' está enraizado (Ingrain)');
     const bench = dBench(t.sd);
@@ -8734,7 +8908,7 @@ function dStatusAct(a){
         user: { side: sd, name: att.name, wrap: fn => dWith(sd, idx, fn) },
         team: dActives(sd).map(x => ({ side: sd, name: dP(x.idx).name, wrap: fn => dWith(sd, x.idx, fn) })),
         target: tg ? { side: tg.sd, name: dP(tg.idx).name, wrap: fn => dWith(tg.sd, tg.idx, fn) } : null,
-        targetOpts: { ignoreAbility: attackerIgnoresAbility(att) }
+        targetOpts: { ignoreAbility: attackerIgnoresAbility(att), byFoe: !!tg && tg.sd !== sd }
       });
       const dfg = mk === 'defog' && (clearHazards('A') | clearHazards('B'));   // Defog remove as armadilhas dos DOIS lados
       dLog(LF.boost(att.name, m.Name, txt + (dfg ? '; armadilhas removidas' : ''))); return null;
@@ -8755,11 +8929,11 @@ function dStatusAct(a){
 }
 
 /* ---------- pivôs ---------- */
-function dPivot(a, pos, pv){
-  const sd = a.side;
+function dPivot(a, pos, pv){ return dPivotAt(a.side, a.slot, a.idx, pos, pv); }
+function dPivotAt(sd, slot, idx, pos, pv){
   if(!dBench(sd).length) return false;
-  if(!dHuman(sd)){ dPivotDo(sd, a.slot, a.idx, dCpuReplacePick(sd), pv); return false; }
-  battle.await = { kind: 'pivot', sd, slot: a.slot, idx: a.idx, pos, pv };
+  if(!dHuman(sd)){ dPivotDo(sd, slot, idx, dCpuReplacePick(sd), pv); return false; }
+  battle.await = { kind: 'pivot', sd, slot, idx, pos, pv };
   return true;
 }
 function dPivotDo(sd, slot, oldIdx, to, pv){
