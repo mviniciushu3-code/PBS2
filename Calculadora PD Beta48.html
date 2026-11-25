@@ -715,7 +715,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 47; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 48; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
 const ICON_TRASH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
@@ -2948,6 +2948,63 @@ function battleMoveTypeOverride(_calcIdx, moveType){
   if(battle.plasmaTurn === battle.turn && moveType === 'Normal') return { type: 'Electric', label: 'Plasma Fists (Normal→Electric)' };
   return null;
 }
+// ===== Golpes de STATUS Electric que miram um Pokémon (Eerie Impulse, Electrify, Thunder Wave...): Volt Absorb (cura 1/4),
+//  Motor Drive (Spe +1) e Lightning Rod (SpA +1) absorvem e o golpe não faz efeito (como no Showdown; antes do substituto).
+//  No Doubles a Lightning Rod de um oponente atrai o golpe. Electrify / Plasma Fists no usuário também tornam o golpe Electric.
+const ELECTRIC_ABSORB = { 'volt absorb': 'Volt Absorb', 'motor drive': 'Motor Drive', 'lightning rod': 'Lightning Rod' };
+function statusMoveTypeFor(m, aIdx){
+  let t = (m && m.Type) || '';
+  if(battle.electrify && battle.electrify[aIdx] === battle.turn) t = 'Electric';
+  else if(battle.plasmaTurn === battle.turn && t === 'Normal') t = 'Electric';
+  return t;
+}
+function electricStatusAbsorb(aSd, aIdx, tSd, tIdx, m){
+  if(aIdx === tIdx || statusMoveTypeFor(m, aIdx) !== 'Electric') return null;
+  const ap = battle.sharedPrepared[aIdx], tp = battle.sharedPrepared[tIdx], T = battle.sides[tSd]; if(!tp) return null;
+  const ab = ELECTRIC_ABSORB[normKey(tp.ability || '')]; if(!ab || attackerIgnoresAbility(ap)) return null;
+  const fx = ABSORB_EFFECT[ab];
+  if(fx.stage){ const [st, n] = fx.stage; let txt = ''; withMon(tSd, tIdx, () => { txt = canChangeStage(tSd, st, n) ? LF.statusAbsorbStage(tp.name, ab, fmtStageChange(changeStage(tSd, st, n))) : LF.statusAbsorbImmune(tp.name, ab); }); return txt; }
+  const h = Math.min(tp.hpMax - T.hp[tIdx], Math.max(1, Math.floor(tp.hpMax * fx.heal)));
+  if(h > 0){ T.hp[tIdx] += h; return LF.statusAbsorbHeal(tp.name, ab, h, T.hp[tIdx], tp.hpMax); }
+  return LF.statusAbsorbImmune(tp.name, ab);
+}
+// Doubles: Lightning Rod de um oponente atrai o golpe de status Electric (devolve o índice novo ou null).
+function dLightningRodStatus(sd, idx, m, tSd, tIdx){
+  if(statusMoveTypeFor(m, idx) !== 'Electric' || attackerIgnoresAbility(dP(idx))) return null;
+  const o = sd === 'A' ? 'B' : 'A'; if(tSd !== o) return null;
+  if(normKey(dP(tIdx).ability || '') === 'lightning rod') return null;
+  const f = dActives(o).find(x => x.idx !== tIdx && normKey(dP(x.idx).ability || '') === 'lightning rod');
+  return f ? f.idx : null;
+}
+// ===== Thief / Covet: depois de acertar o Pokémon (não o substituto), se o usuário está de pé e SEM item, ele toma o item do alvo
+//  (só durante a batalha). Não toma: Sticky Hold (alvo de pé, sem Mold Breaker), itens que não podem ser trocados (Mega Stone etc.).
+//  O Magic Room não impede. Devolve linhas de log.
+const ITEM_STEAL_MOVES = new Set(['thief','covet']);
+function thiefLines(aSd, aIdx, tSd, tIdx, moveName){
+  const ap = battle.sharedPrepared[aIdx], tp = battle.sharedPrepared[tIdx];
+  if(!ap || !tp || !(battle.sides[aSd].hp[aIdx] > 0) || rawHeldItem(aSd, aIdx)) return [];
+  const it = rawHeldItem(tSd, tIdx); if(!it) return [];
+  if(normKey(tp.ability || '') === 'sticky hold' && battle.sides[tSd].hp[tIdx] > 0 && !attackerIgnoresAbility(ap)) return [LF.stickyHold(tp.name)];
+  if(trickBlocked(ap, '', tp, it)) return [];
+  const name = rawItemName(tp);
+  if(!battle.itemOv) battle.itemOv = {};
+  battle.itemOv[aIdx] = name; battle.itemOv[tIdx] = '';
+  const A = battle.sides[aSd]; if(A.itemUsed) delete A.itemUsed[aIdx]; delete volOf(aSd, aIdx).choice;
+  refreshBattlePrepared();
+  const seeds = applySeedActivations().map(c => LF.seed(c));
+  return [LF.thief(ap.name, tp.name, name, moveName)].concat(seeds);
+}
+// ===== Dragon Tail / Circle Throw (prioridade -6): depois do dano, o alvo é trocado por um Pokémon aleatório do banco.
+//  Só se o golpe acertou o Pokémon (não o substituto), o alvo e o usuário estão de pé e há Pokémon no banco.
+//  Ingrain, Suction Cups e Guard Dog impedem (Mold Breaker ignora as habilidades). Se arrastar, Eject Button / Red Card do alvo não ativam.
+const DRAG_HIT_MOVES = new Set(['dragon tail','circle throw']);
+function dragHitBlock(ap, tSd, tIdx){
+  const tp = battle.sharedPrepared[tIdx];
+  if(volPeek(tSd, tIdx).ingrain) return 'Ingrain';
+  const ab = normKey(tp.ability || '');
+  if((ab === 'suction cups' || ab === 'guard dog') && !attackerIgnoresAbility(ap)) return tp.ability;
+  return null;
+}
 // ===== Minimize: quem usou fica "minimizado" até sair de campo. Flying Press contra ele: dano ×2 e sempre acerta (exceto semi-invulnerável). =====
 function minimizeSureHit(mk, tSd, tIdx, semi){ return mk === 'flying press' && !!volPeek(tSd, tIdx).minimize && !(semi && semi.kind !== 'charge'); }
 // ===== Magic Room: 5 turnos; os itens dos Pokémon EM CAMPO não fazem efeito (usar de novo encerra). Mega, Trick e Pluck/Bug Bite não são afetados. =====
@@ -4619,6 +4676,7 @@ function executeAction(action, ordered, actionIdx){
       const _ds = getSemi(defSide);
       if(_ds && _ds.kind !== 'charge' && normKey(attacker.ability||'') !== 'no guard' && normKey(defender.ability||'') !== 'no guard')
         return { side: action.side, type: 'move-miss', attackerName: attacker.name, moveName: action.move.Name, semiDodge: defender.name };
+      { const _ea = electricStatusAbsorb(action.side, attackerActiveIdx, defSide, _dIdx, action.move); if(_ea) return _txtS(_ea); }   // Volt Absorb / Motor Drive / Lightning Rod
       if(moveNameKey === 'telekinesis'){
         if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
         const _tf = telekinesisFail(defSide, _dIdx); if(_tf) return _failS(_tf);
@@ -4745,6 +4803,7 @@ function executeAction(action, ordered, actionIdx){
           const _ds = getSemi(defSide);
           if(_ds && _ds.kind !== 'charge' && normKey(attacker.ability||'') !== 'no guard' && normKey(defender.ability||'') !== 'no guard')
             return { side: action.side, type: 'move-miss', attackerName: attacker.name, moveName: action.move.Name, semiDodge: defender.name };
+          { const _ea = electricStatusAbsorb(action.side, attackerActiveIdx, defSide, defenderSideState.activePokeIdx, action.move); if(_ea) return _txtS(_ea); }   // Volt Absorb / Motor Drive / Lightning Rod
           if((defenderSideState.sub || 0) > 0 && !SOUND_STAT_MOVES.has(moveNameKey))
             return { side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.Name, reason: 'o substituto de ' + defender.name + ' bloqueou' };
         }
@@ -4782,6 +4841,11 @@ function executeAction(action, ordered, actionIdx){
       const t = TERRAIN_MOVE_MAP[moveNameKey];
       if(setBattleTerrain(t, action.side, battle.turn)){ refreshBattlePrepared(); return { side: action.side, type: 'terrain-change', name: attacker.name, terrain: t }; }
       return { side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.Name, reason: 'o terreno já está ativo' };
+    }
+    if(moveNameKey === 'thunder wave'){
+      const _spv = protectionVerdict(moveNameKey, { status: true, foeStatus: true, priority: getMovePriority(action.move.Name), spread: false, contact: false }, Object.assign({ prot: defenderSideState.protected || null }, defenderSideState.sideProt || {}));
+      if(_spv.blocked) return { side: action.side, type: 'blocked', attackerName: attacker.name, moveName: action.move.Name, defenderName: defender.name, by: _spv.by };
+      const _ea = electricStatusAbsorb(action.side, attackerActiveIdx, defSide, defenderSideState.activePokeIdx, action.move); if(_ea) return _txtS(_ea);
     }
     return { side: action.side, type: 'status-noeffect', attackerName: attacker.name, moveName: action.move.Name };
   }
@@ -5090,6 +5154,7 @@ function executeAction(action, ordered, actionIdx){
   // Smack Down / Thousand Arrows: o alvo fica no chão (perde Magnet Rise e Telekinesis)
   if(GROUNDING_HIT_MOVES.has(moveNameKey) && dealt > 0 && !subbed){ const _gt = applyGroundingHit(defSide, s.activePokeIdx, dSemi); if(_gt && !_semiCut) hitNote += ' ' + _gt; }
   if((moveNameKey === 'pluck' || moveNameKey === 'bug bite') && dealt > 0 && !subbed) pluckLines(action.side, attackerActiveIdx, defSide, s.activePokeIdx).forEach(t => { hitNote += ' ' + t; });
+  if(ITEM_STEAL_MOVES.has(moveNameKey) && dealt > 0 && !subbed) thiefLines(action.side, attackerActiveIdx, defSide, s.activePokeIdx, action.move.moveName).forEach(t => { hitNote += ' ' + t; });
   if(moveNameKey === 'plasma fists' && dealt > 0 && !subbed && battle.plasmaTurn !== battle.turn){ battle.plasmaTurn = battle.turn; refreshBattlePrepared(); hitNote += ' ' + LF.plasma(); }
   // Eelevate: nocauteou com golpe de dano => +1 no maior stat (não ativa se o nocaute encerra a batalha)
   if(!subbed && s.hp[s.activePokeIdx] <= 0 && attackerSideState.hp[attackerActiveIdx] > 0 && normKey(attacker.ability || '') === 'eelevate'
@@ -5123,8 +5188,14 @@ function executeAction(action, ordered, actionIdx){
   let pivot = null;
   if(PIVOT_DAMAGE_MOVES.has(moveNameKey) && attackerSideState.hp[attackerActiveIdx] > 0 && getAvailableSwitchTargets(action.side).length > 0) pivot = { passStages: false, passSub: false, via: action.move.moveName };
   // Eject Button / Red Card: o portador levou dano (não o substituto), não caiu e o golpe não tem o boost do Sheer Force. Depois do último hit.
+  // Dragon Tail / Circle Throw: decide o arrasto ANTES do Eject Button / Red Card (que então não ativam)
+  let dragHit = false;
+  if(DRAG_HIT_MOVES.has(moveNameKey) && dealt > 0 && !subbed && s.hp[s.activePokeIdx] > 0 && attackerSideState.hp[attackerActiveIdx] > 0 && getAvailableSwitchTargets(defSide).length){
+    const _db = dragHitBlock(attacker, defSide, s.activePokeIdx);
+    if(_db) hitNote += ' ' + LF.dragHitBlocked(defender.name, _db); else dragHit = true;
+  }
   let ejectSide = null, redCard = null;
-  if(dealt > 0 && !subbed && s.hp[s.activePokeIdx] > 0 && !sheerForceOn(attacker, moveInfo)){
+  if(!dragHit && dealt > 0 && !subbed && s.hp[s.activePokeIdx] > 0 && !sheerForceOn(attacker, moveInfo)){
     const _it = heldItem(defSide, s.activePokeIdx);
     if(_it === 'eject button' && getAvailableSwitchTargets(defSide).length){
       useItem(defSide, s.activePokeIdx); ejectSide = defSide; hitNote += ` ${defender.name} usou o Eject Button!`;   // U-turn/Volt Switch/Flip Turn: o atacante também troca depois
@@ -5164,6 +5235,8 @@ function executeAction(action, ordered, actionIdx){
     _midSnap: (drainHeal > 0 || recoilDmg > 0) ? _midSnap : undefined,
     subHit: subbed, subAbsorbed, subBroken, subRemain: s.sub || 0, pivot, eject: ejectSide,
     doubleKO: attackerFainted && s.hp[s.activePokeIdx] <= 0,
+    ...(dragHit ? (() => { const _d = singlesDragOut(defSide);   // Dragon Tail / Circle Throw
+      return _d ? { weatherChanges: [{ side: defSide, type: 'note', text: _d.text, _snap: _d.snap }].concat(_d.entries) } : {}; })() : {}),
     ...(redCard ? (() => { const _rs = redCard.pre, _d = singlesDragOut(action.side);
       return { _snap: _rs, weatherChanges: [{ side: defSide, type: 'note', text: redCard.note, _snap: _rs }, { side: action.side, type: 'note', text: _d.text, _snap: _d.snap }].concat(_d.entries) }; })() : {}),
   };
@@ -6501,6 +6574,12 @@ const LF = {
   magicRoomEnd: () => `A área bizarra se desfez: os itens voltaram a fazer efeito.`,
   pluck: (n, t, berry, heal, hpA, max) => `<b>${n}</b> comeu a <b>${berry}</b> de <b>${t}</b>!${heal ? ` Recuperou <span style="color:var(--mint);">${heal} HP</span> (${hpA}/${max}).` : ''}`,
   pluckBlocked: t => `<b>${t}</b> segurou a Berry com Sticky Hold!`,
+  statusAbsorbHeal: (n, ab, h, hpA, max) => `<b>${n}</b> absorveu o golpe com ${ab} e recuperou <span style="color:var(--mint);">${h} HP</span> (${hpA}/${max})!`,
+  statusAbsorbStage: (n, ab, txt) => `<b>${n}</b> absorveu o golpe com ${ab}! ${txt}.`,
+  statusAbsorbImmune: (n, ab) => `<b>${n}</b> não é afetado (${ab}).`,
+  thief: (n, t, item, mv) => `<b>${n}</b> roubou o item <b>${item}</b> de <b>${t}</b> (${mv})!`,
+  stickyHold: t => `<b>${t}</b> segurou o item com Sticky Hold!`,
+  dragHitBlocked: (t, why) => `<b>${t}</b> não foi arrastado (${why}).`,
   anticipation: n => `<b>${n}</b> estremeceu! (Anticipation)`,
   hydration: (n, st) => `<b>${n}</b> curou-se de <b>${st}</b> com Hydration!`,
   effectSpore: (holder, att, st) => `Effect Spore de <b>${holder}</b>: <b>${att}</b> agora está <b>${st}</b>!`,
@@ -10138,9 +10217,15 @@ function dHit(a, tSd, tIdx, o){
   if((hpDone > 0 || subAbs > 0) && heldItem(tSd, tIdx) === 'air balloon'){ useItem(tSd, tIdx); refreshBattlePrepared(); dLog(`O Air Balloon de ${dn} estourou!`); }
   if(GROUNDING_HIT_MOVES.has(mk) && dealt > 0 && !subbed){ const gt = applyGroundingHit(tSd, tIdx, dsemi); if(gt && !semiCut) dLog(gt); }
   if((mk === 'pluck' || mk === 'bug bite') && dealt > 0 && !subbed) pluckLines(sd, idx, tSd, tIdx).forEach(t => dLog(t));
+  if(ITEM_STEAL_MOVES.has(mk) && dealt > 0 && !subbed) thiefLines(sd, idx, tSd, tIdx, m.moveName).forEach(t => dLog(t));
   if(mk === 'plasma fists' && dealt > 0 && !subbed && battle.plasmaTurn !== battle.turn){ battle.plasmaTurn = battle.turn; refreshBattlePrepared(); dLog(LF.plasma()); }
   // Eject Button / Red Card: decididos no fim do golpe (depois do último hit e de todos os alvos)
-  if(dealt > 0 && !subbed && T.hp[tIdx] > 0 && !sheerForceOn(att, info)){ const it = heldItem(tSd, tIdx); if(it === 'eject button' || it === 'red card') (o.items || (o.items = [])).push({ sd: tSd, idx: tIdx, it, spe: dSpeed(tSd, tIdx) }); }
+  // Dragon Tail / Circle Throw: decide o arrasto antes do Eject Button / Red Card (que então não ativam)
+  let dragHit = false;
+  if(DRAG_HIT_MOVES.has(mk) && dealt > 0 && !subbed && T.hp[tIdx] > 0 && S.hp[idx] > 0 && dBench(tSd).length){
+    const db = dragHitBlock(att, tSd, tIdx); if(db) dLog(LF.dragHitBlocked(def.name, db)); else dragHit = true;
+  }
+  if(!dragHit && dealt > 0 && !subbed && T.hp[tIdx] > 0 && !sheerForceOn(att, info)){ const it = heldItem(tSd, tIdx); if(it === 'eject button' || it === 'red card') (o.items || (o.items = [])).push({ sd: tSd, idx: tIdx, it, spe: dSpeed(tSd, tIdx) }); }
   // Eelevate: nocauteou com golpe de dano => +1 no maior stat (não ativa se o nocaute encerra a batalha)
   if(!subbed && T.hp[tIdx] <= 0 && S.hp[idx] > 0 && tSd !== sd && normKey(att.ability || '') === 'eelevate' && !dSideDead(tSd)){
     const bst = beastBoostStat(att);
@@ -10173,6 +10258,10 @@ function dHit(a, tSd, tIdx, o){
     if(!immune && !leafGuardBlocks(sd, idx) && getStatusOf(sd, idx) === 'Healthy' && (dAb === 'spicy spray' || battleRandom() < 0.3)) dSetStatus(sd, idx, want, def.ability);
   }
   if(T.hp[tIdx] <= 0){ T.subs[tIdx] = 0; }   // "foi nocauteado!" já vem na linha de dano (fmtDamageHtml), igual ao Singles
+  if(dragHit && T.hp[tIdx] > 0 && T.active.includes(tIdx)){   // Dragon Tail / Circle Throw: arrasta um aleatório do banco
+    const bench = dBench(tSd);
+    if(bench.length){ const to = bench[Math.floor(battleRandom() * bench.length)]; dLogEntry(LF.dragged(def.name, dP(to).name)); dEnter(tSd, T.active.indexOf(tIdx), to, false); }
+  }
   return res;
 }
 
@@ -10226,11 +10315,13 @@ function dStatusAct(a){
     if(tIdx == null || !dAlive(t.sd, tIdx)){ t = null; tIdx = null; if(foes[0]){ t = { sd: o, slot: foes[0].slot }; tIdx = foes[0].idx; } }
     if(!t) return fail('sem alvo');
     if(t.sd === o){ const rd = dRedirFor(o, sd, idx); if(rd != null && dAlive(o, rd)){ tIdx = rd; t = { sd: o, slot: dS(o).active.indexOf(rd) }; } }
+    { const lr = dLightningRodStatus(sd, idx, m, t.sd, tIdx); if(lr != null){ tIdx = lr; t = { sd: o, slot: dS(o).active.indexOf(lr) }; } }   // Lightning Rod atrai
     const T = dS(t.sd), tp = dP(tIdx);
     { const spv = protectionVerdict(mk, { status: true, foeStatus: t.sd !== sd, priority: getMovePriority(m.Name), spread: false, contact: false }, { prot: T.prot[tIdx] || null, wide: T.wide, quick: T.quick, crafty: T.crafty, mat: T.mat });
       if(spv.blocked){ dLog(LF.blocked({ attackerName: att.name, moveName: m.Name, defenderName: tp.name, by: spv.by })); return null; } }
     const tsm = T.semis[tIdx];
     if(tsm && tsm.kind !== 'charge' && normKey(att.ability || '') !== 'no guard' && normKey(tp.ability || '') !== 'no guard'){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name, semiDodge: tp.name })); return null; }
+    { const ea = electricStatusAbsorb(sd, idx, t.sd, tIdx, m); if(ea){ dLog(LF.moveText(att.name, m.Name, ea)); return null; } }   // Volt Absorb / Motor Drive / Lightning Rod
     if(mk === 'telekinesis'){
       if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
       const tf = telekinesisFail(t.sd, tIdx); if(tf) return fail(tf);
@@ -10348,12 +10439,14 @@ function dStatusAct(a){
         if(tIdx == null || !dAlive(t.sd, tIdx)){ t = null; tIdx = null; if(foes[0]){ t = { sd: o, slot: foes[0].slot }; tIdx = foes[0].idx; } }
         if(!t) return fail('sem alvo');
         if(t.sd === o){ const rd = dRedirFor(o, sd, idx); if(rd != null && dAlive(o, rd)) tIdx = rd; }
+        { const lr = dLightningRodStatus(sd, idx, m, t.sd, tIdx); if(lr != null) tIdx = lr; }   // Lightning Rod atrai
         tg = { sd: t.sd, idx: tIdx };
         const T = dS(tg.sd), tp = dP(tg.idx);
         { const spv = protectionVerdict(mk, { status: true, foeStatus: tg.sd !== sd, priority: getMovePriority(m.Name), spread: false, contact: false }, { prot: T.prot[tg.idx] || null, wide: T.wide, quick: T.quick, crafty: T.crafty, mat: T.mat });
           if(spv.blocked){ dLog(LF.blocked({ attackerName: att.name, moveName: m.Name, defenderName: tp.name, by: spv.by })); return null; } }
         const tsm = T.semis[tg.idx];
         if(tsm && tsm.kind !== 'charge' && normKey(att.ability || '') !== 'no guard' && normKey(tp.ability || '') !== 'no guard'){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name, semiDodge: tp.name })); return null; }
+        { const ea = electricStatusAbsorb(sd, idx, tg.sd, tg.idx, m); if(ea){ dLog(LF.moveText(att.name, m.Name, ea)); return null; } }   // Volt Absorb / Motor Drive / Lightning Rod
         if((T.subs[tg.idx] || 0) > 0 && tg.sd !== sd && !SOUND_STAT_MOVES.has(mk)) return fail('o substituto de ' + tp.name + ' bloqueou');
         if(POWDER_MOVES.has(mk)){ const pi = powderImmune(tp, tg.sd, tg.idx); if(pi) return fail(LF.powderImmune(tp.name, pi)); }   // pó/esporos
         const acc = teleSureHit(tg.sd, tg.idx, mk, tsm) ? 101 : sandVeilAcc(battleMoveAccuracy(mk, m, tg.sd, tg.idx), att, tg.sd, tg.idx);   // Gravity ×6840/4096 · Telekinesis no alvo: sempre acerta
@@ -10384,6 +10477,13 @@ function dStatusAct(a){
   if(mk === 'follow me' || mk === 'rage powder'){ battle.redir[sd] = idx; (battle.redirPowder || (battle.redirPowder = {}))[sd] = mk === 'rage powder'; dLog(`${H}! Atrai a atenção dos oponentes.`); return null; }
   if(mk === 'trick room'){ if(battle.trickRoom > 0){ battle.trickRoom = 0; dLog(`${H}! A dimensão voltou ao normal.`); } else { battle.trickRoom = 5; dLog(`${H}! A dimensão ficou distorcida (5 turnos).`); } return null; }
   if(mk === 'tailwind'){ if(battle.tailwind[sd] > 0) return fail('já ativo'); battle.tailwind[sd] = 4; dLog(`${H}! Vento a favor para o time (4 turnos).`); return null; }
+  if(mk === 'thunder wave' && a.tgt){   // Thunder Wave: ainda sem paralisia; a absorção (e a Lightning Rod) já valem
+    let ti = dS(a.tgt.sd).active[a.tgt.slot], ts = a.tgt.sd;
+    if(ti != null && dAlive(ts, ti)){ const lr = dLightningRodStatus(sd, idx, m, ts, ti); if(lr != null){ ti = lr; ts = dOpp(sd); }
+      const TT = dS(ts), spv = protectionVerdict(mk, { status: true, foeStatus: ts !== sd, priority: getMovePriority(m.Name), spread: false, contact: false }, { prot: TT.prot[ti] || null, wide: TT.wide, quick: TT.quick, crafty: TT.crafty, mat: TT.mat });
+      if(spv.blocked){ dLog(LF.blocked({ attackerName: att.name, moveName: m.Name, defenderName: dP(ti).name, by: spv.by })); return null; }
+      const ea = electricStatusAbsorb(sd, idx, ts, ti, m); if(ea){ dLog(LF.moveText(att.name, m.Name, ea)); return null; } }
+  }
   if(POWDER_MOVES.has(mk) && a.tgt){   // pó/esporos sem efeito programado: ainda assim Grass, Overcoat e Safety Goggles são imunes
     const ti = dS(a.tgt.sd).active[a.tgt.slot];
     if(ti != null && dAlive(a.tgt.sd, ti)){ const pi = powderImmune(dP(ti), a.tgt.sd, ti); if(pi) return fail(LF.powderImmune(dP(ti).name, pi)); }
