@@ -706,7 +706,7 @@ Adamant Nature
   <option value="Black Glasses"><option value="Metal Coat"><option value="Fairy Feather">
   <option value="Choice Band"><option value="Choice Specs"><option value="Choice Scarf">
   <option value="Life Orb"><option value="Assault Vest"><option value="Leftovers">
-  <option value="Focus Sash"><option value="Safety Goggles"><option value="Heavy-Duty Boots"><option value="Power Herb">
+  <option value="Focus Sash"><option value="Safety Goggles"><option value="Heavy-Duty Boots"><option value="Power Herb"><option value="Light Clay">
   <option value="Air Balloon"><option value="Eject Button"><option value="Red Card"><option value="White Herb"><option value="Sitrus Berry">
   <option value="Grassy Seed"><option value="Electric Seed"><option value="Psychic Seed"><option value="Misty Seed">
   <option value="Eviolite"><option value="Weakness Policy"><option value="Expert Belt">
@@ -715,7 +715,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 46; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 47; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
 const ICON_TRASH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
@@ -1014,6 +1014,7 @@ function megaStoneUsableBy(item, names){ const e = megaEntryForStone(item); if(!
   const have = new Set([...dl.querySelectorAll('option')].map(o => normKey(o.value)));
   MEGA_STONE_NAMES.forEach(n => { if(!have.has(normKey(n))){ const o = document.createElement('option'); o.value = n; dl.appendChild(o); } });
 }catch(e){} })();
+let __battlePrepIdx = null;   // Pokémon que a BATALHA está preparando agora (a Calculadora nunca usa)
 let __megaAutoOff = false;   // true enquanto a BATALHA prepara um Pokémon (a batalha decide a forma; a Calculadora não troca sozinha)
 
 // Só na BATALHA (prepareBattleSide) __battleGroundFn é definido: aí o "no chão" segue Gravity, Ingrain, Magnet Rise etc.
@@ -1898,6 +1899,8 @@ function calcularTime(pokemons, opts){
       if(abilityDano === LIQUID_VOICE_ABILITY && SOUND_BASED_MOVES.has(moveNameKey)){
         if(moveType !== 'Water'){ moveType = 'Water'; bpModifierLabels.push('Liquid Voice (→Water)'); }
       }
+      // Só na batalha: Electrify (todo golpe do alvo vira Electric no turno) e Plasma Fists (Normal → Electric no resto do turno).
+      { const _bto = battleMoveTypeOverride(pokeIdx, moveType); if(_bto && _bto.type !== moveType){ moveType = _bto.type; bpModifierLabels.push(_bto.label); } }
       if(abilityDano === TECHNICIAN && basePowerEfetivo<=60 && basePowerEfetivo>0){ bpModifiers.push(1.5); bpModifierLabels.push('Technician (×1.5)'); }
       if(abilityDano === TOUGH_CLAWS && moveInfo.Contact){ bpModifiers.push(1.3); bpModifierLabels.push('Tough Claws (×1.3)'); }
       if(grounded && terrenoGolpe === 'electric' && moveType === 'Electric'){ bpModifiers.push(1.3); bpModifierLabels.push('Electric Terrain (×1.3)'); }
@@ -2490,7 +2493,7 @@ const ROCK_HEAD_NO_BLOCK = new Set(['steelbeam','mindblown']);
 const OHKO_MOVES = new Set(['fissure','sheer cold','guillotine','horn drill']);
 const GROUNDING_HIT_MOVES = new Set(['smack down','thousand arrows']);
 const FORCE_SWITCH_STATUS = new Set(['roar','whirlwind']);
-const VOL_TARGET_STATUS = new Set(['roar','whirlwind','telekinesis','gastro acid','trick','switcheroo','confuse ray','sweet kiss','swagger','flatter','yawn','entrainment']);   // golpes de status com alvo (no Doubles o alvo é escolhido)
+const VOL_TARGET_STATUS = new Set(['roar','whirlwind','telekinesis','gastro acid','trick','switcheroo','confuse ray','sweet kiss','swagger','flatter','yawn','entrainment','electrify']);   // golpes de status com alvo (no Doubles o alvo é escolhido)
 function telekinesisImmune(p){ const n = normKey((p && p.name) || ''); return n === 'gengar-mega' || n === 'mega gengar' || /^(diglett|dugtrio)(-|$)/.test(n) || n === 'sandygast' || n === 'palossand'; }
 function isMegaGengar(p){ const n = normKey((p && p.name) || ''); return n === 'gengar-mega' || n === 'mega gengar'; }
 function volOf(side, idx){ const S = battle.sides[side]; if(!S.vol) S.vol = {}; return S.vol[idx] || (S.vol[idx] = {}); }
@@ -2849,7 +2852,8 @@ function snowCloakAcc(acc, att, tSd, tIdx){
 }
 // ===== TELAS: Reflect (físico), Light Screen (especial), Aurora Veil (os dois; só na neve) — por lado, 5 turnos (Light Clay: 8) =====
 //  Singles ×0,5 · Doubles ×2732/4096. Não somam entre si, não valem em crítico, Infiltrator ignora. Entram no Dmod "Other".
-//  Saem com Brick Break / Psychic Fangs / Raging Bull (se o alvo não for imune ao tipo), Defog (lado do alvo) e Screen Cleaner (os dois lados).
+//  Saem com Brick Break / Psychic Fangs / Raging Bull (só se o golpe ACERTAR e o alvo não for imune ao tipo; também no lado de um aliado),
+//  Defog (lado do alvo) e Screen Cleaner (os dois lados).
 const SCREEN_INFO = { reflect: ['Reflect', '🪞'], lightscreen: ['Light Screen', '💡'], auroraveil: ['Aurora Veil', '🌌'] };
 const SCREEN_MOVES = { 'reflect': 'reflect', 'light screen': 'lightscreen', 'aurora veil': 'auroraveil' };
 const SCREEN_BREAK_MOVES = new Set(['brick break','psychic fangs','raging bull']);
@@ -2931,6 +2935,46 @@ function anticipationShudders(sd, idx){
     const e = (p.type1 ? (ch[p.type1] ?? 1) : 1) * (p.type2 ? (ch[p.type2] ?? 1) : 1);
     return e > 1;
   }));
+}
+// ===== Electrify / Plasma Fists (Singles e Doubles) =====
+//  Electrify: se o alvo ainda não usou golpe no turno, TODOS os golpes dele viram Electric neste turno (sempre acerta, exceto
+//  semi-invulnerável; falha se o alvo já agiu ou não vai usar golpe; substituto bloqueia). Struggle não muda.
+//  Plasma Fists: ao acertar, no resto do turno todo golpe Normal vira Electric (depois de -ate / Normalize).
+//  O tipo novo entra no cálculo da batalha (STAB, itens, imunidades, Volt Absorb...). Some no fim do turno.
+function battleMoveTypeOverride(_calcIdx, moveType){
+  const pokeIdx = __battlePrepIdx;   // índice do Pokémon no time (o cálculo recebe só ele, então o índice do cálculo não serve)
+  if(pokeIdx == null || !battle || !battle.sides) return null;
+  if(battle.electrify && battle.electrify[pokeIdx] === battle.turn) return { type: 'Electric', label: 'Electrify (→Electric)' };
+  if(battle.plasmaTurn === battle.turn && moveType === 'Normal') return { type: 'Electric', label: 'Plasma Fists (Normal→Electric)' };
+  return null;
+}
+// ===== Minimize: quem usou fica "minimizado" até sair de campo. Flying Press contra ele: dano ×2 e sempre acerta (exceto semi-invulnerável). =====
+function minimizeSureHit(mk, tSd, tIdx, semi){ return mk === 'flying press' && !!volPeek(tSd, tIdx).minimize && !(semi && semi.kind !== 'charge'); }
+// ===== Magic Room: 5 turnos; os itens dos Pokémon EM CAMPO não fazem efeito (usar de novo encerra). Mega, Trick e Pluck/Bug Bite não são afetados. =====
+function magicRoomOn(){ return !!battle && battle.magicRoom > 0; }
+function magicRoomHides(pokeIdx){ return !!battle && !__battleInitPrep && magicRoomOn() && !!fieldSideOf(pokeIdx); }
+// Item de verdade (ignora o Magic Room): Mega, Trick / Switcheroo, Pluck / Bug Bite.
+function rawHeldItem(sd, idx){ const p = battle.sharedPrepared[idx]; if(!p || itemGoneIdx(idx, sd)) return ''; return normKey((p.itemReal !== undefined ? p.itemReal : p.item) || ''); }
+function rawItemName(p){ return (p && (p.itemReal !== undefined ? p.itemReal : p.item)) || ''; }
+function magicRoomToggle(){
+  if(magicRoomOn()){ battle.magicRoom = 0; refreshBattlePrepared(); return LF.magicRoomEnd(); }
+  battle.magicRoom = 5;
+  ['A','B'].forEach(sd => fieldMons(sd).forEach(i => { delete volOf(sd, i).choice; }));   // o Choice deixa de prender
+  refreshBattlePrepared(); return LF.magicRoomStart();
+}
+// ===== Pluck / Bug Bite: acertou o Pokémon (não o substituto) => o usuário come a Berry do alvo e ganha o efeito na hora.
+//  Sticky Hold (alvo de pé, sem Mold Breaker) impede. O Magic Room não impede. Devolve linhas de log.
+function pluckLines(aSd, aIdx, tSd, tIdx){
+  const ap = battle.sharedPrepared[aIdx], tp = battle.sharedPrepared[tIdx], A = battle.sides[aSd];
+  if(!ap || !tp || !(A.hp[aIdx] > 0)) return [];
+  const it = rawHeldItem(tSd, tIdx); if(!/ berry$/.test(it)) return [];
+  if(normKey(tp.ability || '') === 'sticky hold' && battle.sides[tSd].hp[tIdx] > 0 && !attackerIgnoresAbility(ap)) return [LF.pluckBlocked(tp.name)];
+  const berry = rawItemName(tp);
+  if(!battle.itemOv) battle.itemOv = {}; battle.itemOv[tIdx] = '';
+  let heal = 0;
+  if(it === 'sitrus berry' && A.hp[aIdx] < ap.hpMax){ const b = A.hp[aIdx]; A.hp[aIdx] = Math.min(ap.hpMax, b + Math.floor(ap.hpMax / (abOf(aSd, aIdx) === 'ripen' ? 2 : 4))); heal = A.hp[aIdx] - b; }
+  refreshBattlePrepared();
+  return [LF.pluck(ap.name, tp.name, berry, heal, A.hp[aIdx], ap.hpMax)];
 }
 // Sol extremo: golpe de dano Water falha · Chuva pesada: golpe de dano Fire falha (o PP é gasto). Cloud Nine / Air Lock anulam.
 function primalMoveFail(move){
@@ -3074,6 +3118,8 @@ function condList(side, idx){
   const cl = choiceLockOf(side, idx);
   add(cl, '🔒', 'Preso pelo item Choice', cl ? 'só pode usar ' + ((findMoveInfo(cl) || {}).Name || cl) : 'só pode usar o primeiro golpe escolhido');
   { const sc = screensOf(side); Object.keys(SCREEN_INFO).forEach(k => add(sc[k] > 0, SCREEN_INFO[k][1], SCREEN_INFO[k][0], k === 'reflect' ? 'reduz o dano físico recebido' : k === 'lightscreen' ? 'reduz o dano especial recebido' : 'reduz o dano físico e especial recebido', sc[k] > 0 ? sc[k] + 't' : '')); }
+  add(v.minimize, '🔹', 'Minimize', 'Flying Press contra ele: dano ×2 e sempre acerta');
+  add(battle.electrify && battle.electrify[idx] === battle.turn, '🔌', 'Electrify', 'os golpes dele viram Electric neste turno');
   add(battle.iceFace && battle.iceFace[idx] === 'noice', '🧊', 'Noice Face (Ice Face quebrado)', 'volta ao Ice Face quando a neve começa ou ao entrar na neve');
   add(battle.megaOv && battle.megaOv[idx], MEGA_ICON, 'Mega Evoluído', p ? p.name : '');
   return out;
@@ -3289,10 +3335,10 @@ function trickBlocked(pa, ia, pb, ib){
 function trickApply(aSd, aIdx, tSd, tIdx){
   const pa = battle.sharedPrepared[aIdx], pb = battle.sharedPrepared[tIdx];
   if(normKey(pb.ability || '') === 'sticky hold') return { fail: pb.name + ' tem Sticky Hold' };
-  const ia = heldItem(aSd, aIdx), ib = heldItem(tSd, tIdx);
+  const ia = rawHeldItem(aSd, aIdx), ib = rawHeldItem(tSd, tIdx);   // o Magic Room não impede o Trick
   if(!ia && !ib) return { fail: 'nenhum dos dois tem item' };
   const bl = trickBlocked(pa, ia, pb, ib); if(bl) return { fail: 'o item ' + bl + ' não pode ser trocado' };
-  const nameA = ia ? pa.item : '', nameB = ib ? pb.item : '';
+  const nameA = ia ? rawItemName(pa) : '', nameB = ib ? rawItemName(pb) : '';
   if(!battle.itemOv) battle.itemOv = {};
   battle.itemOv[aIdx] = nameB; battle.itemOv[tIdx] = nameA;
   [[aSd, aIdx], [tSd, tIdx]].forEach(([sd, i]) => { const S = battle.sides[sd]; if(S.itemUsed) delete S.itemUsed[i]; delete volOf(sd, i).choice; });
@@ -3433,7 +3479,7 @@ function battleFormOf(pokeIdx){
 // Mega possível AGORA para o Pokémon em campo (segura a própria pedra e ainda não é Mega), ou null.
 function megaTargetOf(side, idx){
   const p = battle.sharedPrepared[idx]; if(!p || (battle.megaOv && battle.megaOv[idx])) return null;
-  const it = heldItem(side, idx); if(!it) return null;
+  const it = rawHeldItem(side, idx); if(!it) return null;   // o Magic Room não impede a Mega
   const f = megaFormFor(p.name, it); return (f && findDexEntry(f)) ? f : null;
 }
 // Mega Evolui (ou reverte). Devolve { text, changes } ou null.
@@ -3598,9 +3644,10 @@ function prepareBattleSide(pokeIdx, env){
   const savedW = poke.pokemonWeather, savedT = poke.pokemonTerrain, savedAb = poke.abilityUsed;
   const _abOv = abilityOverrideFor(pokeIdx);   // Trace / Gastro Acid (só em campo, só na batalha)
   const _itOv = itemOverrideFor(pokeIdx), savedItem = poke.item;   // Trick / Switcheroo (só na batalha)
+  const _mrHide = magicRoomHides(pokeIdx), _itemReal = (_itOv !== null ? _itOv : poke.item) || '';   // Magic Room: em campo o item não faz efeito
   const _form = battleFormOf(pokeIdx), savedName = poke.name;     // Mega na batalha / forma base de quem só é Mega por segurar a pedra
   try{
-    __megaAutoOff = true;
+    __megaAutoOff = true; __battlePrepIdx = (battle && !__battleInitPrep) ? pokeIdx : null;
     if(_form){
       poke.name = _form.name;
       const _de = findDexEntry(_form.name);
@@ -3611,6 +3658,7 @@ function prepareBattleSide(pokeIdx, env){
     }
     if(_abOv !== null) poke.abilityUsed = _abOv;
     if(_itOv !== null) poke.item = _itOv;
+    if(_mrHide) poke.item = '';
     // Castform (Forecast) / Cherrim (Flower Gift): forma pelo clima, só em campo e com a habilidade ativa
     var _savedAbRaw = poke.ability, _wxForm = null;
     if(battle && !__battleInitPrep){
@@ -3645,7 +3693,7 @@ function prepareBattleSide(pokeIdx, env){
       speFinal: pr.speFinalClean,
       atkFinalClean: pr.atkFinalClean, spaFinalClean: pr.spaFinalClean,
       resFisica: pr.resFisica, resEspecial: pr.resEspecial,
-      item: poke.item || '',
+      item: poke.item || '', itemReal: _itemReal, magicRoom: _mrHide,
       evs: poke.evs || {}, nature: poke.nature || '',
       ability: poke.abilityUsed || '',
       moveResults: _sortRandomMoves(poke, pr.moveResults.filter(m => m.pd && !m.moveKey.endsWith('Spr') && !/#RF[1-9]/.test(m.moveKey))).map(m => { const _k = normKey(baseMoveNameFromKey(m.moveKey)); return _k === 'last respects' ? Object.assign({}, m, { moveName: 'Last Respects' }) : _k === 'rage fist' ? Object.assign({}, m, { moveName: 'Rage Fist' }) : m; }),
@@ -3658,8 +3706,8 @@ function prepareBattleSide(pokeIdx, env){
     if(_abOv !== null || _form) poke.abilityUsed = savedAb;
     if(_form || _wxForm) poke.name = savedName;
     if(_wxForm) poke.ability = _savedAbRaw;
-    if(_itOv !== null) poke.item = savedItem;
-    __megaAutoOff = false;
+    if(_itOv !== null || _mrHide) poke.item = savedItem;
+    __megaAutoOff = false; __battlePrepIdx = null;
     if(env){
       if(savedW === undefined) delete poke.pokemonWeather; else poke.pokemonWeather = savedW;
       if(savedT === undefined) delete poke.pokemonTerrain; else poke.pokemonTerrain = savedT;
@@ -3786,6 +3834,8 @@ function computeBattleDamage(attacker, defender, moveResult, roll, isCrit, atkSt
   let t1 = defender.type1 ? (chart[defender.type1] !== undefined ? chart[defender.type1] : 1) : 1;
   let t2 = defender.type2 ? (chart[defender.type2] !== undefined ? chart[defender.type2] : 1) : 1;
   if(isFreezeDryMove(baseMoveNameFromKey(moveResult.moveKey || ''))){ if(defender.type1 === 'Water') t1 = 2; if(defender.type2 === 'Water') t2 = 2; } // Freeze-Dry: Water sempre ×2
+  const _isFP = normKey(baseMoveNameFromKey(moveResult.moveKey || '')) === 'flying press';
+  if(_isFP){ const fc = TYPE_CHART['Flying'] || {}; if(defender.type1) t1 *= (fc[defender.type1] ?? 1); if(defender.type2) t2 *= (fc[defender.type2] ?? 1); }   // Flying Press: tipo do golpe + Flying
   // Golpes Ground: no chão (Gravity, Iron Ball, Ingrain, Smack Down) o tipo Flying deixa de ser imune; no ar
   // (Air Balloon, Magnet Rise, Telekinesis) o alvo é imune. Thousand Arrows acerta quem está no ar (Flying ×1).
   if(d.moveType === 'Ground' && battle && battle.sides){
@@ -3853,6 +3903,7 @@ function computeBattleDamage(attacker, defender, moveResult, roll, isCrit, atkSt
       }
     } }
   if(normKey(defender.ability || '') === 'dry skin' && d.moveType === 'Fire' && !attackerIgnoresAbility(attacker) && !otherAll.some(c => /dry skin/i.test(c.nome))) otherAll.push({ nome: 'Dry Skin (Fogo)', mult: 1.25 });
+  if(_isFP){ const _L = defLocOf(defender); if(_L && volPeek(_L.side, _L.idx).minimize) otherAll.push({ nome: 'Minimize (Flying Press ×2)', mult: 2 }); }
   { const _sc = screenComp(attacker, defender, isPhysical, isCrit);   // Reflect / Light Screen / Aurora Veil (não somam entre si)
     if(_sc && !otherAll.some(c => /aurora veil|reflect|light screen/i.test(c.nome))) otherAll.push(_sc); }
   const otherTotal = otherAll.reduce((acc, c) => acc * c.mult, 1);
@@ -3980,6 +4031,8 @@ function tickEnvironment(turnLog){
   }
   { const g = tickGroundEffects(); g.lines.forEach(t => turnLog.actions.push({ type: 'note', text: t })); if(g.changed) changed = true; }
   tickScreens().forEach(t => turnLog.actions.push({ type: 'note', text: t }));   // Reflect / Light Screen / Aurora Veil
+  if(battle.magicRoom > 0){ battle.magicRoom--; if(battle.magicRoom === 0){ turnLog.actions.push({ type: 'note', text: LF.magicRoomEnd() }); changed = true; } }
+  if(battle.plasmaTurn != null || (battle.electrify && Object.keys(battle.electrify).length)){ battle.plasmaTurn = null; battle.electrify = {}; changed = true; }   // só valem no turno
   if(changed) refreshBattlePrepared();
 }
 
@@ -4501,6 +4554,7 @@ function executeAction(action, ordered, actionIdx){
   const defenderSideState = battle.sides[defSide];
   const attackerActiveIdx = attackerSideState.activePokeIdx;
 
+  if(action.type === 'move' && action.move && !action.move.isStruggle){ const _fm = getBattleMoveByKey(attacker, action.move.moveKey); if(_fm) action.move = _fm; }   // tipo atual (Electrify / Plasma Fists)
   const moveNameKey = normKey(baseMoveNameFromKey(action.move.Name || action.move.moveKey));
   const attackerStatus = getStatusOf(action.side, attackerActiveIdx);
 
@@ -4558,7 +4612,7 @@ function executeAction(action, ordered, actionIdx){
       _v.magnetRise = MAGNET_RISE_TURNS; refreshBattlePrepared();
       return _txtS(`${attacker.name} passou a flutuar com eletromagnetismo! (${MAGNET_RISE_TURNS} turnos)${battleGroundedIdx(action.side, attackerActiveIdx) ? ' (mas continua no chão)' : ''}`);
     }
-    if(moveNameKey === 'telekinesis' || moveNameKey === 'gastro acid' || moveNameKey === 'entrainment' || moveNameKey === 'trick' || moveNameKey === 'switcheroo' || moveNameKey === 'yawn' || (moveNameKey in CONFUSE_STATUS) || FORCE_SWITCH_STATUS.has(moveNameKey)){
+    if(moveNameKey === 'telekinesis' || moveNameKey === 'gastro acid' || moveNameKey === 'entrainment' || moveNameKey === 'electrify' || moveNameKey === 'trick' || moveNameKey === 'switcheroo' || moveNameKey === 'yawn' || (moveNameKey in CONFUSE_STATUS) || FORCE_SWITCH_STATUS.has(moveNameKey)){
       const _dIdx = defenderSideState.activePokeIdx;
       { const _spv = protectionVerdict(moveNameKey, { status: true, foeStatus: true, priority: getMovePriority(action.move.Name), spread: false, contact: false }, Object.assign({ prot: defenderSideState.protected || null }, defenderSideState.sideProt || {}));
         if(_spv.blocked) return { side: action.side, type: 'blocked', attackerName: attacker.name, moveName: action.move.Name, defenderName: defender.name, by: _spv.by }; }
@@ -4595,6 +4649,13 @@ function executeAction(action, ordered, actionIdx){
         if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
         const _g = gastroAcidApply(action.side, attackerActiveIdx, defSide, _dIdx, attackerIgnoresAbility(attacker));
         return _g.fail ? _failS(_g.fail) : _txtS(_g.text);
+      }
+      if(moveNameKey === 'electrify'){
+        if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
+        const _op = ordered ? ordered.findIndex(a => a.side === defSide) : -1, _oa = _op >= 0 ? ordered[_op] : null;
+        if(!_oa || _op < actionIdx || !(_oa.type === 'move' || _oa.type === 'status-move')) return _failS(defender.name + ' já agiu ou não vai usar golpe');
+        if(!battle.electrify) battle.electrify = {}; battle.electrify[_dIdx] = battle.turn; refreshBattlePrepared();
+        return _txtS(LF.electrify(defender.name));
       }
       if(moveNameKey === 'entrainment'){
         if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
@@ -4695,6 +4756,7 @@ function executeAction(action, ordered, actionIdx){
         });
         const _dfg = moveNameKey === 'defog' && (clearHazards('A') | clearHazards('B'));   // Defog remove as armadilhas dos DOIS lados
         const _dfs = moveNameKey === 'defog' ? clearScreens(defSide) : [];   // ... e as telas do lado do alvo
+        if(moveNameKey === 'minimize') volOf(action.side, attackerActiveIdx).minimize = true;
         return { side: action.side, type: 'status-boost', attackerName: attacker.name, moveName: action.move.Name, boostText: _txt + (_dfg ? '; armadilhas removidas' : '') + (_dfs.length ? '; telas removidas (' + _dfs.join(', ') + ')' : '') };
       }
     }
@@ -4706,6 +4768,7 @@ function executeAction(action, ordered, actionIdx){
     }
     if(moveNameKey === 'bulk up'){ return { side: action.side, type: 'status-boost', attackerName: attacker.name, moveName: 'Bulk Up', boostText: applyStageList(action.side, [['Atk',1],['Def',1]]) }; }
     if(moveNameKey === 'calm mind'){ return { side: action.side, type: 'status-boost', attackerName: attacker.name, moveName: 'Calm Mind', boostText: applyStageList(action.side, [['SpA',1],['SpD',1]]) }; }
+    if(moveNameKey === 'magic room') return _txtS(magicRoomToggle());
     if(SCREEN_MOVES[moveNameKey]){   // Reflect / Light Screen / Aurora Veil
       const _sc = screenMoveApply(action.side, attackerActiveIdx, moveNameKey);
       return _sc.fail ? _failS(_sc.fail) : _txtS(_sc.text);
@@ -4819,7 +4882,6 @@ function executeAction(action, ordered, actionIdx){
     }
   }
 
-  { const _sbt = screenBreakText(moveNameKey, (action.move.detail && action.move.detail.moveType) || '', defSide, defenderSideState.activePokeIdx); if(_sbt) preNote += ' ' + _sbt; }   // quebra as telas antes de acertar
   const accRoll = battleRandom() * 100;
   const moveInfo = findMoveInfo(baseMoveNameFromKey(action.move.moveKey));
   const noGuardOn = normKey(attacker.ability||'') === 'no guard' || normKey(defender.ability||'') === 'no guard';
@@ -4827,10 +4889,11 @@ function executeAction(action, ordered, actionIdx){
   const _dAb = normKey(defender.ability || '');
   const stormNoMiss = !dSemi && !attackerIgnoresAbility(attacker) && ((_mtAcc === 'Water' && _dAb === 'storm drain') || (_mtAcc === 'Electric' && _dAb === 'lightning rod'));
   const _teleS = teleSureHit(defSide, defenderSideState.activePokeIdx, moveNameKey, dSemi);   // Telekinesis no alvo: sempre acerta
-  const acc = (noGuardOn || stormNoMiss || _teleS) ? 101 : sandVeilAcc(battleMoveAccuracy(moveNameKey, moveInfo, defSide, defenderSideState.activePokeIdx), attacker, defSide, defenderSideState.activePokeIdx);
+  const acc = (noGuardOn || stormNoMiss || _teleS || minimizeSureHit(moveNameKey, defSide, defenderSideState.activePokeIdx, dSemi)) ? 101 : sandVeilAcc(battleMoveAccuracy(moveNameKey, moveInfo, defSide, defenderSideState.activePokeIdx), attacker, defSide, defenderSideState.activePokeIdx);
   if(battleAccuracyEnabled && acc < 101 && accRoll >= acc){
     return { side: action.side, type: 'move-miss', attackerName: attacker.name, moveName: action.move.moveName };
   }
+  { const _sbt = screenBreakText(moveNameKey, (action.move.detail && action.move.detail.moveType) || '', defSide, defenderSideState.activePokeIdx); if(_sbt) preNote += ' ' + _sbt; }   // acertou: quebra as telas antes do dano
   let _semiCut = false;
   if(dSemi && SEMI_GROUND_CANCEL.has(moveNameKey) && (dSemi.base === 'fly' || dSemi.base === 'bounce')){
     defenderSideState.semi = null; _semiCut = true;
@@ -5026,6 +5089,8 @@ function executeAction(action, ordered, actionIdx){
   }
   // Smack Down / Thousand Arrows: o alvo fica no chão (perde Magnet Rise e Telekinesis)
   if(GROUNDING_HIT_MOVES.has(moveNameKey) && dealt > 0 && !subbed){ const _gt = applyGroundingHit(defSide, s.activePokeIdx, dSemi); if(_gt && !_semiCut) hitNote += ' ' + _gt; }
+  if((moveNameKey === 'pluck' || moveNameKey === 'bug bite') && dealt > 0 && !subbed) pluckLines(action.side, attackerActiveIdx, defSide, s.activePokeIdx).forEach(t => { hitNote += ' ' + t; });
+  if(moveNameKey === 'plasma fists' && dealt > 0 && !subbed && battle.plasmaTurn !== battle.turn){ battle.plasmaTurn = battle.turn; refreshBattlePrepared(); hitNote += ' ' + LF.plasma(); }
   // Eelevate: nocauteou com golpe de dano => +1 no maior stat (não ativa se o nocaute encerra a batalha)
   if(!subbed && s.hp[s.activePokeIdx] <= 0 && attackerSideState.hp[attackerActiveIdx] > 0 && normKey(attacker.ability || '') === 'eelevate'
      && (singlesSideAlive(defSide) || (battle.mode === 'pvc' && Number(battle.infiniteMode) > 0))){
@@ -5181,7 +5246,7 @@ function snapshotBattle(){
     weatherInfo: battle.weatherInfo ? JSON.parse(JSON.stringify(battle.weatherInfo)) : null,
     terrainInfo: battle.terrainInfo ? JSON.parse(JSON.stringify(battle.terrainInfo)) : null,
     gravity: battle.gravity || 0,
-    iceFace: JSON.parse(JSON.stringify(battle.iceFace || {})),
+    iceFace: JSON.parse(JSON.stringify(battle.iceFace || {})), magicRoom: battle.magicRoom || 0,
     itemOv: JSON.parse(JSON.stringify(battle.itemOv || {})),
     megaOv: JSON.parse(JSON.stringify(battle.megaOv || {})), megaUsed: Object.assign({ A: false, B: false }, battle.megaUsed || {}), megaPend: JSON.parse(JSON.stringify(battle.megaPend || { A: {}, B: {} })),
     sides: {
@@ -5207,7 +5272,7 @@ function restoreSnapshot(snap){
   battle.weatherInfo = snap.weatherInfo ? JSON.parse(JSON.stringify(snap.weatherInfo)) : null;
   battle.terrainInfo = snap.terrainInfo ? JSON.parse(JSON.stringify(snap.terrainInfo)) : null;
   battle.gravity = snap.gravity || 0;
-  battle.iceFace = JSON.parse(JSON.stringify(snap.iceFace || {}));
+  battle.iceFace = JSON.parse(JSON.stringify(snap.iceFace || {})); battle.magicRoom = snap.magicRoom || 0; battle.plasmaTurn = null; battle.electrify = {};
   battle.itemOv = JSON.parse(JSON.stringify(snap.itemOv || {}));
   battle.megaOv = JSON.parse(JSON.stringify(snap.megaOv || {})); battle.megaUsed = Object.assign({ A: false, B: false }, snap.megaUsed || {}); battle.megaPend = JSON.parse(JSON.stringify(snap.megaPend || { A: {}, B: {} }));
   battle.pausedTurn = null;
@@ -6430,6 +6495,12 @@ const LF = {
   screenCleaner: (n, list) => `Screen Cleaner de <b>${n}</b> removeu as telas do campo (${list.join(', ')})!`,
   iceFaceBreak: n => `O Ice Face de <b>${n}</b> absorveu o golpe e quebrou (Noice Face)!`,
   iceFaceRestore: n => `<b>${n}</b> voltou à forma Ice Face com a neve!`,
+  electrify: n => `<b>${n}</b> foi eletrificado: os golpes dele viram Electric neste turno!`,
+  plasma: () => `Uma chuva de íons caiu: golpes Normal viram Electric no resto do turno! (Plasma Fists)`,
+  magicRoomStart: () => `Criou uma área bizarra: os itens não fazem efeito (Magic Room, 5 turnos)!`,
+  magicRoomEnd: () => `A área bizarra se desfez: os itens voltaram a fazer efeito.`,
+  pluck: (n, t, berry, heal, hpA, max) => `<b>${n}</b> comeu a <b>${berry}</b> de <b>${t}</b>!${heal ? ` Recuperou <span style="color:var(--mint);">${heal} HP</span> (${hpA}/${max}).` : ''}`,
+  pluckBlocked: t => `<b>${t}</b> segurou a Berry com Sticky Hold!`,
   anticipation: n => `<b>${n}</b> estremeceu! (Anticipation)`,
   hydration: (n, st) => `<b>${n}</b> curou-se de <b>${st}</b> com Hydration!`,
   effectSpore: (holder, att, st) => `Effect Spore de <b>${holder}</b>: <b>${att}</b> agora está <b>${st}</b>!`,
@@ -7331,7 +7402,7 @@ function envSelectHtml(kind){
   return `<select data-manual-env="${kind}" style="font-family:var(--font-mono);font-size:11px;">${opts.map(([v, l]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${l}</option>`).join('')}</select><span style="font-family:var(--font-mono);font-size:11px;color:var(--text-dim);">${(kind === 'weather' ? battle.weather : battle.terrain) !== 'none' ? envTurnsText(kind === 'weather' ? battle.weatherInfo : battle.terrainInfo).replace(' · ', '') : ''}</span>`;
 }
 function getAllItemsList(cur){
-  const set = new Set([...RANDOM_ITEMS_POOL, ...MEGA_STONE_NAMES, 'Eject Button', 'Red Card', 'Focus Sash','Life Orb','Leftovers','Sitrus Berry','Choice Band','Choice Specs','Choice Scarf','Assault Vest','White Herb','Safety Goggles', ...currentPokemons.map(p => p && p.item).filter(Boolean), cur].filter(Boolean));
+  const set = new Set([...RANDOM_ITEMS_POOL, ...MEGA_STONE_NAMES, 'Eject Button', 'Red Card', 'Light Clay', 'Focus Sash','Life Orb','Leftovers','Sitrus Berry','Choice Band','Choice Specs','Choice Scarf','Assault Vest','White Herb','Safety Goggles', ...currentPokemons.map(p => p && p.item).filter(Boolean), cur].filter(Boolean));
   return [...set].sort();
 }
 function getAllAbilitiesList(cur){
@@ -7691,7 +7762,12 @@ function presStep(token){
   } else {
     const v0 = pres.view;
     pres.view = st.view;
-    if(JSON.stringify(v0) !== JSON.stringify(st.view)){
+    // Entrou outro Pokémon em campo: o card troca e a linha do log aparece NO MESMO instante.
+    const _swap = !!v0 && !!st.view && ['A','B'].some(sd => v0[sd] && st.view[sd] && v0[sd].i !== st.view[sd].i);
+    if(_swap && pres.queue.length && pres.queue[0].text){
+      pres.queue.shift(); pres.cur = null; pres.hitsShown = 0; pres.shown++;
+      renderBattle(); delay = 700;
+    } else if(JSON.stringify(v0) !== JSON.stringify(st.view)){
       renderBattle();
       delay = hpAnimDur(presHpDelta(v0, st.view)) + 300;
     }
@@ -9445,8 +9521,11 @@ function dPresStep(token){
       if(att) reqs.push(att);
       if(hit.length === 1) reqs.push(hit[0]);
       if(reqs.length) dblPresScrollReq = reqs; }
+    // Entrou outro Pokémon em campo: o card troca e a linha do log aparece NO MESMO instante.
+    const swap = ['A','B'].some(k => JSON.stringify((p.view[k] || {}).a || []) !== JSON.stringify((nv[k] || {}).a || []));
     p.view = nv; p.phase = 'text';
-    if(changed){ renderBattle(); delay = d > 0 ? hpAnimDur(d) + 300 : 250; }
+    if(changed && swap && d === 0){ p.shown++; p.phase = 'hp'; renderBattle(); delay = 700; }
+    else if(changed){ renderBattle(); delay = d > 0 ? hpAnimDur(d) + 300 : 250; }
   } else { p.shown++; p.phase = 'hp'; renderBattle(); delay = 700; }
   p.timer = setTimeout(() => dPresStep(token), delay);
 }
@@ -9776,6 +9855,7 @@ function dExec(a, order){
 
 /* ---------- golpes de dano ---------- */
 function dMoveAct(a, order){
+  if(a.move && !a.move.isStruggle){ const fm = getBattleMoveByKey(dP(a.idx), a.move.moveKey); if(fm) a.move = fm; }   // tipo atual (Electrify / Plasma Fists)
   const sd = a.side, S = dS(sd), idx = a.idx, att = dP(idx), m = a.move;
   const mk = normKey(baseMoveNameFromKey(m.moveKey)), info = findMoveInfo(baseMoveNameFromKey(m.moveKey));
   const nm = dNm(sd, idx), mn = m.moveName;
@@ -9958,10 +10038,10 @@ function dHit(a, tSd, tIdx, o){
   const mtype = (m.detail && m.detail.moveType) || (info && info.Type) || '';
   const dAb = normKey(def.ability || '');
   const stormNoMiss = !dsemi && !attackerIgnoresAbility(att) && ((mtype === 'Water' && dAb === 'storm drain') || (mtype === 'Electric' && dAb === 'lightning rod'));
-  const acc = (noGuard || stormNoMiss || teleSureHit(tSd, tIdx, mk, dsemi)) ? 101 : sandVeilAcc(battleMoveAccuracy(mk, info, tSd, tIdx), att, tSd, tIdx);   // Telekinesis no alvo: sempre acerta
-  { const sbt = screenBreakText(mk, mtype, tSd, tIdx); if(sbt){ flushHead(); dLog(sbt); } }   // Brick Break / Psychic Fangs / Raging Bull: quebram as telas antes de acertar
+  const acc = (noGuard || stormNoMiss || teleSureHit(tSd, tIdx, mk, dsemi) || minimizeSureHit(mk, tSd, tIdx, dsemi)) ? 101 : sandVeilAcc(battleMoveAccuracy(mk, info, tSd, tIdx), att, tSd, tIdx);   // Telekinesis no alvo: sempre acerta
   const accRoll = battleRandom() * 100;
   if(battleAccuracyEnabled && acc < 101 && accRoll >= acc){ dLog(sp ? `↳ errou <b>${def.name}</b>!` : LF.miss({ attackerName: att.name, moveName: m.moveName })); o.headDone = true; return res; }
+  { const sbt = screenBreakText(mk, mtype, tSd, tIdx); if(sbt){ flushHead(); dLog(sbt); } }   // Brick Break / Psychic Fangs / Raging Bull: acertou => quebra as telas do lado do alvo (até de aliado) antes do dano
   let semiCut = false;
   if(dsemi && SEMI_GROUND_CANCEL.has(mk) && (dsemi.base === 'fly' || dsemi.base === 'bounce')){ flushHead(); T.semis[tIdx] = null; semiCut = true; dLog(`${dn} foi derrubado e perdeu ${dsemi.name}!`); }
   // Absorção por habilidade
@@ -10057,6 +10137,8 @@ function dHit(a, tSd, tIdx, o){
   // Smack Down / Thousand Arrows: o alvo fica no chão (perde Magnet Rise e Telekinesis)
   if((hpDone > 0 || subAbs > 0) && heldItem(tSd, tIdx) === 'air balloon'){ useItem(tSd, tIdx); refreshBattlePrepared(); dLog(`O Air Balloon de ${dn} estourou!`); }
   if(GROUNDING_HIT_MOVES.has(mk) && dealt > 0 && !subbed){ const gt = applyGroundingHit(tSd, tIdx, dsemi); if(gt && !semiCut) dLog(gt); }
+  if((mk === 'pluck' || mk === 'bug bite') && dealt > 0 && !subbed) pluckLines(sd, idx, tSd, tIdx).forEach(t => dLog(t));
+  if(mk === 'plasma fists' && dealt > 0 && !subbed && battle.plasmaTurn !== battle.turn){ battle.plasmaTurn = battle.turn; refreshBattlePrepared(); dLog(LF.plasma()); }
   // Eject Button / Red Card: decididos no fim do golpe (depois do último hit e de todos os alvos)
   if(dealt > 0 && !subbed && T.hp[tIdx] > 0 && !sheerForceOn(att, info)){ const it = heldItem(tSd, tIdx); if(it === 'eject button' || it === 'red card') (o.items || (o.items = [])).push({ sd: tSd, idx: tIdx, it, spe: dSpeed(tSd, tIdx) }); }
   // Eelevate: nocauteou com golpe de dano => +1 no maior stat (não ativa se o nocaute encerra a batalha)
@@ -10136,7 +10218,7 @@ function dStatusAct(a){
     v.magnetRise = MAGNET_RISE_TURNS; refreshBattlePrepared();
     dLog(LF.moveText(att.name, m.Name, `${att.name} passou a flutuar com eletromagnetismo! (${MAGNET_RISE_TURNS} turnos)${battleGroundedIdx(sd, idx) ? ' (mas continua no chão)' : ''}`)); return null;
   }
-  if(mk === 'telekinesis' || mk === 'gastro acid' || mk === 'entrainment' || mk === 'trick' || mk === 'switcheroo' || mk === 'yawn' || (mk in CONFUSE_STATUS) || FORCE_SWITCH_STATUS.has(mk)){
+  if(mk === 'telekinesis' || mk === 'gastro acid' || mk === 'entrainment' || mk === 'electrify' || mk === 'trick' || mk === 'switcheroo' || mk === 'yawn' || (mk in CONFUSE_STATUS) || FORCE_SWITCH_STATUS.has(mk)){
     // alvo escolhido (nunca o próprio usuário); sem alvo válido => primeiro oponente em campo
     const foes = dActives(o);
     let t = (a.tgt && !(a.tgt.sd === sd && S.active[a.tgt.slot] === idx)) ? a.tgt : null;
@@ -10182,6 +10264,13 @@ function dStatusAct(a){
       const g = gastroAcidApply(sd, idx, t.sd, tIdx, attackerIgnoresAbility(att));
       if(g.fail) return fail(g.fail);
       dLog(LF.moveText(att.name, m.Name, g.text)); return null;
+    }
+    if(mk === 'electrify'){
+      if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
+      const x = (D.ctx && D.ctx.order || []).find(z => z.idx === tIdx && z.side === t.sd);
+      if(!x || x.done || !(x.type === 'move' || x.type === 'status-move')) return fail(tp.name + ' já agiu ou não vai usar golpe');
+      if(!battle.electrify) battle.electrify = {}; battle.electrify[tIdx] = battle.turn; refreshBattlePrepared();
+      dLog(LF.moveText(att.name, m.Name, LF.electrify(tp.name))); return null;
     }
     if(mk === 'entrainment'){
       if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
@@ -10278,10 +10367,12 @@ function dStatusAct(a){
       });
       const dfg = mk === 'defog' && (clearHazards('A') | clearHazards('B'));   // Defog remove as armadilhas dos DOIS lados
       const dfs = (mk === 'defog' && tg) ? clearScreens(tg.sd) : [];   // ... e as telas do lado do alvo
+      if(mk === 'minimize') volOf(sd, idx).minimize = true;
       dLog(LF.boost(att.name, m.Name, txt + (dfg ? '; armadilhas removidas' : '') + (dfs.length ? '; telas removidas (' + dfs.join(', ') + ')' : ''))); return null;
     }
   }
   if(DBL_BOOSTS[mk]){ dWith(sd, idx, () => dLog(LF.boost(att.name, m.Name, applyStageList(sd, DBL_BOOSTS[mk])))); return null; }
+  if(mk === 'magic room'){ dLog(LF.moveText(att.name, m.Name, magicRoomToggle())); return null; }
   if(SCREEN_MOVES[mk]){ const sc = screenMoveApply(sd, idx, mk); if(sc.fail) return fail(sc.fail); dLog(LF.moveText(att.name, m.Name, sc.text)); return null; }   // Reflect / Light Screen / Aurora Veil
   if(WEATHER_MOVE_MAP[mk]){ const w = WEATHER_MOVE_MAP[mk]; if(dWith(sd, idx, () => setBattleWeather(w, sd, battle.turn))){ refreshBattlePrepared(); dLog(LF.weatherChange(att.name, w)); return null; } return fail(weatherMoveFailReason()); }
   if(TERRAIN_MOVE_MAP[mk]){ const t = TERRAIN_MOVE_MAP[mk]; if(dWith(sd, idx, () => setBattleTerrain(t, sd, battle.turn))){ refreshBattlePrepared(); dLog(LF.terrainChange(att.name, t)); return null; } return fail('o terreno já está ativo'); }
