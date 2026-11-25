@@ -47,6 +47,8 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
 14) PRECISÃO: use sempre battleMoveAccuracy() (Blizzard 101 na neve; Triple Axel/Kick 90).
    Triple Axel (20/40/60) e Triple Kick (10/20/30): cada hit é um golpe independente, com
    precisão e crítico próprios. Golpe multistrike mostra a contagem de hits mesmo com 1 hit.
+15) MEGA STONES: a ÚNICA lista de pedras e Pokémon associados é a constante MEGA_STONES
+   (procure "TABELA ÚNICA"). Para acrescentar ou corrigir uma Mega, edite só ali.
 =====================================================================
 -->
 <meta charset="UTF-8">
@@ -671,7 +673,7 @@ Adamant Nature
   <footer>PDS+ = (Atk Final × BP Final × DMod Final × 0,44 / Def) + 2 · PDS- = PDS+ × 0,85</footer>
 </div>
 
-<datalist id="itemsList">
+<datalist id="itemsList"><!-- as Mega Stones (tabela MEGA_STONES) são acrescentadas por JS ao carregar -->
   <option value="Silk Scarf"><option value="Charcoal"><option value="Mystic Water">
   <option value="Magnet"><option value="Miracle Seed"><option value="Never-Melt Ice">
   <option value="Black Belt"><option value="Poison Barb"><option value="Soft Sand">
@@ -689,7 +691,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 38; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 39; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
 const ICON_TRASH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
@@ -860,6 +862,135 @@ const HARDCODED_STATUS_MOVES = {
 
 const RANDOM_ITEMS_POOL = ['Silk Scarf','Charcoal','Mystic Water','Magnet','Miracle Seed','Never-Melt Ice','Black Belt','Poison Barb','Soft Sand','Sharp Beak','Twisted Spoon','Silver Powder','Hard Stone','Spell Tag','Dragon Fang','Black Glasses','Metal Coat','Fairy Feather','Choice Band','Choice Specs','Choice Scarf','Life Orb','Assault Vest','Leftovers','Focus Sash','Safety Goggles','Heavy-Duty Boots','Air Balloon','White Herb','Sitrus Berry','Grassy Seed','Electric Seed','Psychic Seed','Misty Seed','Cell Battery','Eviolite','Weakness Policy','Expert Belt','Wise Glasses','Muscle Band','Normal Gem'];
 
+// ======================================================================================
+// MEGA EVOLUÇÃO — TABELA ÚNICA (edite SÓ AQUI para acrescentar/corrigir Mega Stones)
+//  stone: nome exato da pedra · base: espécies (nomes da aba Dex) que Mega Evoluem com ela ·
+//  mega: nome da forma Mega na aba Dex. Mais de um nome = grafias aceitas (o 1º que existir na Dex é usado).
+//  Fonte: Bulbapedia, "Mega Stone" (List of Mega Stones) — 92 pedras, de X/Y até Legends: Z-A Mega Dimension.
+//  Rayquaza não tem pedra (não está aqui).
+// ======================================================================================
+const MEGA_STONES = [
+  // —— X/Y ——
+  { stone: "Gengarite", base: ["Gengar"], mega: ["Gengar-Mega"] },
+  { stone: "Gardevoirite", base: ["Gardevoir"], mega: ["Gardevoir-Mega"] },
+  { stone: "Ampharosite", base: ["Ampharos"], mega: ["Ampharos-Mega"] },
+  { stone: "Venusaurite", base: ["Venusaur"], mega: ["Venusaur-Mega"] },
+  { stone: "Charizardite X", base: ["Charizard"], mega: ["Charizard-Mega-X"] },
+  { stone: "Blastoisinite", base: ["Blastoise"], mega: ["Blastoise-Mega"] },
+  { stone: "Mewtwonite X", base: ["Mewtwo"], mega: ["Mewtwo-Mega-X"] },
+  { stone: "Mewtwonite Y", base: ["Mewtwo"], mega: ["Mewtwo-Mega-Y"] },
+  { stone: "Blazikenite", base: ["Blaziken"], mega: ["Blaziken-Mega"] },
+  { stone: "Medichamite", base: ["Medicham"], mega: ["Medicham-Mega"] },
+  { stone: "Houndoominite", base: ["Houndoom"], mega: ["Houndoom-Mega"] },
+  { stone: "Aggronite", base: ["Aggron"], mega: ["Aggron-Mega"] },
+  { stone: "Banettite", base: ["Banette"], mega: ["Banette-Mega"] },
+  { stone: "Tyranitarite", base: ["Tyranitar"], mega: ["Tyranitar-Mega"] },
+  { stone: "Scizorite", base: ["Scizor"], mega: ["Scizor-Mega"] },
+  { stone: "Pinsirite", base: ["Pinsir"], mega: ["Pinsir-Mega"] },
+  { stone: "Aerodactylite", base: ["Aerodactyl"], mega: ["Aerodactyl-Mega"] },
+  { stone: "Lucarionite", base: ["Lucario"], mega: ["Lucario-Mega"] },
+  { stone: "Abomasite", base: ["Abomasnow"], mega: ["Abomasnow-Mega"] },
+  { stone: "Kangaskhanite", base: ["Kangaskhan"], mega: ["Kangaskhan-Mega"] },
+  { stone: "Gyaradosite", base: ["Gyarados"], mega: ["Gyarados-Mega"] },
+  { stone: "Absolite", base: ["Absol"], mega: ["Absol-Mega"] },
+  { stone: "Charizardite Y", base: ["Charizard"], mega: ["Charizard-Mega-Y"] },
+  { stone: "Alakazite", base: ["Alakazam"], mega: ["Alakazam-Mega"] },
+  { stone: "Heracronite", base: ["Heracross"], mega: ["Heracross-Mega"] },
+  { stone: "Mawilite", base: ["Mawile"], mega: ["Mawile-Mega"] },
+  { stone: "Manectite", base: ["Manectric"], mega: ["Manectric-Mega"] },
+  { stone: "Garchompite", base: ["Garchomp"], mega: ["Garchomp-Mega"] },
+  { stone: "Latiasite", base: ["Latias"], mega: ["Latias-Mega"] },
+  { stone: "Latiosite", base: ["Latios"], mega: ["Latios-Mega"] },
+  // —— Omega Ruby/Alpha Sapphire ——
+  { stone: "Swampertite", base: ["Swampert"], mega: ["Swampert-Mega"] },
+  { stone: "Sceptilite", base: ["Sceptile"], mega: ["Sceptile-Mega"] },
+  { stone: "Sablenite", base: ["Sableye"], mega: ["Sableye-Mega"] },
+  { stone: "Altarianite", base: ["Altaria"], mega: ["Altaria-Mega"] },
+  { stone: "Galladite", base: ["Gallade"], mega: ["Gallade-Mega"] },
+  { stone: "Audinite", base: ["Audino"], mega: ["Audino-Mega"] },
+  { stone: "Metagrossite", base: ["Metagross"], mega: ["Metagross-Mega"] },
+  { stone: "Sharpedonite", base: ["Sharpedo"], mega: ["Sharpedo-Mega"] },
+  { stone: "Slowbronite", base: ["Slowbro"], mega: ["Slowbro-Mega"] },
+  { stone: "Steelixite", base: ["Steelix"], mega: ["Steelix-Mega"] },
+  { stone: "Pidgeotite", base: ["Pidgeot"], mega: ["Pidgeot-Mega"] },
+  { stone: "Glalitite", base: ["Glalie"], mega: ["Glalie-Mega"] },
+  { stone: "Diancite", base: ["Diancie"], mega: ["Diancie-Mega"] },
+  { stone: "Cameruptite", base: ["Camerupt"], mega: ["Camerupt-Mega"] },
+  { stone: "Lopunnite", base: ["Lopunny", "Loppuny"], mega: ["Lopunny-Mega", "Loppuny-Mega"] },
+  { stone: "Salamencite", base: ["Salamence"], mega: ["Salamence-Mega"] },
+  { stone: "Beedrillite", base: ["Beedrill"], mega: ["Beedrill-Mega"] },
+  // —— Legends: Z-A ——
+  { stone: "Clefablite", base: ["Clefable"], mega: ["Clefable-Mega"] },
+  { stone: "Victreebelite", base: ["Victreebel"], mega: ["Victreebel-Mega"] },
+  { stone: "Starminite", base: ["Starmie"], mega: ["Starmie-Mega"] },
+  { stone: "Dragoninite", base: ["Dragonite"], mega: ["Dragonite-Mega"] },
+  { stone: "Meganiumite", base: ["Meganium"], mega: ["Meganium-Mega"] },
+  { stone: "Feraligite", base: ["Feraligatr"], mega: ["Feraligatr-Mega"] },
+  { stone: "Skarmorite", base: ["Skarmory"], mega: ["Skarmory-Mega"] },
+  { stone: "Froslassite", base: ["Froslass"], mega: ["Froslass-Mega"] },
+  // —— Legends: Z-A — Mega Dimension (DLC) ——
+  { stone: "Heatranite", base: ["Heatran"], mega: ["Heatran-Mega"] },
+  { stone: "Darkranite", base: ["Darkrai"], mega: ["Darkrai-Mega"] },
+  // —— Legends: Z-A ——
+  { stone: "Emboarite", base: ["Emboar"], mega: ["Emboar-Mega"] },
+  { stone: "Excadrite", base: ["Excadrill"], mega: ["Excadrill-Mega"] },
+  { stone: "Scolipite", base: ["Scolipede"], mega: ["Scolipede-Mega"] },
+  { stone: "Scraftinite", base: ["Scrafty"], mega: ["Scrafty-Mega"] },
+  { stone: "Eelektrossite", base: ["Eelektross"], mega: ["Eelektross-Mega"] },
+  { stone: "Chandelurite", base: ["Chandelure"], mega: ["Chandelure-Mega"] },
+  { stone: "Chesnaughtite", base: ["Chesnaught"], mega: ["Chesnaught-Mega"] },
+  { stone: "Delphoxite", base: ["Delphox"], mega: ["Delphox-Mega"] },
+  { stone: "Greninjite", base: ["Greninja"], mega: ["Greninja-Mega"] },
+  { stone: "Pyroarite", base: ["Pyroar"], mega: ["Pyroar-Mega"] },
+  { stone: "Floettite", base: ["Floette-Eternal"], mega: ["Floette-Mega"] },
+  { stone: "Malamarite", base: ["Malamar"], mega: ["Malamar-Mega"] },
+  { stone: "Barbaracite", base: ["Barbaracle"], mega: ["Barbaracle-Mega"] },
+  { stone: "Dragalgite", base: ["Dragalge"], mega: ["Dragalge-Mega"] },
+  { stone: "Hawluchanite", base: ["Hawlucha"], mega: ["Hawlucha-Mega"] },
+  { stone: "Zygardite", base: ["Zygarde-Complete", "Zygarde"], mega: ["Zygarde-Mega"] },
+  { stone: "Drampanite", base: ["Drampa"], mega: ["Drampa-Mega"] },
+  // —— Legends: Z-A — Mega Dimension (DLC) ——
+  { stone: "Zeraorite", base: ["Zeraora"], mega: ["Zeraora-Mega"] },
+  // —— Legends: Z-A ——
+  { stone: "Falinksite", base: ["Falinks", "Fallinks"], mega: ["Falinks-Mega", "Fallinks-Mega"] },
+  // —— Legends: Z-A — Mega Dimension (DLC) ——
+  { stone: "Raichunite X", base: ["Raichu"], mega: ["Raichu-Mega-X"] },
+  { stone: "Raichunite Y", base: ["Raichu"], mega: ["Raichu-Mega-Y"] },
+  { stone: "Chimechite", base: ["Chimecho"], mega: ["Chimecho-Mega"] },
+  { stone: "Absolite Z", base: ["Absol"], mega: ["Absol-Mega-Z"] },
+  { stone: "Staraptite", base: ["Staraptor"], mega: ["Staraptor-Mega"] },
+  { stone: "Garchompite Z", base: ["Garchomp"], mega: ["Garchomp-Mega-Z"] },
+  { stone: "Lucarionite Z", base: ["Lucario"], mega: ["Lucario-Mega-Z"] },
+  { stone: "Golurkite", base: ["Golurk"], mega: ["Golurk-Mega"] },
+  { stone: "Meowsticite", base: ["Meowstic", "Meowstic-F"], mega: ["Meowstic-Mega"] },
+  { stone: "Crabominite", base: ["Crabominable"], mega: ["Crabominable-Mega"] },
+  { stone: "Golisopite", base: ["Golisopod"], mega: ["Golisopod-Mega"] },
+  { stone: "Scovillainite", base: ["Scovillain"], mega: ["Scovillain-Mega"] },
+  { stone: "Baxcalibrite", base: ["Baxcalibur"], mega: ["Baxcalibur-Mega"] },
+  { stone: "Glimmoranite", base: ["Glimmora"], mega: ["Glimmora-Mega"] },
+  { stone: "Magearnite", base: ["Magearna", "Magearna-Original"], mega: ["Magearna-Mega"] },
+  { stone: "Tatsugirinite", base: ["Tatsugiri", "Tatsugiri-Curly", "Tatsugiri-Droopy", "Tatsugiri-Stretchy"], mega: ["Tatsugiri-Mega"] },
+];
+const MEGA_STONE_NAMES = MEGA_STONES.map(e => e.stone);
+function megaEntryForStone(item){ const k = normKey(item || ''); return k ? (MEGA_STONES.find(e => normKey(e.stone) === k) || null) : null; }
+function megaPickDex(list){ return list.find(n => typeof findDexEntry === 'function' && findDexEntry(n)) || list[0]; }
+// Forma Mega de `species` segurando `item` (null se a pedra não for dela).
+function megaFormFor(species, item){
+  const e = megaEntryForStone(item); if(!e) return null;
+  const k = normKey(limparNomeParaBusca(species || ''));
+  return e.base.some(b => normKey(b) === k) ? megaPickDex(e.mega) : null;
+}
+// `species` é a Mega desta pedra?
+function isMegaOfStone(species, item){ const e = megaEntryForStone(item); const k = normKey(limparNomeParaBusca(species || '')); return !!e && e.mega.some(m => normKey(m) === k); }
+// Pedra que pertence a algum dos Pokémon (nomes base ou Mega) — usado pelo Trick.
+function megaStoneUsableBy(item, names){ const e = megaEntryForStone(item); if(!e) return false; const ks = names.map(n => normKey(limparNomeParaBusca(n || ''))); return [...e.base, ...e.mega].some(n => ks.includes(normKey(n))); }
+(function addMegaStonesToItemList(){ try{
+  const dl = document.getElementById('itemsList'); if(!dl) return;
+  const have = new Set([...dl.querySelectorAll('option')].map(o => normKey(o.value)));
+  MEGA_STONE_NAMES.forEach(n => { if(!have.has(normKey(n))){ const o = document.createElement('option'); o.value = n; dl.appendChild(o); } });
+}catch(e){} })();
+let __megaAutoOff = false;   // true enquanto a BATALHA prepara um Pokémon (a batalha decide a forma; a Calculadora não troca sozinha)
+
 // Só na BATALHA (prepareBattleSide) __battleGroundFn é definido: aí o "no chão" segue Gravity, Ingrain, Magnet Rise etc.
 // Na aba Calculadora ele é sempre null e nada muda.
 let __battleGroundFn = null;
@@ -945,7 +1076,7 @@ function syncArceusBtn(){
   b.style.borderColor = arceusMode ? 'var(--amber)' : ''; b.style.color = arceusMode ? 'var(--amber)' : '';
 }
 let battleSecEffects = true;
-let battleManual = { weather:false, terrain:false, item:false, ability:false, build:false, status:false }; // status manual: desligado por padrão
+let battleManual = { weather:false, terrain:false, item:false, ability:false, build:false, status:false, mega:false };   // mega = Mega ilimitada (o modo Arceus liga) // status manual: desligado por padrão
 let battleCalcView = false, battleCalcAll = false, calcAllOverride = {};   // battleCalcAll: no log de cálculo mostra TODAS as etapas (inclusive as ×1)
 let openPreviewRolls = new Set();
 let openHpDamage = new Set();
@@ -1398,19 +1529,12 @@ function calcularTime(pokemons, opts){
   pokemons.forEach((poke, pokeIdx)=>{
     if(!poke) return;
     if(!poke.nature || !NATURES[poke.nature]) poke.nature = 'Serious';
-    if(!poke.formResolved){
-      poke.formResolved = true;
-      const baseClean = limparNomeParaBusca(poke.name);
-      const itemLower = (poke.item||'').trim().toLowerCase();
-      const itemSemSufixo = itemLower.replace(/\s+(x|y)$/,'');
-      const sufixoMatch = itemLower.match(/\s+(x|y)$/);
-      if(itemSemSufixo === normKey(baseClean)+'ite'){
-        const formas = getFormOptions(baseClean);
-        let mega = null;
-        if(sufixoMatch){ const letra = sufixoMatch[1].toLowerCase(); mega = formas.find(f=>normKey(f).includes('mega') && normKey(f).endsWith('-'+letra)); }
-        if(!mega) mega = formas.find(f=>normKey(f).includes('mega'));
-        if(mega) poke.name = mega;
-      }
+    poke.formResolved = true;
+    // Mega pela pedra (tabela MEGA_STONES): base + própria pedra => forma Mega; tirou a pedra => volta à forma de antes.
+    if(!__megaAutoOff){
+      const _mf = megaFormFor(poke.name, poke.item);
+      if(_mf && findDexEntry(_mf)){ poke.megaBase = limparNomeParaBusca(poke.name); poke.megaBaseAbility = poke.abilityUsed; poke.megaAuto = poke.item; poke.name = _mf; poke.abilityUsed = undefined; }
+      else if(poke.megaAuto && poke.megaBase && isMegaOfStone(poke.name, poke.megaAuto) && !isMegaOfStone(poke.name, poke.item)){ poke.name = poke.megaBase; poke.abilityUsed = poke.megaBaseAbility; delete poke.megaAuto; delete poke.megaBase; delete poke.megaBaseAbility; }
     }
     let nomeParaBusca = limparNomeParaBusca(poke.name);
     if(normKey(nomeParaBusca)==='castform' && poke.ability==='Forecast'){
@@ -2682,7 +2806,7 @@ function trickBlocked(pa, ia, pb, ib){
     if(it === 'rusted sword' && any(/^zacian/)) return it;
     if(it === 'rusted shield' && any(/^zamazenta/)) return it;
     if(/ mask$/.test(it) && any(/^ogerpon/)) return it;
-    if(isMegaStoneName(it)){ const stem = it.replace(/ite( [xyz])?$/, '').slice(0, 4); if(sp.some(x => x.slice(0, 4) === stem)) return it; }
+    if(megaStoneUsableBy(it, [pa.name, pb.name])) return it;   // tabela MEGA_STONES
   }
   return null;
 }
@@ -2699,6 +2823,154 @@ function trickApply(aSd, aIdx, tSd, tIdx){
   [[aSd, aIdx], [tSd, tIdx]].forEach(([sd, i]) => { const S = battle.sides[sd]; if(S.itemUsed) delete S.itemUsed[i]; });
   refreshBattlePrepared();
   return { text: `<b>${pa.name}</b> trocou de item com <b>${pb.name}</b>! ${pa.name} recebeu ${nameB ? '<b>' + nameB + '</b>' : 'nada'}; ${pb.name} recebeu ${nameA ? '<b>' + nameA + '</b>' : 'nada'}.` };
+}
+// ===== MEGA EVOLUÇÃO NA BATALHA (Singles e Doubles) =====
+//  battle.megaOv[idx] = forma Mega atual · battle.megaUsed[lado] = já usou a Mega desta batalha ·
+//  battle.megaPend[lado][idx] = 'mega' | 'revert' (acontece no início do turno: depois das trocas, antes dos golpes).
+//  Uma Mega por batalha por lado. Ilimitada: ⚙️ Arceus → "Mega ilimitada" (ON no modo Arceus) e CPU no nível Fácil (Aleatório).
+//  Stats, velocidade (ordem do turno) e habilidade já valem no instante da Mega. A Mega continua ao sair de campo.
+function megaUnlimited(side){ return !!battleManual.mega || (battle.mode === 'pvc' && side === 'B' && battle.cpuLogic === 'random'); }
+// Forma de batalha do Pokémon: a Mega ativa, ou a forma BASE quando ele está como Mega na Calculadora só por segurar a pedra.
+function battleFormOf(pokeIdx){
+  const poke = currentPokemons[pokeIdx]; if(!poke) return null;
+  if(battle && !__battleInitPrep && battle.megaOv && battle.megaOv[pokeIdx]) return { name: battle.megaOv[pokeIdx], mega: true };
+  const cur = limparNomeParaBusca(poke.name);
+  if(isMegaOfStone(cur, poke.item)){
+    const e = megaEntryForStone(poke.item);
+    const base = (poke.megaBase && e.base.some(b => normKey(b) === normKey(poke.megaBase))) ? poke.megaBase : megaPickDex(e.base);
+    return { name: base, mega: false };
+  }
+  return null;
+}
+// Mega possível AGORA para o Pokémon em campo (segura a própria pedra e ainda não é Mega), ou null.
+function megaTargetOf(side, idx){
+  const p = battle.sharedPrepared[idx]; if(!p || (battle.megaOv && battle.megaOv[idx])) return null;
+  const it = heldItem(side, idx); if(!it) return null;
+  const f = megaFormFor(p.name, it); return (f && findDexEntry(f)) ? f : null;
+}
+// Mega Evolui (ou reverte). Devolve { text, changes } ou null.
+function megaApply(side, idx, revert){
+  const p0 = battle.sharedPrepared[idx]; if(!p0) return null;
+  if(!battle.megaOv) battle.megaOv = {};
+  if(!battle.megaUsed) battle.megaUsed = { A: false, B: false };
+  if(revert){ if(!battle.megaOv[idx]) return null; delete battle.megaOv[idx]; }
+  else {
+    const to = megaTargetOf(side, idx); if(!to) return null;
+    if(!megaUnlimited(side) && battle.megaUsed[side]) return null;
+    battle.megaOv[idx] = to; if(!megaUnlimited(side)) battle.megaUsed[side] = true;
+  }
+  refreshBattlePrepared();
+  const p1 = battle.sharedPrepared[idx], S = battle.sides[side];
+  if(S.hp[idx] > p1.hpMax) S.hp[idx] = p1.hpMax;
+  const text = revert ? LF.megaRevert(p0.name, p1.name) : LF.mega(p0.name, p1.name, p1.ability);
+  const changes = abilityStartChanges(side, idx, false).concat(traceRecheck(side, false));   // habilidade da Mega ativa na hora (ex.: Drought)
+  return { text, changes };
+}
+// Preparado "como se" estivesse com outra forma (para a CPU avaliar a Mega sem aplicar).
+function preparedAsForm(idx, megaName){
+  if(!battle.megaOv) battle.megaOv = {};
+  const had = battle.megaOv[idx]; battle.megaOv[idx] = megaName;
+  try { return prepareBattleSide(idx, { weather: battle.weather, terrain: battle.terrain }); }
+  finally { if(had) battle.megaOv[idx] = had; else delete battle.megaOv[idx]; }
+}
+// CPU decide quem Mega Evolui neste turno (cands = Pokémon em campo que vão usar golpe).
+//  Fácil (Aleatório): Mega ilimitada, sempre que puder · Médio: na 1ª oportunidade ·
+//  Difícil: não Mega se a Mega levaria OHKO de um golpe conhecido do oponente (e a forma base não), e guarda a Mega
+//  se outro Pokémon do time tiver uma Mega claramente melhor contra o time do oponente.
+function cpuMegaDecide(side, cands){
+  if(!battle.megaPend) battle.megaPend = { A: {}, B: {} };
+  const P = battle.megaPend[side] || (battle.megaPend[side] = {});
+  const ok = cands.filter(i => megaTargetOf(side, i));
+  if(!ok.length) return;
+  const logic = battle.cpuLogic || 'maxdamage';
+  if(logic === 'random'){ ok.forEach(i => { P[i] = 'mega'; }); return; }
+  if(battle.megaUsed && battle.megaUsed[side]) return;
+  if(logic !== 'hard'){ P[ok[0]] = 'mega'; return; }
+  const S = battle.sides[side], o = side === 'A' ? 'B' : 'A', O = battle.sides[o];
+  const oppList = O.roster.filter(i => O.hp[i] > 0 && battle.sharedPrepared[i]).map(i => ({ p: battle.sharedPrepared[i], hp: O.hp[i] }));
+  const foes = fieldMons(o);
+  const score = (i, prep) => cpuBlindTeamScore(prep, S.hp[i], oppList);
+  let best = null, bestSc = -Infinity;
+  for(const i of ok){
+    const megaP = preparedAsForm(i, megaTargetOf(side, i)), baseP = battle.sharedPrepared[i];
+    // perigo: a Mega leva OHKO de algum golpe conhecido de um oponente em campo e a forma base não
+    let worse = false;
+    for(const f of foes){
+      const fp = battle.sharedPrepared[f], moves = cpuKnownMoves(o, fp) || [];
+      const fst = stagesOf(o, f), myst = stagesOf(side, i), fStatus = getStatusOf(o, f);
+      for(const m of moves){
+        const mMega = withMon(side, i, () => estimateDamageRange(fp, megaP, m, fst, myst, undefined, fStatus).max);
+        const mBase = estimateDamageRange(fp, baseP, m, fst, myst, undefined, fStatus).max;
+        if(mMega >= S.hp[i] && mBase < S.hp[i]){ worse = true; break; }
+      }
+      if(worse) break;
+    }
+    if(worse) continue;
+    const sc = score(i, megaP);
+    if(sc > bestSc){ bestSc = sc; best = i; }
+  }
+  if(best === null) return;
+  // Mega melhor no banco? (guarda a Mega da batalha para ele)
+  for(const j of S.roster){
+    if(cands.includes(j) || !(S.hp[j] > 0) || !battle.sharedPrepared[j]) continue;
+    const it = heldItem(side, j), f = it && megaFormFor(battle.sharedPrepared[j].name, it);
+    if(!f || !findDexEntry(f)) continue;
+    if(score(j, preparedAsForm(j, f)) > bestSc + 0.25) return;
+  }
+  P[best] = 'mega';
+}
+// Executa os pedidos de Mega/reversão do turno (por velocidade). acts = ações do turno. Devolve [{ side, idx, text, changes }].
+function megaStepRun(acts, speedOf){
+  const pend = battle.megaPend || {}, reqs = [];
+  ['A','B'].forEach(sd => Object.keys(pend[sd] || {}).forEach(k => {
+    const idx = Number(k), act = acts.find(a => a.side === sd && (battle.format === 'doubles' ? a.idx === idx : true) && (a.type === 'move' || a.type === 'status-move') && !a.semiAttack);
+    if(act) reqs.push({ side: sd, idx, revert: pend[sd][k] === 'revert' });
+  }));
+  reqs.sort((x, y) => speedOf(y.side, y.idx) - speedOf(x.side, x.idx));
+  const out = [];
+  for(const r of reqs){
+    const S = battle.sides[r.side];
+    const onField = battle.format === 'doubles' ? S.active.includes(r.idx) : S.activePokeIdx === r.idx;
+    if(!onField || !(S.hp[r.idx] > 0)) continue;
+    const res = megaApply(r.side, r.idx, r.revert);
+    if(res) out.push(Object.assign({ side: r.side, idx: r.idx }, res));
+  }
+  battle.megaPend = { A: {}, B: {} };
+  return out;
+}
+// Botão de Mega no card (humanos; no modo Arceus também ⚡ = na hora, e "Reverter" quando já é Mega).
+function megaBarHtml(side){
+  if(!battle || battle.finished) return '';
+  const S = battle.sides[side], idx = S.activePokeIdx, p = battle.sharedPrepared[idx];
+  if(!p || !(S.hp[idx] > 0)) return '';
+  const human = side === 'A' || battle.mode === 'pvp', arc = !!battleManual.mega;
+  if(!human && !arc) return '';
+  const isMega = !!(battle.megaOv && battle.megaOv[idx]), target = megaTargetOf(side, idx), unl = megaUnlimited(side);
+  const P = (battle.megaPend && battle.megaPend[side]) || {};
+  let mode = null;
+  if(isMega){ if(arc) mode = 'revert'; }
+  else if(target && (unl || !(battle.megaUsed && battle.megaUsed[side]))){
+    const other = battle.format === 'doubles' && Object.keys(P).some(k => Number(k) !== idx && P[k] === 'mega');   // Doubles: o outro já marcou a Mega
+    if(unl || !other) mode = 'mega';
+  }
+  if(!mode) return '';
+  const on = P[idx] === mode, lbl = mode === 'mega' ? `💎 Mega Evoluir → ${target}` : '↩️ Reverter Mega';
+  const tStyle = on ? 'border-color:var(--amber);color:var(--amber);' : '';
+  const turnBtn = human ? `<button type="button" class="battle-toolbar-btn mega-btn" data-mega-side="${side}" data-mega-mode="${mode}" data-mega-when="turn" style="${tStyle}" title="${mode === 'mega' ? 'Mega Evolui no início do turno (depois das trocas, antes dos golpes)' : 'Volta à forma normal no início do turno'}">${lbl}${on ? ' ✓' : ''}</button>` : '';
+  const nowBtn = arc ? `<button type="button" class="battle-toolbar-btn mega-btn" data-mega-side="${side}" data-mega-mode="${mode}" data-mega-when="now" title="Modo Arceus: ${mode === 'mega' ? 'Mega Evolui' : 'reverte'} AGORA">⚡${human ? '' : ' ' + lbl}</button>` : '';
+  return `<div class="mega-bar" style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:6px 0;">${turnBtn}${nowBtn}</div>`;
+}
+// ⚡ (modo Arceus): Mega / reversão na hora, fora do turno.
+function megaNow(side, idx, revert){
+  const r = megaApply(side, idx, revert); if(!r) return;
+  if(battle.format === 'doubles'){
+    dLog(r.text); dLogChanges(r.changes, idx); dblPush(); renderBattle(); return;
+  }
+  let le = battle.log[battle.log.length - 1];
+  if(!le || le.turn !== battle.turn){ le = newTurnLog(battle.turn); battle.log.push(le); }
+  le.actions.push({ side, type: 'note', text: r.text });
+  r.changes.forEach(c => le.actions.push(Object.assign({ side }, c)));
+  pushSnapshot(); renderBattle();
 }
 const PRIORITY_GUARD_ABILITIES = new Set(['armor tail', 'queenly majesty']);
 function priorityGuardHolder(attacker, moveKey, sideMons){
@@ -2738,7 +3010,17 @@ function prepareBattleSide(pokeIdx, env){
   const savedW = poke.pokemonWeather, savedT = poke.pokemonTerrain, savedAb = poke.abilityUsed;
   const _abOv = abilityOverrideFor(pokeIdx);   // Trace / Gastro Acid (só em campo, só na batalha)
   const _itOv = itemOverrideFor(pokeIdx), savedItem = poke.item;   // Trick / Switcheroo (só na batalha)
+  const _form = battleFormOf(pokeIdx), savedName = poke.name;     // Mega na batalha / forma base de quem só é Mega por segurar a pedra
   try{
+    __megaAutoOff = true;
+    if(_form){
+      poke.name = _form.name;
+      const _de = findDexEntry(_form.name);
+      if(_de){
+        const has = a => !!a && _de.Abilities.some(x => normKey(x) === normKey(a));
+        if(!has(poke.abilityUsed)) poke.abilityUsed = _form.mega ? (_de.Abilities[0] || '') : (has(poke.megaBaseAbility) ? poke.megaBaseAbility : (escolherHabilidadeDano(_de) || _de.Abilities[0] || ''));
+      }
+    }
     if(_abOv !== null) poke.abilityUsed = _abOv;
     if(_itOv !== null) poke.item = _itOv;
     const opts = { weather: document.getElementById('weatherSelect').value, terrain: document.getElementById('terrainSelect').value };
@@ -2779,8 +3061,10 @@ function prepareBattleSide(pokeIdx, env){
     };
   } catch(e){ console.error('[battle] prepare:', e); return null; }
   finally{
-    if(_abOv !== null) poke.abilityUsed = savedAb;
+    if(_abOv !== null || _form) poke.abilityUsed = savedAb;
+    if(_form) poke.name = savedName;
     if(_itOv !== null) poke.item = savedItem;
+    __megaAutoOff = false;
     if(env){
       if(savedW === undefined) delete poke.pokemonWeather; else poke.pokemonWeather = savedW;
       if(savedT === undefined) delete poke.pokemonTerrain; else poke.pokemonTerrain = savedT;
@@ -4203,6 +4487,7 @@ function snapshotBattle(){
     terrainInfo: battle.terrainInfo ? JSON.parse(JSON.stringify(battle.terrainInfo)) : null,
     gravity: battle.gravity || 0,
     itemOv: JSON.parse(JSON.stringify(battle.itemOv || {})),
+    megaOv: JSON.parse(JSON.stringify(battle.megaOv || {})), megaUsed: Object.assign({ A: false, B: false }, battle.megaUsed || {}), megaPend: JSON.parse(JSON.stringify(battle.megaPend || { A: {}, B: {} })),
     sides: {
       A: { roster: [...battle.sides.A.roster], hp: {...battle.sides.A.hp}, activePokeIdx: battle.sides.A.activePokeIdx, recharge: battle.sides.A.recharge, currentEntryTurn: battle.sides.A.currentEntryTurn || 0, flinched: battle.sides.A.flinched || false, pp: JSON.parse(JSON.stringify(battle.sides.A.pp || {})), stages: {...battle.sides.A.stages}, protected: battle.sides.A.protected, lastProtectTurn: battle.sides.A.lastProtectTurn, lastProtectAcc: battle.sides.A.lastProtectAcc, lastProtectStreak: battle.sides.A.lastProtectStreak || 0, sideProt: battle.sides.A.sideProt ? Object.assign({}, battle.sides.A.sideProt) : null, endure: !!battle.sides.A.endure, hazards: battle.sides.A.hazards ? Object.assign({}, battle.sides.A.hazards) : null, statusData: serializeSideStatus(battle.sides.A) },
       B: { roster: [...battle.sides.B.roster], hp: {...battle.sides.B.hp}, activePokeIdx: battle.sides.B.activePokeIdx, recharge: battle.sides.B.recharge, currentEntryTurn: battle.sides.B.currentEntryTurn || 0, flinched: battle.sides.B.flinched || false, pp: JSON.parse(JSON.stringify(battle.sides.B.pp || {})), stages: {...battle.sides.B.stages}, protected: battle.sides.B.protected, lastProtectTurn: battle.sides.B.lastProtectTurn, lastProtectAcc: battle.sides.B.lastProtectAcc, lastProtectStreak: battle.sides.B.lastProtectStreak || 0, sideProt: battle.sides.B.sideProt ? Object.assign({}, battle.sides.B.sideProt) : null, endure: !!battle.sides.B.endure, hazards: battle.sides.B.hazards ? Object.assign({}, battle.sides.B.hazards) : null, statusData: serializeSideStatus(battle.sides.B) },
@@ -4227,6 +4512,7 @@ function restoreSnapshot(snap){
   battle.terrainInfo = snap.terrainInfo ? JSON.parse(JSON.stringify(snap.terrainInfo)) : null;
   battle.gravity = snap.gravity || 0;
   battle.itemOv = JSON.parse(JSON.stringify(snap.itemOv || {}));
+  battle.megaOv = JSON.parse(JSON.stringify(snap.megaOv || {})); battle.megaUsed = Object.assign({ A: false, B: false }, snap.megaUsed || {}); battle.megaPend = JSON.parse(JSON.stringify(snap.megaPend || { A: {}, B: {} }));
   battle.pausedTurn = null;
   if(snap.pokeBuild){
     Object.keys(snap.pokeBuild).forEach(k => { const b = snap.pokeBuild[k], p = currentPokemons[k]; if(!b || !p) return;
@@ -4640,6 +4926,7 @@ function resolveBattleTurn(){
     actions.push(bAction);
   }
 
+  if(battle.mode === 'pvc'){ const _ba = actions.find(a => a.side === 'B'); if(_ba && (_ba.type === 'move' || _ba.type === 'status-move') && !_ba.semiAttack) cpuMegaDecide('B', [sB.activePokeIdx]); }
   const ordered = determineActionOrder(actions);
   const turnLog = newTurnLog(battle.turn);
   freezeBattleView(turnLog);
@@ -4654,6 +4941,18 @@ function runTurn(ctx, startIdx){
   for(let actIdx = startIdx; actIdx < ordered.length; actIdx++){
     const action = ordered[actIdx];
     if(battle.finished) break;
+    // Mega Evolução: depois das trocas, antes do 1º golpe. A nova velocidade já reordena o resto do turno.
+    if(!ctx.megaDone && action.type !== 'switch'){
+      ctx.megaDone = true;
+      const _mg = megaStepRun(ordered, (sd) => getEffectiveSpeed(sd, battle.sides[sd].activePokeIdx));
+      if(_mg.length){
+        _mg.forEach(m => { turnLog.actions.push({ side: m.side, type: 'note', text: m.text }); m.changes.forEach(c => turnLog.actions.push(Object.assign({ side: m.side }, c))); });
+        const _rest = ordered.slice(actIdx);
+        _rest.forEach(a => { a.speed = getEffectiveSpeed(a.side, battle.sides[a.side].activePokeIdx); });
+        ordered.splice(actIdx, _rest.length, ...determineActionOrder(_rest));
+        actIdx--; continue;
+      }
+    }
     const s = battle.sides[action.side];
 
     if(s.activePokeIdx !== actionTargets[action.side]){ turnLog.actions.push({ side: action.side, type: 'skip', reason: 'switched' }); continue; }
@@ -4969,6 +5268,7 @@ function keepOrDefaultAction(side){
 }
 function resetPendingActions(){
   const sA = battle.sides.A, sB = battle.sides.B;
+  battle.megaPend = { A: {}, B: {} };
   // PvP: NENHUM lado escolhe sozinho. Cada player precisa selecionar o próprio golpe/ação em todo turno (o Lutar só habilita depois dos dois).
   if(battle.mode === 'pvp'){ battle.pendingAction.A = null; battle.pendingAction.B = null; return; }
   battle.pendingAction.A = (sA.recharge || getSemi('A')) ? null : keepOrDefaultAction('A');
@@ -5387,6 +5687,8 @@ const LF = {
   dragged: (from, to) => `<b>${from}</b> foi forçado a sair e <b>${to}</b> foi arrastado para o campo!`,
   eelevate: (n, txt) => `Eelevate de <b>${n}</b>: ${txt}.`,
   confuseGain: n => `<b>${n}</b> ficou confuso!`,
+  mega: (from, to, ab) => `💎 <b>${from}</b> Mega Evoluiu para <b>${to}</b>!${ab ? ' (habilidade: ' + ab + ')' : ''}`,
+  megaRevert: (from, to) => `↩️ <b>${from}</b> voltou à forma normal (<b>${to}</b>).`,
   confused: n => `<b>${n}</b> está confuso!`,
   snapOut: n => `<b>${n}</b> não está mais confuso!`,
   confusionHit: a => `<b>${a.name}</b> está confuso e se feriu na confusão! <span class="dmg">−${a.damage} HP</span> (${a.hpBefore} → ${a.hpAfter}/${a.hpMax})${a.survived ? ` Aguentou com 1 HP (${a.survived})!` : ''}${a.hpAfter <= 0 ? ` <b>${a.name}</b> foi nocauteado!` : ''}`,
@@ -6001,6 +6303,7 @@ function battleSideCardInner(side){
     <div class="status-ability-row">${statusHtml}${abilityItemHtml}</div>
     ${resDisplayHtml}
     ${statsExpandableHtml}
+    ${megaBarHtml(side)}
     ${movesHtml}
     ${dblExtra}
     ${lutarInline}
@@ -6011,6 +6314,7 @@ function battleSideCardInner(side){
     <div class="status-ability-row">${statusHtml}${abilityItemHtml}</div>
     ${resDisplayHtml}
     ${statsExpandableHtml}
+    ${megaBarHtml(side)}
     ${movesHtml}
     ${dblExtra}
     ${lutarInline}
@@ -6286,7 +6590,7 @@ function envSelectHtml(kind){
   return `<select data-manual-env="${kind}" style="font-family:var(--font-mono);font-size:11px;">${opts.map(([v, l]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${l}</option>`).join('')}</select><span style="font-family:var(--font-mono);font-size:11px;color:var(--text-dim);">${(kind === 'weather' ? battle.weather : battle.terrain) !== 'none' ? envTurnsText(kind === 'weather' ? battle.weatherInfo : battle.terrainInfo).replace(' · ', '') : ''}</span>`;
 }
 function getAllItemsList(cur){
-  const set = new Set([...RANDOM_ITEMS_POOL, 'Eject Button', 'Red Card', 'Focus Sash','Life Orb','Leftovers','Sitrus Berry','Choice Band','Choice Specs','Choice Scarf','Assault Vest','White Herb','Safety Goggles', ...currentPokemons.map(p => p && p.item).filter(Boolean), cur].filter(Boolean));
+  const set = new Set([...RANDOM_ITEMS_POOL, ...MEGA_STONE_NAMES, 'Eject Button', 'Red Card', 'Focus Sash','Life Orb','Leftovers','Sitrus Berry','Choice Band','Choice Specs','Choice Scarf','Assault Vest','White Herb','Safety Goggles', ...currentPokemons.map(p => p && p.item).filter(Boolean), cur].filter(Boolean));
   return [...set].sort();
 }
 function getAllAbilitiesList(cur){
@@ -6692,7 +6996,7 @@ function renderBattleInner(){
     <button type="button" class="battle-toolbar-btn" id="battleUndoRerollBtn" style="${battleUndoReroll?'border-color:var(--mint);color:var(--mint);':''}" title="Ao voltar o turno (Undo), gera novos valores aleatórios (rolls, crit, precisão, efeitos)">🎲 Undo novo RNG ${battleUndoReroll?'ON':'OFF'}</button>
     <button type="button" class="battle-toolbar-btn" id="battleGearBtn" style="${battleGearOpen?'border-color:var(--mint);color:var(--mint);':''}" title="Opções avançadas">⚙️</button>
     ${battleGearOpen ? `<div class="battle-gear-panel"><div class="battle-gear-tabs"><button type="button" class="battle-toolbar-btn" data-gear-sub="geral" style="${battleGearSub==='geral'?'border-color:var(--mint);color:var(--mint);':''}">Geral ${battleGearSub==='geral'?'▾':'▸'}</button><button type="button" class="battle-toolbar-btn" data-gear-sub="arceus" style="${battleGearSub==='arceus'?'border-color:var(--amber);color:var(--amber);':''}">🔱 Arceus ${battleGearSub==='arceus'?'▾':'▸'}</button></div>${battleGearSub==='geral' ? `<div class="battle-gear-group"><div class="battle-gear-btns"><button type="button" class="battle-toolbar-btn" id="battleSwapPDBtn" title="Ordem dos valores de PD nos golpes">${battleSwapPD ? 'PD crescente' : 'PD decrescente'}</button>${battle.mode === 'pvc' ? `<button type="button" class="battle-toolbar-btn" id="battleHideMyBtn" style="${battleHideMyMoves?'border-color:var(--mint);color:var(--mint);':''}" title="A CPU só considera os meus golpes que ela já viu">🙈 Ocultar meus moves ${battleHideMyMoves?'ON':'OFF'}</button>
-    <button type="button" class="battle-toolbar-btn" id="battleHideCpuBtn" style="${battleHideCpuMoves?'border-color:var(--mint);color:var(--mint);':''}" title="Os golpes da CPU só aparecem depois de usados">🕵️ Ocultar moves da CPU ${battleHideCpuMoves?'ON':'OFF'}</button>` : ''}${battle.mode === 'pvc' ? `<button type="button" class="battle-toolbar-btn" id="battleCpuKnowsBtn" style="${!battleSetup.hideMyLead?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: ao escolher o próximo Pokémon, a CPU escolhe DEPOIS de mim e vê a minha escolha. Desligado: ela escolhe sem saber qual será o meu. (Não funciona junto com a opção ao lado.)">🧠 CPU sabe minha escolha ${!battleSetup.hideMyLead?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleIKnowBtn" style="${!battleSetup.hideCpuLead?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: a CPU escolhe ANTES e eu vejo o Pokémon dela antes de escolher o meu. Desligado: ela só entra depois que eu escolher. (Não funciona junto com a opção ao lado.)">👁 Eu sei a escolha da CPU ${!battleSetup.hideCpuLead?'ON':'OFF'}</button>` : ''}</div></div>` : ''}${battleGearSub==='arceus' ? `<div class="battle-gear-group"><div class="battle-gear-btns">${[['weather','Clima manual'],['terrain','Terreno manual'],['item','Item manual'],['ability','Habilidade manual'],['build','Build manual'],['status','Status manual']].map(([k,l]) => `<button type="button" class="battle-toolbar-btn" data-manual="${k}" style="${battleManual[k]?'border-color:var(--mint);color:var(--mint);':''}">${l} ${battleManual[k]?'ON':'OFF'}</button>`).join('')}<button type="button" class="battle-toolbar-btn" id="battleEditMovesBtn" style="${battleEditMoves?'border-color:var(--mint);color:var(--mint);':''}" title="Mostra um ✕ em cada golpe para excluir e um + para adicionar golpes">✏️ Editar moves ${battleEditMoves?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleAuraBarBtn" style="${auraBarEnabled?'border-color:var(--mint);color:var(--mint);':''}" title="Mostra a barra de Aura ao lado do terreno mesmo sem Fairy Aura / Dark Aura / Aura Break em campo (ligar o modo Arceus não liga esta opção)">🌟 Barra de Aura ${auraBarEnabled?'ON':'OFF'}</button></div></div>` : ''}</div>` : ''}
+    <button type="button" class="battle-toolbar-btn" id="battleHideCpuBtn" style="${battleHideCpuMoves?'border-color:var(--mint);color:var(--mint);':''}" title="Os golpes da CPU só aparecem depois de usados">🕵️ Ocultar moves da CPU ${battleHideCpuMoves?'ON':'OFF'}</button>` : ''}${battle.mode === 'pvc' ? `<button type="button" class="battle-toolbar-btn" id="battleCpuKnowsBtn" style="${!battleSetup.hideMyLead?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: ao escolher o próximo Pokémon, a CPU escolhe DEPOIS de mim e vê a minha escolha. Desligado: ela escolhe sem saber qual será o meu. (Não funciona junto com a opção ao lado.)">🧠 CPU sabe minha escolha ${!battleSetup.hideMyLead?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleIKnowBtn" style="${!battleSetup.hideCpuLead?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: a CPU escolhe ANTES e eu vejo o Pokémon dela antes de escolher o meu. Desligado: ela só entra depois que eu escolher. (Não funciona junto com a opção ao lado.)">👁 Eu sei a escolha da CPU ${!battleSetup.hideCpuLead?'ON':'OFF'}</button>` : ''}</div></div>` : ''}${battleGearSub==='arceus' ? `<div class="battle-gear-group"><div class="battle-gear-btns">${[['weather','Clima manual'],['terrain','Terreno manual'],['item','Item manual'],['ability','Habilidade manual'],['build','Build manual'],['status','Status manual'],['mega','💎 Mega ilimitada']].map(([k,l]) => `<button type="button" class="battle-toolbar-btn" data-manual="${k}" style="${battleManual[k]?'border-color:var(--mint);color:var(--mint);':''}">${l} ${battleManual[k]?'ON':'OFF'}</button>`).join('')}<button type="button" class="battle-toolbar-btn" id="battleEditMovesBtn" style="${battleEditMoves?'border-color:var(--mint);color:var(--mint);':''}" title="Mostra um ✕ em cada golpe para excluir e um + para adicionar golpes">✏️ Editar moves ${battleEditMoves?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleAuraBarBtn" style="${auraBarEnabled?'border-color:var(--mint);color:var(--mint);':''}" title="Mostra a barra de Aura ao lado do terreno mesmo sem Fairy Aura / Dark Aura / Aura Break em campo (ligar o modo Arceus não liga esta opção)">🌟 Barra de Aura ${auraBarEnabled?'ON':'OFF'}</button></div></div>` : ''}</div>` : ''}
   </div>`;
 
   const _dbl = battle.format === 'doubles';
@@ -6769,7 +7073,7 @@ function renderBattleInner(){
   `;
   if(_dbl){
     cont.querySelectorAll('.dbl-slot').forEach(w => {
-      w.querySelectorAll('[data-side],[data-cpu-side],[data-del-side],[data-manual-stage],[data-move-add-toggle],[data-move-add-input],[data-move-add-ok],[data-status-side],[data-heal-sd],[data-dbl-lutar]').forEach(el => { el.dataset.slot = w.dataset.dblSlot; });
+      w.querySelectorAll('[data-side],[data-cpu-side],[data-del-side],[data-manual-stage],[data-move-add-toggle],[data-move-add-input],[data-move-add-ok],[data-status-side],[data-heal-sd],[data-dbl-lutar],[data-mega-side]').forEach(el => { el.dataset.slot = w.dataset.dblSlot; });
     });
     ['A','B'].forEach((k, i) => { const r = document.getElementById('dblRow' + k); if(r) r.scrollLeft = _scr[i]; });
     if(dblPresScrollReq){
@@ -6990,6 +7294,18 @@ function renderBattleInner(){
     });
   });
 
+  cont.querySelectorAll('[data-mega-side]').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    const sd = b.dataset.megaSide, mode = b.dataset.megaMode;
+    const idx = battle.format === 'doubles' ? dS(sd).active[Number(b.dataset.slot)] : battle.sides[sd].activePokeIdx;
+    if(idx == null) return;
+    if(b.dataset.megaWhen === 'now'){ presGateDefer(() => megaNow(sd, idx, mode === 'revert')); return; }
+    if(presGateBlock()) return;
+    if(!battle.megaPend) battle.megaPend = { A: {}, B: {} };
+    const P = battle.megaPend[sd] || (battle.megaPend[sd] = {});
+    if(P[idx] === mode) delete P[idx]; else P[idx] = mode;
+    renderBattle();
+  }));
   cont.querySelectorAll('[data-dbl-tgt]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); if(presGateBlock()) return; dPickTarget(b.dataset.tsd, Number(b.dataset.tslot)); }));
   cont.querySelectorAll('.battle-replacement-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -8035,7 +8351,7 @@ function renderResults(teamResults){
       computeAndRender();
     });
   });
-  resultsEl.querySelectorAll('.forma-select').forEach(s=>s.addEventListener('change', (e)=>{ const idx = Number(e.target.dataset.poke); currentPokemons[idx].name = e.target.value; currentPokemons[idx].abilityUsed = undefined; computeAndRender(); }));
+  resultsEl.querySelectorAll('.forma-select').forEach(s=>s.addEventListener('change', (e)=>{ const idx = Number(e.target.dataset.poke); currentPokemons[idx].name = e.target.value; currentPokemons[idx].abilityUsed = undefined; delete currentPokemons[idx].megaAuto; delete currentPokemons[idx].megaBase; delete currentPokemons[idx].megaBaseAbility; computeAndRender(); }));
   resultsEl.querySelectorAll('.nature-select').forEach(s=>s.addEventListener('change', (e)=>{ const idx = Number(e.target.dataset.poke); currentPokemons[idx].nature = e.target.value; computeAndRender(); }));
   resultsEl.querySelectorAll('.ability-select').forEach(s=>s.addEventListener('change', (e)=>{ const idx = Number(e.target.dataset.poke); currentPokemons[idx].abilityUsed = e.target.value; computeAndRender(); }));
   resultsEl.querySelectorAll('.pokemon-stage-select').forEach(s=>s.addEventListener('change', (e)=>{ const idx = Number(e.target.dataset.poke); currentPokemons[idx].pokemonStage = Number(e.target.value); computeAndRender(); }));
@@ -8496,6 +8812,15 @@ function dblInit(){
 }
 
 /* ---------- entrada em campo ---------- */
+// Registra no log do Doubles as mudanças de entrada/habilidade (mesmo formato do dEnter).
+function dLogChanges(ch, idx){
+  (ch || []).forEach(c => {
+    if(c.type === 'hazard' || c.type === 'note') dLog(c.text);
+    else if(c.type === 'weather-change') dLog(LF.weatherChange(c.name || dP(idx).name, c.weather));
+    else if(c.type === 'terrain-change') dLog(LF.terrainChange(c.name || dP(idx).name, c.terrain));
+    else if(c.type === 'seed-activate') dLog(LF.seed(Object.assign({}, c, { name: c.name || dP(idx).name })));
+  });
+}
 function dEnter(sd, slot, idx, afterFaint, initial, batonPass){
   const S = dS(sd);
   const _old = S.active[slot];
@@ -8584,6 +8909,7 @@ function dRunTurn(){
     else a = dMkAct(sd, slot, dHuman(sd) ? battle.dp[sd][slot] : dCpuChoose(sd, slot));
     if(a) acts.push(a);
   }));
+  ['A','B'].forEach(sd => { if(!dHuman(sd)) cpuMegaDecide(sd, acts.filter(a => a.side === sd && (a.type === 'move' || a.type === 'status-move') && !a.semiAttack).map(a => a.idx)); });
   const tb = acts.map(() => battleRandom()), tr = battle.trickRoom > 0;
   const order = acts.map((a, i) => ({ a, tb: tb[i] })).sort((x, y) => {
     if(x.a.priority !== y.a.priority) return y.a.priority - x.a.priority;
@@ -8601,6 +8927,20 @@ function dContinue(start){
     if(battle.finished) break;
     if(dSideDead('A') || dSideDead('B')) break;
     const a = order[i];
+    // Mega Evolução: depois das trocas, antes do 1º golpe. A nova velocidade já reordena o resto do turno.
+    if(!D.ctx.megaDone && a.type !== 'switch'){
+      D.ctx.megaDone = true;
+      const mg = megaStepRun(order.slice(i), (sd, idx) => dSpeed(sd, idx));
+      if(mg.length){
+        mg.forEach(m => { battle._curAtt = null; dLog(m.text); dLogChanges(m.changes, m.idx); });
+        const rest = order.slice(i), trR = battle.trickRoom > 0;
+        rest.forEach(x => { if(dS(x.side).active[x.slot] === x.idx) x.speed = dSpeed(x.side, x.idx); });
+        const tbs = rest.map(() => battleRandom());
+        const re = rest.map((x, k) => ({ x, tb: tbs[k] })).sort((p, q) => (p.x.priority !== q.x.priority) ? q.x.priority - p.x.priority : (p.x.speed !== q.x.speed ? (trR ? p.x.speed - q.x.speed : q.x.speed - p.x.speed) : (p.tb < q.tb ? -1 : 1))).map(z => z.x);
+        order.splice(i, rest.length, ...re);
+        i--; continue;
+      }
+    }
     const r = dExec(a, order);
     a.done = true;
     dTrackFaints();
@@ -9272,6 +9612,7 @@ function dReplacePick(sd, idx){
 function dNextTurn(){
   battle.need = null; battle.await = null;
   ['A','B'].forEach(sd => { const S = dS(sd); S.active.forEach((i, slot) => { if(i != null && S.hp[i] <= 0) S.active[slot] = null; }); dSyncActive(sd); });
+  battle.megaPend = { A: {}, B: {} };
   battle.turn++; battle.dp = { A: [null, null], B: [null, null] }; battle.dd = { A: [null, null], B: [null, null] }; D.ui.pick = null; battle._tl = null;
   dblPush(); renderBattle();
 }
