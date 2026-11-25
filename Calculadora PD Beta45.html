@@ -49,6 +49,12 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
    precisão e crítico próprios. Golpe multistrike mostra a contagem de hits mesmo com 1 hit.
 15) MEGA STONES: a ÚNICA lista de pedras e Pokémon associados é a constante MEGA_STONES
    (procure "TABELA ÚNICA"). Para acrescentar ou corrigir uma Mega, edite só ali.
+16) DÚVIDA DE MECÂNICA: pesquise no código-fonte do Pokémon Showdown antes de implementar
+   (github.com/smogon/pokemon-showdown — data/moves.ts, data/abilities.ts, data/items.ts,
+   data/conditions.ts, sim/battle.ts, sim/pokemon.ts; o conteúdo cru abre em
+   raw.githubusercontent.com/smogon/pokemon-showdown/master/<caminho>). Se a regra passada
+   pelo usuário for diferente do Showdown, vale a do usuário; se ficar ambíguo, pergunte.
+   Arredondamentos de cura/precisão seguem o battle.modify do Showdown (sdModify).
 =====================================================================
 -->
 <meta charset="UTF-8">
@@ -490,7 +496,7 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   /* Golpes centralizados no card (celular e desktop) */
   .battle-actions-grid.moves-grid{ display:flex; flex-wrap:wrap; justify-content:center; gap:6px; }
   .battle-actions-grid.moves-grid > *{ flex:0 0 calc(50% - 3px); min-width:0; box-sizing:border-box; }
-  /* Cores dos tipos nos golpes (toggle 🎨). Struggle/Typeless não recebem a classe .typed */
+  /* Cores dos tipos nos golpes (⚙️ → 🎨 Cores → Cores Moves). Struggle/Typeless não recebem a classe .typed */
   .battle-action-btn.typed{ border-color: color-mix(in srgb, var(--tc) 70%, var(--line)); background: color-mix(in srgb, var(--tc) 20%, var(--panel)); }
   .battle-action-btn.typed:hover{ border-color: var(--tc); background: color-mix(in srgb, var(--tc) 30%, var(--panel)); }
   .battle-action-btn.typed.selected{ border-color: var(--mint); background: color-mix(in srgb, var(--tc) 42%, var(--panel)); box-shadow: 0 0 0 2px var(--mint) inset; }
@@ -709,7 +715,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 44; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 45; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
 const ICON_TRASH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
@@ -872,6 +878,7 @@ const HARDCODED_STATUS_MOVES = {
   'sunny day': { Name:'Sunny Day', Type:'Fire', Category:'Status', Accuracy:101, PP:5, IsStatus:true },
   'sandstorm': { Name:'Sandstorm', Type:'Rock', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
   'snowscape': { Name:'Snowscape', Type:'Ice', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
+  'shore up': { Name:'Shore Up', Type:'Ground', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
   'electric terrain': { Name:'Electric Terrain', Type:'Electric', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
   'grassy terrain': { Name:'Grassy Terrain', Type:'Grass', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
   'misty terrain': { Name:'Misty Terrain', Type:'Fairy', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
@@ -1069,7 +1076,7 @@ let battleShowDamageAsPercent = true;
 let openStatsPanels = new Set();
 let openCondPanels = new Set();   // painéis de condições (hazards / status / voláteis) abertos: chave "lado:idx"
 let cpuPreviewMove = {};
-let battleGearOpen = false, battleGearSub = null;   // battleGearSub: 'geral' | 'arceus' | null (sanfona: só o grupo clicado fica aberto)
+let battleGearOpen = false, battleGearSub = null;   // battleGearSub: 'geral' | 'arceus' | 'cores' | null (sanfona: só o grupo clicado fica aberto)
 // Modo Arceus: liga todas as opções de edição (desligado por padrão). Guarda o estado anterior para restaurar ao desligar.
 let arceusMode = false, _arceusPrev = null;
 function setArceusMode(on){
@@ -2795,19 +2802,93 @@ function harvestLine(sd, idx){
   delete S.itemUsed[idx]; refreshBattlePrepared();
   return LF.harvest(p.name, it);
 }
-// ===== Moonlight / Synthesis / Morning Sun: cura conforme o clima =====
-//  Sem clima ou Strong Winds: 1/2 · sol forte: ×2732/4096 · outro clima: 1/4 (arredondado para baixo).
-//  Cloud Nine / Air Lock = sem clima. Utility Umbrella: o portador ignora chuva e sol (cura 1/2).
-const WEATHER_HEAL_MOVES = new Set(['moonlight','synthesis','morning sun']);
-function weatherHealApply(sd, idx){
+// ===== CLIMA NA BATALHA (Singles e Doubles) — regra 16: em dúvida, conferir no código do Showdown =====
+// Clima do campo (Cloud Nine / Air Lock anulam) e clima "efetivo" do Pokémon (Utility Umbrella ignora sol e chuva).
+function fieldWeather(){ return (battle && battle.weather && !weatherSuppressed()) ? battle.weather : 'none'; }
+function effWeatherFor(sd, idx){ const w = fieldWeather(); return (umbrellaOf(sd, idx) && ['sun','harshsun','rain','heavyrain'].includes(w)) ? 'none' : w; }
+function rainOnFor(sd, idx){ return ['rain','heavyrain'].includes(effWeatherFor(sd, idx)); }
+function sandOn(){ return fieldWeather() === 'sand'; }
+// Arredondamento do Showdown (battle.modify): fator em /4096 e arredonda para o mais próximo (,5 para baixo).
+function sdModify(value, factor){ const m = Math.trunc(factor * 4096); return Math.trunc((Math.trunc(value * m) + 2047) / 4096); }
+// battle.heal do Showdown: cura de 1 ou menos vira 1; depois trunca.
+function sdHeal(v){ return (v && v <= 1) ? 1 : Math.trunc(v); }
+// Dano de tempestade de areia: AINDA NÃO EXISTE na batalha (decisão do usuário). Quando existir, são imunes:
+// tipos Rock/Ground/Steel, Sand Force, Sand Rush, Sand Veil, Overcoat, Magic Guard e Safety Goggles.
+function sandDamageImmune(p, sd, idx){
+  if(!p) return true; const T = [p.type1, p.type2], ab = normKey(p.ability || '');
+  return T.includes('Rock') || T.includes('Ground') || T.includes('Steel') || ['sand force','sand rush','sand veil','overcoat','magic guard'].includes(ab) || heldItem(sd, idx) === 'safety goggles';
+}
+// Sol extremo: golpe de dano Water falha · Chuva pesada: golpe de dano Fire falha (o PP é gasto). Cloud Nine / Air Lock anulam.
+function primalMoveFail(move){
+  if(!move || move.isStruggle) return null;
+  const w = fieldWeather(); if(w !== 'harshsun' && w !== 'heavyrain') return null;
+  const t = (move.detail && move.detail.moveType) || ((findMoveInfo(baseMoveNameFromKey(move.moveKey || move.Name || '')) || {}).Type) || '';
+  if(w === 'harshsun' && t === 'Water') return 'o golpe de água evaporou no sol extremo';
+  if(w === 'heavyrain' && t === 'Fire') return 'o golpe de fogo se apagou na chuva pesada';
+  return null;
+}
+// Golpe de clima (Sunny Day, Rain Dance, Sandstorm, Snowscape) que não pôde ativar: motivo.
+function weatherMoveFailReason(){ return PRIMAL_WEATHERS.has(battle.weather) ? 'o clima extremo impede (nem Cloud Nine / Air Lock evitam)' : 'o clima já está ativo'; }
+// Growth: no sol (efetivo do usuário) sobe Atk e SpA em 2 cada.
+function growthPlan(plan, mk, sd, idx){
+  if(!plan || mk !== 'growth' || !['sun','harshsun'].includes(effWeatherFor(sd, idx))) return plan;
+  return Object.assign({}, plan, { self: plan.self.map(([st, n]) => [st, n * 2]) });
+}
+// Sand Veil: na tempestade de areia, a precisão contra o portador ×3277/4096 (Mold Breaker ignora).
+function sandVeilAcc(acc, att, tSd, tIdx){
+  const tp = battle.sharedPrepared[tIdx];
+  if(!(acc < 101) || !tp || normKey(tp.ability || '') !== 'sand veil' || !sandOn() || attackerIgnoresAbility(att)) return acc;
+  return Math.trunc((acc * 3277 + 2047) / 4096);
+}
+// ===== Pó e esporos: Grass, Overcoat e Safety Goggles são imunes (golpes de pó, Rage Powder e Effect Spore) =====
+const POWDER_MOVES = new Set(['cotton spore','magic powder','poison powder','powder','rage powder','sleep powder','spore','stun spore']);
+function powderImmune(p, sd, idx){
+  if(!p) return null;
+  if(p.type1 === 'Grass' || p.type2 === 'Grass') return 'Grass';
+  if(normKey(p.ability || '') === 'overcoat') return 'Overcoat';
+  if(heldItem(sd, idx) === 'safety goggles') return 'Safety Goggles';
+  return null;
+}
+// Effect Spore: golpe de contato que atinge o portador => sorteio 0-99: <11 sono, <21 paralisia, <30 veneno (cada hit sorteia).
+// Só se o atacante está sem status e não é imune a pó. Imunidades de cada status continuam valendo. Devolve o status aplicado ou null.
+function effectSporeRoll(aSd, aIdx){
+  const p = battle.sharedPrepared[aIdx], S = battle.sides[aSd];
+  if(!p || !(S.hp[aIdx] > 0) || getStatusOf(aSd, aIdx) !== 'Healthy' || powderImmune(p, aSd, aIdx)) return null;
+  const r = Math.floor(battleRandom() * 100);
+  const st = r < 11 ? 'Asleep' : r < 21 ? 'Paralyzed' : r < 30 ? 'Poisoned' : null;
+  if(!st || leafGuardBlocks(aSd, aIdx)) return null;
+  const T = [p.type1, p.type2], ab = normKey(p.ability || '');
+  if(st === 'Asleep' && ['insomnia','vital spirit','sweet veil','comatose'].includes(ab)) return null;
+  if(st === 'Paralyzed' && (T.includes('Electric') || ['limber','comatose'].includes(ab))) return null;
+  if(st === 'Poisoned' && (T.includes('Poison') || T.includes('Steel') || ['immunity','pastel veil','comatose'].includes(ab))) return null;
+  S.status[aIdx] = st; if(st === 'Asleep'){ S.sleepCounter[aIdx] = 0; if(S.restSleep) delete S.restSleep[aIdx]; } S.toxicCounter[aIdx] = 0;
+  return st;
+}
+// Rain Dish: na chuva (efetiva), recupera 1/16 do HP máx. no fim do turno. Devolve a cura.
+function rainDishHeal(sd, idx){
+  const S = battle.sides[sd], p = battle.sharedPrepared[idx];
+  if(!p || !(S.hp[idx] > 0) || abOf(sd, idx) !== 'rain dish' || !rainOnFor(sd, idx) || S.hp[idx] >= p.hpMax || volPeek(sd, idx).healBlock > 0) return 0;
+  const h = Math.min(p.hpMax - S.hp[idx], sdHeal(p.hpMax / 16)); S.hp[idx] += h; return h;
+}
+// Hydration: na chuva (efetiva), cura o status não volátil no fim do turno, ANTES do dano de queimadura/veneno. Devolve o status curado.
+function hydrationCure(sd, idx){
+  const S = battle.sides[sd], st = getStatusOf(sd, idx);
+  if(!(S.hp[idx] > 0) || abOf(sd, idx) !== 'hydration' || !rainOnFor(sd, idx) || st === 'Healthy') return null;
+  S.status[idx] = 'Healthy'; if(S.sleepCounter) S.sleepCounter[idx] = 0; if(S.frozenCounter) S.frozenCounter[idx] = 0; if(S.toxicCounter) S.toxicCounter[idx] = 0; if(S.restSleep) delete S.restSleep[idx];
+  return st;
+}
+// ===== Moonlight / Synthesis / Morning Sun / Shore Up: cura conforme o clima (arredondamento do Showdown) =====
+//  Moonlight / Synthesis / Morning Sun (clima efetivo do usuário): sem clima ou Strong Winds 1/2 · sol 0,667 (2732/4096) ·
+//  chuva, areia, neve 1/4. Shore Up: areia 0,667 · fora dela 1/2. Cloud Nine / Air Lock = sem clima.
+const WEATHER_HEAL_MOVES = new Set(['moonlight','synthesis','morning sun','shore up']);
+function weatherHealApply(sd, idx, mk){
   const S = battle.sides[sd], p = battle.sharedPrepared[idx];
   if(volPeek(sd, idx).healBlock > 0) return { fail: 'Heal Block' };
   if(S.hp[idx] >= p.hpMax) return { fail: 'o HP de ' + p.name + ' já está cheio' };
-  let w = weatherSuppressed() ? 'none' : (battle.weather || 'none');
-  if(umbrellaOf(sd, idx) && ['sun','harshsun','rain','heavyrain'].includes(w)) w = 'none';
-  const amt = (w === 'none' || w === 'strongwinds') ? Math.floor(p.hpMax / 2)
-    : (w === 'sun' || w === 'harshsun') ? pokeRound(p.hpMax * 2732 / 4096) : Math.floor(p.hpMax / 4);
-  const b = S.hp[idx]; S.hp[idx] = Math.min(p.hpMax, b + Math.max(1, amt));
+  let f;
+  if(mk === 'shore up') f = sandOn() ? 0.667 : 0.5;
+  else { const w = effWeatherFor(sd, idx); f = ['sun','harshsun'].includes(w) ? 0.667 : ['rain','heavyrain','sand','snow','hail'].includes(w) ? 0.25 : 0.5; }
+  const b = S.hp[idx]; S.hp[idx] = Math.min(p.hpMax, b + sdHeal(sdModify(p.hpMax, f)));
   return { text: LF.healMove(p.name, S.hp[idx] - b, S.hp[idx], p.hpMax) };
 }
 // Singles: tira o Pokémon do lado `side` de campo e põe um aleatório do banco (Roar, Whirlwind, Red Card).
@@ -3124,6 +3205,8 @@ function weatherEndsThisTurn(){
 function abilitySpeedMult(sd, idx){
   let m = 1;
   if(abOf(sd, idx) === 'chlorophyll' && sunOnFor(sd, idx)) m *= 2;
+  if(abOf(sd, idx) === 'swift swim' && rainOnFor(sd, idx)) m *= 2;   // chuva efetiva (Umbrella ignora)
+  if(abOf(sd, idx) === 'sand rush' && sandOn()) m *= 2;
   const pr = volPeek(sd, idx).proto; if(pr && pr.stat === 'Spe') m *= 1.5;
   return m;
 }
@@ -3467,10 +3550,16 @@ function prepareBattleSide(pokeIdx, env){
 // Precisão fixa por golpe (sobrepõe a planilha). Vale para Singles e Doubles.
 const ACCURACY_OVERRIDES = { 'triple axel': 90, 'triple kick': 90 };
 // Precisão efetiva do golpe na batalha: Blizzard nunca erra (101) na neve. Use SEMPRE este helper (log, botões, CPU, detalhes).
-function battleMoveAccuracy(moveNameKey, moveInfo){
+function battleMoveAccuracy(moveNameKey, moveInfo, tSd, tIdx){
   const k = normKey(moveNameKey || '');
   let acc = moveInfo ? (moveInfo.Accuracy ?? 100) : 100;
   if(ACCURACY_OVERRIDES[k] !== undefined) acc = ACCURACY_OVERRIDES[k];
+  // Clima (efetivo do ALVO, como no Showdown): Thunder / Hurricane 50% no sol; na chuva Thunder, Hurricane e as Storms sempre acertam.
+  if(battle && battle.sides){
+    const tw = (tSd != null && tIdx != null) ? effWeatherFor(tSd, tIdx) : fieldWeather();
+    if((k === 'thunder' || k === 'hurricane') && ['sun','harshsun'].includes(tw)) acc = 50;
+    if(['thunder','hurricane','bleakwind storm','wildbolt storm','sandsear storm'].includes(k) && ['rain','heavyrain'].includes(tw)) acc = 101;
+  }
   if(k === 'blizzard' && battle && battle.weather === 'snow') acc = 101;
   if(gravityOn() && acc < 101 && !OHKO_MOVES.has(k)) acc = Math.min(100, pokeRound(acc * GRAVITY_ACC_MULT));   // Gravity: ×6840/4096 (exceto OHKO)
   return acc;
@@ -4222,7 +4311,7 @@ function applySecondaryEffects(action, attacker, defender, moveInfo){
     Burned: () => dT.includes('Fire') || ['water veil','water bubble','thermal exchange','comatose'].includes(dAb),
     Poisoned: () => dT.includes('Poison') || dT.includes('Steel') || ['immunity','pastel veil','comatose'].includes(dAb),
     Paralyzed: () => dT.includes('Electric') || ['limber','comatose'].includes(dAb),
-    Frozen: () => dT.includes('Ice') || ['magma armor','comatose'].includes(dAb),
+    Frozen: () => dT.includes('Ice') || ['magma armor','comatose'].includes(dAb) || sunOnFor(dSide, dIdx),   // sol: não congela
     Asleep: () => ['insomnia','vital spirit','sweet veil','comatose'].includes(dAb)
   };
   const STAT = STAGE_NAME_MAP;
@@ -4294,13 +4383,16 @@ function executeAction(action, ordered, actionIdx){
     choiceLockSet(action.side, attackerActiveIdx, action.move.Name);
     // Precisão: battleMoveAccuracy (Gravity ×6840/4096). Alvo sob Telekinesis e a própria Telekinesis sempre acertam.
     const _tSureS = moveNameKey === 'telekinesis' || teleSureHit(defSide, defenderSideState.activePokeIdx, moveNameKey, getSemi(defSide));
-    const acc = _tSureS ? 101 : battleMoveAccuracy(moveNameKey, action.move);
+    const acc = _tSureS ? 101 : sandVeilAcc(battleMoveAccuracy(moveNameKey, action.move, defSide, defenderSideState.activePokeIdx), attacker, defSide, defenderSideState.activePokeIdx);
     const accRoll = battleRandom() * 100;
     if(battleAccuracyEnabled && acc < 101 && accRoll >= acc){
       return { side: action.side, type: 'move-miss', attackerName: attacker.name, moveName: action.move.Name };
     }
     const _failS = r => ({ side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.Name, reason: r });
     const _txtS = t => ({ side: action.side, type: 'move-text', attackerName: attacker.name, moveName: action.move.Name, text: t });
+    if(POWDER_MOVES.has(moveNameKey) && moveNameKey !== 'rage powder'){   // pó/esporos: Grass, Overcoat e Safety Goggles são imunes
+      const _pi = powderImmune(defender, defSide, defenderSideState.activePokeIdx); if(_pi) return _failS(LF.powderImmune(defender.name, _pi));
+    }
     if(moveNameKey === 'rest'){
       if(action.viaSleepTalk) return _failS('não funciona pelo Sleep Talk');
       const _rf = restFail(action.side, attackerActiveIdx); if(_rf) return _failS(_rf);
@@ -4314,8 +4406,8 @@ function executeAction(action, ordered, actionIdx){
       _r._sleepTalkLine = LF.moveText(attacker.name, 'Sleep Talk', `Chamou <b>${_pk.type === 'move' ? _pk.move.moveName : _pk.move.Name}</b>!`);
       return _r;
     }
-    if(WEATHER_HEAL_MOVES.has(moveNameKey)){   // Moonlight / Synthesis / Morning Sun
-      const _h = weatherHealApply(action.side, attackerActiveIdx);
+    if(WEATHER_HEAL_MOVES.has(moveNameKey)){   // Moonlight / Synthesis / Morning Sun / Shore Up
+      const _h = weatherHealApply(action.side, attackerActiveIdx, moveNameKey);
       return _h.fail ? _failS(_h.fail) : _txtS(_h.text);
     }
     if(moveNameKey === 'gravity'){
@@ -4454,7 +4546,7 @@ function executeAction(action, ordered, actionIdx){
         return { side: action.side, type: 'status-protect', attackerName: attacker.name, moveName: _pn };
       } }
     {
-      const _plan = statusMovePlan(action.move);
+      const _plan = growthPlan(statusMovePlan(action.move), moveNameKey, action.side, attackerActiveIdx);
       if(_plan){
         if(_plan.target.length){
           { const _spv = protectionVerdict(moveNameKey, { status: true, foeStatus: true, priority: getMovePriority(action.move.Name), spread: false, contact: false }, Object.assign({ prot: defenderSideState.protected || null }, defenderSideState.sideProt || {}));
@@ -4486,7 +4578,7 @@ function executeAction(action, ordered, actionIdx){
     if(WEATHER_MOVE_MAP[moveNameKey]){
       const w = WEATHER_MOVE_MAP[moveNameKey];
       if(setBattleWeather(w, action.side, battle.turn)){ refreshBattlePrepared(); return { side: action.side, type: 'weather-change', name: attacker.name, weather: w }; }
-      return { side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.Name, reason: 'o clima já está ativo' };
+      return { side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.Name, reason: weatherMoveFailReason() };
     }
     if(TERRAIN_MOVE_MAP[moveNameKey]){
       const t = TERRAIN_MOVE_MAP[moveNameKey];
@@ -4530,6 +4622,7 @@ function executeAction(action, ordered, actionIdx){
   if(!action.move.isStruggle) markRevealed(action.side, attackerActiveIdx, baseMoveNameFromKey(action.move.moveKey));
   attackerSideState.lastMoveKey = moveNameKey;
   if(!action.move.isStruggle) choiceLockSet(action.side, attackerActiveIdx, action.move.moveKey);
+  { const _pf = primalMoveFail(action.move); if(_pf) return { side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.moveName, reason: _pf }; }
   if(EXPLOSIVE_MOVES.has(moveNameKey) && (normKey(attacker.ability || '') === 'damp' || normKey(defender.ability || '') === 'damp')){
     const _dp = normKey(defender.ability || '') === 'damp' ? defender.name : attacker.name;
     return { side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.moveName, reason: 'Damp de ' + _dp + ' impede explosões' };
@@ -4598,7 +4691,7 @@ function executeAction(action, ordered, actionIdx){
   const _dAb = normKey(defender.ability || '');
   const stormNoMiss = !dSemi && !attackerIgnoresAbility(attacker) && ((_mtAcc === 'Water' && _dAb === 'storm drain') || (_mtAcc === 'Electric' && _dAb === 'lightning rod'));
   const _teleS = teleSureHit(defSide, defenderSideState.activePokeIdx, moveNameKey, dSemi);   // Telekinesis no alvo: sempre acerta
-  const acc = (noGuardOn || stormNoMiss || _teleS) ? 101 : battleMoveAccuracy(moveNameKey, moveInfo);
+  const acc = (noGuardOn || stormNoMiss || _teleS) ? 101 : sandVeilAcc(battleMoveAccuracy(moveNameKey, moveInfo, defSide, defenderSideState.activePokeIdx), attacker, defSide, defenderSideState.activePokeIdx);
   if(battleAccuracyEnabled && acc < 101 && accRoll >= acc){
     return { side: action.side, type: 'move-miss', attackerName: attacker.name, moveName: action.move.moveName };
   }
@@ -4681,12 +4774,19 @@ function executeAction(action, ordered, actionIdx){
       attackerSideState.hp[attackerActiveIdx] = Math.max(0, _cb - _cd); contactHurt += _cb - attackerSideState.hp[attackerActiveIdx];
     }
     hits.push({ damage: r.damage, toHp, toSub, roll: ROLL_MULTS[hitRollIdx], rollIdx: hitRollIdx, isCrit: hitCrit, calc: r.calc, hpBefore: hpPre, hpAfter: s.hp[s.activePokeIdx], snap: snapView() });
+    // Effect Spore: cada hit de contato que atinge o Pokémon sorteia; se o atacante dormir, o golpe acaba na hora.
+    let _esSleep = false;
+    if(moveInfo && moveInfo.Contact && toSub === 0 && r.typeEff > 0 && normKey(defender.ability || '') === 'effect spore'){
+      const _es = effectSporeRoll(action.side, attackerActiveIdx);
+      if(_es){ abilNotes.push(LF.effectSpore(defender.name, attacker.name, _es)); if(window._stSnap && window._stSnap[action.side]) window._stSnap[action.side][attackerActiveIdx] = _es; _esSleep = _es === 'Asleep'; }
+    }
     // Mummy / Wandering Spirit: golpe de contato que atingiu o Pokémon (não o substituto). Os próximos hits já usam as habilidades novas.
     if(moveInfo && moveInfo.Contact && toSub === 0 && r.typeEff > 0){
       const _cal = contactAbilityLines(action.side, attackerActiveIdx, defSide, s.activePokeIdx);
       if(_cal.length){ _cal.forEach(t => abilNotes.push(t)); attacker = getSidePrepared(action.side); defender = getSidePrepared(defSide); hitMove = getBattleMoveByKey(attacker, action.move.moveKey) || hitMove; }
     }
     if(attackerSideState.hp[attackerActiveIdx] <= 0) break;   // o atacante caiu (Rough Skin): ele cai primeiro
+    if(_esSleep) break;   // Effect Spore fez o atacante dormir
     if(s.hp[s.activePokeIdx] <= 0) break;
   }
   const subbed = subAbsorbed > 0 && hpDamageDone === 0;
@@ -5218,6 +5318,15 @@ function applyEndOfTurnStatusDamage(turnLog){
     }
   }
 }
+// Hydration: na chuva cura o status ANTES do dano de queimadura/veneno.
+function applyEndOfTurnHydration(turnLog){
+  for(const side of ['A', 'B']){
+    const s = battle.sides[side], idx = s.activePokeIdx, pr = battle.sharedPrepared[idx];
+    const old = pr ? hydrationCure(side, idx) : null; if(!old) continue;
+    turnLog.actions.push({ side, type: 'note', text: LF.hydration(pr.name, old) });
+    if(window._stSnap && window._stSnap[side]) window._stSnap[side][idx] = 'Healthy';
+  }
+}
 // Ingrain: cura no fim do turno (antes de queimadura/veneno).
 function applyEndOfTurnIngrain(turnLog){
   for(const side of ['A', 'B']){
@@ -5245,6 +5354,7 @@ function applyEndOfTurnAbilities(turnLog){
     const pr = battle.sharedPrepared[idx];
     if(!pr) continue;
     { const _hv = harvestLine(side, idx); if(_hv) turnLog.actions.push({ side, type: 'note', text: _hv }); }   // Harvest
+    { const _rd = rainDishHeal(side, idx); if(_rd) turnLog.actions.push({ side, type: 'status-heal', name: pr.name, heal: _rd, label: 'Rain Dish', hpAfter: s.hp[idx], hpMax: pr.hpMax }); }
     if(normKey(pr.ability || '') === 'speed boost' && canChangeStage(side, 'Spe', 1)){
       const _sr = changeStage(side, 'Spe', 1);
       turnLog.actions.push({ side, type: 'ability-boost', name: pr.name, text: 'Speed Boost: ' + fmtStageChange(_sr) });
@@ -5520,6 +5630,7 @@ function runTurn(ctx, startIdx){
   battle.sides.A.sideProt = null; battle.sides.B.sideProt = null;
   battle.sides.A.endure = false; battle.sides.B.endure = false;
 
+  applyEndOfTurnHydration(turnLog);
   applyEndOfTurnIngrain(turnLog);
   applyEndOfTurnStatusDamage(turnLog);
   orbLines().forEach(o => { turnLog.actions.push({ side: o.sd, type: 'note', text: o.text }); if(window._stSnap && window._stSnap[o.sd]) window._stSnap[o.sd][o.idx] = o.st; });   // Flame / Toxic Orb
@@ -6159,6 +6270,9 @@ const LF = {
   eelevate: (n, txt) => `Eelevate de <b>${n}</b>: ${txt}.`,
   abilityChanged: (n, ab, src) => `A habilidade de <b>${n}</b> virou <b>${ab}</b> (${src})!`,
   abilitySwap: (holder, att, abH, abA) => `<b>${holder}</b> trocou de habilidade com <b>${att}</b> (Wandering Spirit)! ${holder}: <b>${abA}</b> · ${att}: <b>${abH}</b>.`,
+  hydration: (n, st) => `<b>${n}</b> curou-se de <b>${st}</b> com Hydration!`,
+  effectSpore: (holder, att, st) => `Effect Spore de <b>${holder}</b>: <b>${att}</b> agora está <b>${st}</b>!`,
+  powderImmune: (n, why) => `${n} não é afetado por pó/esporos (${why})`,
   harvest: (n, berry) => `<b>${n}</b> colheu outra <b>${berry}</b> (Harvest)!`,
   healMove: (n, h, hpA, max) => `<b>${n}</b> recuperou <span style="color:var(--mint);">${h} HP</span>! (${hpA}/${max})`,
   confuseGain: n => `<b>${n}</b> ficou confuso!`,
@@ -6359,7 +6473,7 @@ function oppDamageLineHtml(side, m){
   return `<div class="battle-action-sub" style="font-size:11px;text-align:center;margin-top:8px;"><span style="color:${cMin};font-weight:700;">${Math.round(rMin)}%</span>–<span style="color:${cMax};font-weight:700;">${Math.round(rMax)}%</span></div>`;
 }
 
-/* ===== Cores de tipo nos golpes (toggle 🎨 na barra de opções; ligado por padrão) =====
+/* ===== Cores de tipo nos golpes (⚙️ → 🎨 Cores → "Cores Moves"; ligado por padrão) =====
    Struggle e golpes sem tipo (Typeless) NÃO recebem cor. */
 const TYPE_COLORS = { Normal:'#A8A77A', Fire:'#EE8130', Water:'#6390F0', Electric:'#F7D02C', Grass:'#7AC74C', Ice:'#96D9D6', Fighting:'#C22E28', Poison:'#A33EA1', Ground:'#E2BF65', Flying:'#A98FF3', Psychic:'#F95587', Bug:'#A6B91A', Rock:'#B6A136', Ghost:'#735797', Dragon:'#6F35FC', Dark:'#705746', Steel:'#B7B7CE', Fairy:'#D685AD' };
 let battleTypeColors = (() => { try{ return localStorage.getItem('pd_typeColors') !== '0'; }catch(e){ return true; } })();
@@ -6707,8 +6821,8 @@ function battleSideCardInner(side){
   const _resAttr = (stat) => battleResCurrentHP ? `data-res-side="${skey(side)}" data-res-k="${stageVal(stat === 'Def' ? active.defFinal : active.spdFinal, s.stages[stat] || 0) / 100}" data-res-ms="${['multiscale','shadow shield'].includes(normKey(active.ability || '')) ? 1 : 0}" data-res-max="${active.hpMax}"` : '';
   const resDisplayHtml = battleShowPDRes
     ? `<div class="battle-res-display">
-        <div class="res-item"><span class="label">RES Fís</span><b style="color:#2A52BE;" ${_resAttr('Def')}>${fmt2(resFisica)}</b></div>
-        <div class="res-item"><span class="label">RES Esp</span><b style="color:#FF5CAD;" ${_resAttr('SpD')}>${fmt2(resEspecial)}</b></div>
+        <div class="res-item"><span class="label">RES Fís</span><b style="color:#2A52BE;cursor:pointer;" data-res-click title="Clique: RES com HP ${battleResCurrentHP ? 'atual (mudar para máximo)' : 'máximo (mudar para atual)'}" ${_resAttr('Def')}>${fmt2(resFisica)}</b></div>
+        <div class="res-item"><span class="label">RES Esp</span><b style="color:#FF5CAD;cursor:pointer;" data-res-click title="Clique: RES com HP ${battleResCurrentHP ? 'atual (mudar para máximo)' : 'máximo (mudar para atual)'}" ${_resAttr('SpD')}>${fmt2(resEspecial)}</b></div>
       </div>`
     : '';
 
@@ -7473,11 +7587,10 @@ function renderBattleInner(){
     <button type="button" class="battle-toolbar-btn" id="battleRollsToggle" style="${battleShowRolls?'border-color:var(--mint);color:var(--mint);':''}">🎲 Rolls ${battleShowRolls?'ON':'OFF'}</button>
     <button type="button" class="battle-toolbar-btn" id="battleEstimateToggle" style="${battleShowEstimate?'border-color:var(--mint);color:var(--mint);':''}">📊 Dano ${battleShowEstimate?'ON':'OFF'}</button>
     <button type="button" class="battle-toolbar-btn" id="battlePDResToggle" style="${battleShowPDRes?'border-color:var(--mint);color:var(--mint);':''}">👁 PD/RES ${battleShowPDRes?'ON':'OFF'}</button>
-    <button type="button" class="battle-toolbar-btn" id="battleTypeColorToggle" style="${battleTypeColors?'border-color:var(--mint);color:var(--mint);':''}" title="Colorir os golpes com a cor do tipo (Struggle e golpes sem tipo não têm cor)">🎨 Cores ${battleTypeColors?'ON':'OFF'}</button>
     <button type="button" class="battle-toolbar-btn" id="battleSecToggle" style="${battleSecEffects?'border-color:var(--mint);color:var(--mint);':''}" title="Efeitos secundários dos golpes">Efeitos 2º ${battleSecEffects?'ON':'OFF'}</button>
     <button type="button" class="battle-toolbar-btn" id="battleUndoRerollBtn" style="${battleUndoReroll?'border-color:var(--mint);color:var(--mint);':''}" title="Ao voltar o turno (Undo), gera novos valores aleatórios (rolls, crit, precisão, efeitos)">🎲 Undo novo RNG ${battleUndoReroll?'ON':'OFF'}</button>
     <button type="button" class="battle-toolbar-btn" id="battleGearBtn" style="${battleGearOpen?'border-color:var(--mint);color:var(--mint);':''}" title="Opções avançadas">⚙️</button>
-    ${battleGearOpen ? `<div class="battle-gear-panel"><div class="battle-gear-tabs"><button type="button" class="battle-toolbar-btn" data-gear-sub="geral" style="${battleGearSub==='geral'?'border-color:var(--mint);color:var(--mint);':''}">Geral ${battleGearSub==='geral'?'▾':'▸'}</button><button type="button" class="battle-toolbar-btn" data-gear-sub="arceus" style="${battleGearSub==='arceus'?'border-color:var(--amber);color:var(--amber);':''}">🔱 Arceus ${battleGearSub==='arceus'?'▾':'▸'}</button></div>${battleGearSub==='geral' ? `<div class="battle-gear-group"><div class="battle-gear-btns"><button type="button" class="battle-toolbar-btn" id="battleSecAlwaysBtn" style="${battleSecAlways?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: todo efeito secundário dos golpes ativa (101%). Imunidades (Shield Dust, Covert Cloak, tipo/habilidade) continuam valendo.">🎲 Efeito 2º sempre (101%) ${battleSecAlways?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleSwapPDBtn" title="Ordem dos valores de PD nos golpes">${battleSwapPD ? 'PD crescente' : 'PD decrescente'}</button>${battle.mode === 'pvc' ? `<button type="button" class="battle-toolbar-btn" id="battleHideMyBtn" style="${battleHideMyMoves?'border-color:var(--mint);color:var(--mint);':''}" title="A CPU só considera os meus golpes que ela já viu">🙈 Ocultar meus moves ${battleHideMyMoves?'ON':'OFF'}</button>
+    ${battleGearOpen ? `<div class="battle-gear-panel"><div class="battle-gear-tabs"><button type="button" class="battle-toolbar-btn" data-gear-sub="geral" style="${battleGearSub==='geral'?'border-color:var(--mint);color:var(--mint);':''}">Geral ${battleGearSub==='geral'?'▾':'▸'}</button><button type="button" class="battle-toolbar-btn" data-gear-sub="arceus" style="${battleGearSub==='arceus'?'border-color:var(--amber);color:var(--amber);':''}">🔱 Arceus ${battleGearSub==='arceus'?'▾':'▸'}</button><button type="button" class="battle-toolbar-btn" data-gear-sub="cores" style="${battleGearSub==='cores'?'border-color:var(--mint);color:var(--mint);':''}">🎨 Cores ${battleGearSub==='cores'?'▾':'▸'}</button></div>${battleGearSub==='cores' ? `<div class="battle-gear-group"><div class="battle-gear-btns"><button type="button" class="battle-toolbar-btn" id="battleTypeColorToggle" style="${battleTypeColors?'border-color:var(--mint);color:var(--mint);':''}" title="Colorir os golpes com a cor do tipo (Struggle e golpes sem tipo não têm cor)">🎨 Cores Moves ${battleTypeColors?'ON':'OFF'}</button></div></div>` : ''}${battleGearSub==='geral' ? `<div class="battle-gear-group"><div class="battle-gear-btns"><button type="button" class="battle-toolbar-btn" id="battleSecAlwaysBtn" style="${battleSecAlways?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: todo efeito secundário dos golpes ativa (101%). Imunidades (Shield Dust, Covert Cloak, tipo/habilidade) continuam valendo.">🎲 Efeito 2º sempre (101%) ${battleSecAlways?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleSwapPDBtn" title="Ordem dos valores de PD nos golpes">${battleSwapPD ? 'PD crescente' : 'PD decrescente'}</button>${battle.mode === 'pvc' ? `<button type="button" class="battle-toolbar-btn" id="battleHideMyBtn" style="${battleHideMyMoves?'border-color:var(--mint);color:var(--mint);':''}" title="A CPU só considera os meus golpes que ela já viu">🙈 Ocultar meus moves ${battleHideMyMoves?'ON':'OFF'}</button>
     <button type="button" class="battle-toolbar-btn" id="battleHideCpuBtn" style="${battleHideCpuMoves?'border-color:var(--mint);color:var(--mint);':''}" title="Os golpes da CPU só aparecem depois de usados">🕵️ Ocultar moves da CPU ${battleHideCpuMoves?'ON':'OFF'}</button>` : ''}${battle.mode === 'pvc' ? `<button type="button" class="battle-toolbar-btn" id="battleCpuKnowsBtn" style="${!battleSetup.hideMyLead?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: ao escolher o próximo Pokémon, a CPU escolhe DEPOIS de mim e vê a minha escolha. Desligado: ela escolhe sem saber qual será o meu. (Não funciona junto com a opção ao lado.)">🧠 CPU sabe minha escolha ${!battleSetup.hideMyLead?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleIKnowBtn" style="${!battleSetup.hideCpuLead?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: a CPU escolhe ANTES e eu vejo o Pokémon dela antes de escolher o meu. Desligado: ela só entra depois que eu escolher. (Não funciona junto com a opção ao lado.)">👁 Eu sei a escolha da CPU ${!battleSetup.hideCpuLead?'ON':'OFF'}</button>` : ''}</div></div>` : ''}${battleGearSub==='arceus' ? `<div class="battle-gear-group"><div class="battle-gear-btns">${[['weather','Clima manual'],['terrain','Terreno manual'],['item','Item manual'],['ability','Habilidade manual'],['build','Build manual'],['status','Status manual'],['mega','Mega ilimitada'],['conds','🔎 Condições sempre visíveis']].map(([k,l]) => `<button type="button" class="battle-toolbar-btn" data-manual="${k}" style="${battleManual[k]?'border-color:var(--mint);color:var(--mint);':''}">${l} ${battleManual[k]?'ON':'OFF'}</button>`).join('')}<button type="button" class="battle-toolbar-btn" id="battleEditMovesBtn" style="${battleEditMoves?'border-color:var(--mint);color:var(--mint);':''}" title="Mostra um ✕ em cada golpe para excluir e um + para adicionar golpes">✏️ Editar moves ${battleEditMoves?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleAuraBarBtn" style="${auraBarEnabled?'border-color:var(--mint);color:var(--mint);':''}" title="Mostra a barra de Aura ao lado do terreno mesmo sem Fairy Aura / Dark Aura / Aura Break em campo (ligar o modo Arceus não liga esta opção)">🌟 Barra de Aura ${auraBarEnabled?'ON':'OFF'}</button></div></div>` : ''}</div>` : ''}
   </div>`;
 
@@ -7598,6 +7711,8 @@ function renderBattleInner(){
   document.getElementById('battlePPToggle')?.addEventListener('click', () => { battlePPEnabled = !battlePPEnabled; renderBattle(); });
   document.getElementById('battleDamageFormatToggle')?.addEventListener('click', () => { battleShowDamageAsPercent = !battleShowDamageAsPercent; renderBattle(); });
   document.getElementById('battleResToggle')?.addEventListener('click', () => { battleResCurrentHP = !battleResCurrentHP; renderBattle(); });
+  // Clicar no valor de RES alterna RES atual / máxima (o mesmo do botão 🛡 RES, que muda junto)
+  document.querySelectorAll('[data-res-click]').forEach(el => el.addEventListener('click', ev => { ev.stopPropagation(); battleResCurrentHP = !battleResCurrentHP; renderBattle(); }));
   document.getElementById('battleEstimateToggle')?.addEventListener('click', () => { battleShowEstimate = !battleShowEstimate; renderBattle(); });
   document.getElementById('battlePDResToggle')?.addEventListener('click', () => { battleShowPDRes = !battleShowPDRes; renderBattle(); });
   document.querySelectorAll('.battle-action-btn[data-action-type="switch"]').forEach(btn => {
@@ -9370,7 +9485,7 @@ function dResolveTargets(a, m, mk){
     tgt = { sd: o, slot: foes[0].slot }; tIdx = foes[0].idx;
   }
   if(tgt.sd === o && !m.isStruggle){
-    const rd = battle.redir && battle.redir[o];
+    const rd = dRedirFor(o, a.side, a.idx);
     if(rd != null && dAlive(o, rd)) tIdx = rd;
     else {
       const info = findMoveInfo(baseMoveNameFromKey(m.moveKey));
@@ -9383,6 +9498,12 @@ function dResolveTargets(a, m, mk){
 }
 
 /* ---------- fluxo do turno ---------- */
+// Redirecionamento (Follow Me / Rage Powder) para golpes do atacante (aSd, aIdx). Rage Powder não atrai quem é imune a pó.
+function dRedirFor(o, aSd, aIdx){
+  const rd = battle.redir && battle.redir[o]; if(rd == null) return null;
+  if(battle.redirPowder && battle.redirPowder[o] && powderImmune(dP(aIdx), aSd, aIdx)) return null;
+  return rd;
+}
 function dMkAct(sd, slot, ch){
   const S = dS(sd), idx = S.active[slot];
   if(!ch || idx == null) return null;
@@ -9521,6 +9642,7 @@ function dMoveAct(a, order){
   if(mk === 'gigaton hammer' && S.lastMove[idx] === 'gigaton hammer'){ dLog(LF.moveFail(att.name, mn, 'não pode ser usado em turnos seguidos')); return null; }
   S.lastMove[idx] = mk;
   if(!m.isStruggle) choiceLockSet(sd, idx, m.moveKey);
+  { const pf = primalMoveFail(m); if(pf){ dLog(LF.moveFail(att.name, mn, pf)); return null; } }
   if(EXPLOSIVE_MOVES.has(mk)){
     const damp = [...dActives('A'), ...dActives('B')].find(x => normKey(dP(x.idx).ability || '') === 'damp');
     if(damp){ dLog(LF.moveFail(att.name, mn, 'Damp de ' + dP(damp.idx).name + ' impede explosões')); return null; }
@@ -9616,7 +9738,7 @@ function dSec(sd, idx, tSd, tIdx, info, mk){
     Burned: () => dT.includes('Fire') || ['water veil','water bubble','thermal exchange','comatose'].includes(dAb),
     Poisoned: () => dT.includes('Poison') || dT.includes('Steel') || ['immunity','pastel veil','comatose'].includes(dAb),
     Paralyzed: () => dT.includes('Electric') || ['limber','comatose'].includes(dAb),
-    Frozen: () => dT.includes('Ice') || ['magma armor','comatose'].includes(dAb),
+    Frozen: () => dT.includes('Ice') || ['magma armor','comatose'].includes(dAb) || sunOnFor(tSd, tIdx),   // sol: não congela
     Asleep: () => ['insomnia','vital spirit','sweet veil','comatose'].includes(dAb),
   };
   const STAT = STAGE_NAME_MAP;
@@ -9675,7 +9797,7 @@ function dHit(a, tSd, tIdx, o){
   const mtype = (m.detail && m.detail.moveType) || (info && info.Type) || '';
   const dAb = normKey(def.ability || '');
   const stormNoMiss = !dsemi && !attackerIgnoresAbility(att) && ((mtype === 'Water' && dAb === 'storm drain') || (mtype === 'Electric' && dAb === 'lightning rod'));
-  const acc = (noGuard || stormNoMiss || teleSureHit(tSd, tIdx, mk, dsemi)) ? 101 : battleMoveAccuracy(mk, info);   // Telekinesis no alvo: sempre acerta
+  const acc = (noGuard || stormNoMiss || teleSureHit(tSd, tIdx, mk, dsemi)) ? 101 : sandVeilAcc(battleMoveAccuracy(mk, info, tSd, tIdx), att, tSd, tIdx);   // Telekinesis no alvo: sempre acerta
   const accRoll = battleRandom() * 100;
   if(battleAccuracyEnabled && acc < 101 && accRoll >= acc){ dLog(sp ? `↳ errou <b>${def.name}</b>!` : LF.miss({ attackerName: att.name, moveName: m.moveName })); o.headDone = true; return res; }
   let semiCut = false;
@@ -9730,12 +9852,19 @@ function dHit(a, tSd, tIdx, o){
     // Rough Skin / Iron Barbs: cada hit de contato que acerta o Pokémon (não o substituto), mesmo com 0 de dano
     if(cRA && !hitSub && S.hp[idx] > 0 && normKey(att.ability || '') !== 'magic guard'){ const b = S.hp[idx]; S.hp[idx] = Math.max(0, b - Math.max(1, Math.floor(att.hpMax / 8))); cHurt += b - S.hp[idx]; }
     hitRecs.push({ damage: r.damage, rollIdx: ri, isCrit: hc, calc: r.calc, hpBefore: _hb, hpAfter: T.hp[tIdx] });
+    // Effect Spore: cada hit de contato que atinge o Pokémon sorteia; se o atacante dormir, o golpe acaba na hora.
+    let esSleep = false;
+    if(info && info.Contact && !hitSub && tIdx !== idx && r.typeEff > 0 && normKey(def.ability || '') === 'effect spore'){
+      const es = effectSporeRoll(sd, idx);
+      if(es){ abilN.push(LF.effectSpore(def.name, att.name, es)); esSleep = es === 'Asleep'; }
+    }
     // Mummy / Wandering Spirit: golpe de contato que atingiu o Pokémon (não o substituto). Os próximos hits já usam as habilidades novas.
     if(info && info.Contact && !hitSub && tIdx !== idx && r.typeEff > 0){
       const cal = contactAbilityLines(sd, idx, tSd, tIdx);
       if(cal.length){ cal.forEach(t => abilN.push(t)); att = dP(idx); def = dP(tIdx); mv = (o.spread && att.sprMap && att.sprMap[m.moveKey]) || getBattleMoveByKey(att, m.moveKey) || mv; }
     }
     if(S.hp[idx] <= 0) break;   // o atacante caiu (Rough Skin): ele cai primeiro
+    if(esSleep) break;   // Effect Spore fez o atacante dormir
     if(T.hp[tIdx] <= 0) break;
   }
   const subbed = subAbs > 0 && hpDone === 0;
@@ -9823,8 +9952,8 @@ function dStatusAct(a){
     const sub = { side: sd, slot: a.slot, idx, type: pk.type, move: pk.move, priority: 0, speed: 0, tgt: ft ? { sd: o, slot: ft.slot } : null, noPP: true, viaSleepTalk: true };
     return pk.type === 'move' ? dMoveAct(sub, D.ctx ? D.ctx.order : [sub]) : dStatusAct(sub);
   }
-  if(WEATHER_HEAL_MOVES.has(mk)){   // Moonlight / Synthesis / Morning Sun
-    const h = weatherHealApply(sd, idx); if(h.fail) return fail(h.fail);
+  if(WEATHER_HEAL_MOVES.has(mk)){   // Moonlight / Synthesis / Morning Sun / Shore Up
+    const h = weatherHealApply(sd, idx, mk); if(h.fail) return fail(h.fail);
     dLog(LF.moveText(att.name, m.Name, h.text)); return null;
   }
   if(mk === 'gravity'){
@@ -9850,7 +9979,7 @@ function dStatusAct(a){
     let tIdx = t ? dS(t.sd).active[t.slot] : null;
     if(tIdx == null || !dAlive(t.sd, tIdx)){ t = null; tIdx = null; if(foes[0]){ t = { sd: o, slot: foes[0].slot }; tIdx = foes[0].idx; } }
     if(!t) return fail('sem alvo');
-    if(t.sd === o){ const rd = battle.redir && battle.redir[o]; if(rd != null && dAlive(o, rd)){ tIdx = rd; t = { sd: o, slot: dS(o).active.indexOf(rd) }; } }
+    if(t.sd === o){ const rd = dRedirFor(o, sd, idx); if(rd != null && dAlive(o, rd)){ tIdx = rd; t = { sd: o, slot: dS(o).active.indexOf(rd) }; } }
     const T = dS(t.sd), tp = dP(tIdx);
     { const spv = protectionVerdict(mk, { status: true, foeStatus: t.sd !== sd, priority: getMovePriority(m.Name), spread: false, contact: false }, { prot: T.prot[tIdx] || null, wide: T.wide, quick: T.quick, crafty: T.crafty, mat: T.mat });
       if(spv.blocked){ dLog(LF.blocked({ attackerName: att.name, moveName: m.Name, defenderName: tp.name, by: spv.by })); return null; } }
@@ -9862,7 +9991,7 @@ function dStatusAct(a){
       volOf(t.sd, tIdx).tele = TELEKINESIS_TURNS; refreshBattlePrepared();
       dLog(LF.moveText(att.name, m.Name, `${tp.name} foi erguido no ar! (${TELEKINESIS_TURNS} turnos)${battleGroundedIdx(t.sd, tIdx) ? ' (mas continua no chão)' : ''}`)); return null;
     }
-    const acc = (mk === 'yawn' || teleSureHit(t.sd, tIdx, mk, tsm)) ? 101 : battleMoveAccuracy(mk, m);   // Yawn sempre acerta (exceto semi-invulnerável)
+    const acc = (mk === 'yawn' || teleSureHit(t.sd, tIdx, mk, tsm)) ? 101 : sandVeilAcc(battleMoveAccuracy(mk, m, t.sd, tIdx), att, t.sd, tIdx);   // Yawn sempre acerta (exceto semi-invulnerável)
     if(battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name })); return null; }
     if(mk === 'yawn'){
       if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
@@ -9956,7 +10085,7 @@ function dStatusAct(a){
       dLog(LF.protect(att.name, m.Name)); return null;
     } }
   {
-    const plan = statusMovePlan(m);
+    const plan = growthPlan(statusMovePlan(m), mk, sd, idx);
     if(plan){
       let tg = null;
       if(plan.target.length){
@@ -9965,7 +10094,7 @@ function dStatusAct(a){
         let tIdx = t ? dS(t.sd).active[t.slot] : null;
         if(tIdx == null || !dAlive(t.sd, tIdx)){ t = null; tIdx = null; if(foes[0]){ t = { sd: o, slot: foes[0].slot }; tIdx = foes[0].idx; } }
         if(!t) return fail('sem alvo');
-        if(t.sd === o){ const rd = battle.redir && battle.redir[o]; if(rd != null && dAlive(o, rd)) tIdx = rd; }
+        if(t.sd === o){ const rd = dRedirFor(o, sd, idx); if(rd != null && dAlive(o, rd)) tIdx = rd; }
         tg = { sd: t.sd, idx: tIdx };
         const T = dS(tg.sd), tp = dP(tg.idx);
         { const spv = protectionVerdict(mk, { status: true, foeStatus: tg.sd !== sd, priority: getMovePriority(m.Name), spread: false, contact: false }, { prot: T.prot[tg.idx] || null, wide: T.wide, quick: T.quick, crafty: T.crafty, mat: T.mat });
@@ -9973,7 +10102,8 @@ function dStatusAct(a){
         const tsm = T.semis[tg.idx];
         if(tsm && tsm.kind !== 'charge' && normKey(att.ability || '') !== 'no guard' && normKey(tp.ability || '') !== 'no guard'){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name, semiDodge: tp.name })); return null; }
         if((T.subs[tg.idx] || 0) > 0 && tg.sd !== sd && !SOUND_STAT_MOVES.has(mk)) return fail('o substituto de ' + tp.name + ' bloqueou');
-        const acc = teleSureHit(tg.sd, tg.idx, mk, tsm) ? 101 : battleMoveAccuracy(mk, m);   // Gravity ×6840/4096 · Telekinesis no alvo: sempre acerta
+        if(POWDER_MOVES.has(mk)){ const pi = powderImmune(tp, tg.sd, tg.idx); if(pi) return fail(LF.powderImmune(tp.name, pi)); }   // pó/esporos
+        const acc = teleSureHit(tg.sd, tg.idx, mk, tsm) ? 101 : sandVeilAcc(battleMoveAccuracy(mk, m, tg.sd, tg.idx), att, tg.sd, tg.idx);   // Gravity ×6840/4096 · Telekinesis no alvo: sempre acerta
         if(battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name })); return null; }
       }
       const txt = applyStatusPlan(plan, {
@@ -9987,16 +10117,20 @@ function dStatusAct(a){
     }
   }
   if(DBL_BOOSTS[mk]){ dWith(sd, idx, () => dLog(LF.boost(att.name, m.Name, applyStageList(sd, DBL_BOOSTS[mk])))); return null; }
-  if(WEATHER_MOVE_MAP[mk]){ const w = WEATHER_MOVE_MAP[mk]; if(dWith(sd, idx, () => setBattleWeather(w, sd, battle.turn))){ refreshBattlePrepared(); dLog(LF.weatherChange(att.name, w)); return null; } return fail('o clima já está ativo'); }
+  if(WEATHER_MOVE_MAP[mk]){ const w = WEATHER_MOVE_MAP[mk]; if(dWith(sd, idx, () => setBattleWeather(w, sd, battle.turn))){ refreshBattlePrepared(); dLog(LF.weatherChange(att.name, w)); return null; } return fail(weatherMoveFailReason()); }
   if(TERRAIN_MOVE_MAP[mk]){ const t = TERRAIN_MOVE_MAP[mk]; if(dWith(sd, idx, () => setBattleTerrain(t, sd, battle.turn))){ refreshBattlePrepared(); dLog(LF.terrainChange(att.name, t)); return null; } return fail('o terreno já está ativo'); }
   if(mk === 'helping hand'){
     const al = a.tgt && a.tgt.sd === sd ? S.active[a.tgt.slot] : dActives(sd).find(x => x.idx !== idx)?.idx;
     if(al == null || al === idx || !dAlive(sd, al)) return fail('sem aliado');
     S.hh[al] = true; dLog(`${H}! Vai ajudar <b>${dP(al).name}</b>.`); return null;
   }
-  if(mk === 'follow me' || mk === 'rage powder'){ battle.redir[sd] = idx; dLog(`${H}! Atrai a atenção dos oponentes.`); return null; }
+  if(mk === 'follow me' || mk === 'rage powder'){ battle.redir[sd] = idx; (battle.redirPowder || (battle.redirPowder = {}))[sd] = mk === 'rage powder'; dLog(`${H}! Atrai a atenção dos oponentes.`); return null; }
   if(mk === 'trick room'){ if(battle.trickRoom > 0){ battle.trickRoom = 0; dLog(`${H}! A dimensão voltou ao normal.`); } else { battle.trickRoom = 5; dLog(`${H}! A dimensão ficou distorcida (5 turnos).`); } return null; }
   if(mk === 'tailwind'){ if(battle.tailwind[sd] > 0) return fail('já ativo'); battle.tailwind[sd] = 4; dLog(`${H}! Vento a favor para o time (4 turnos).`); return null; }
+  if(POWDER_MOVES.has(mk) && a.tgt){   // pó/esporos sem efeito programado: ainda assim Grass, Overcoat e Safety Goggles são imunes
+    const ti = dS(a.tgt.sd).active[a.tgt.slot];
+    if(ti != null && dAlive(a.tgt.sd, ti)){ const pi = powderImmune(dP(ti), a.tgt.sd, ti); if(pi) return fail(LF.powderImmune(dP(ti).name, pi)); }
+  }
   dLog(LF.noEffect(att.name, m.Name)); return null;
 }
 
@@ -10028,9 +10162,10 @@ function dPivotPick(to){
 /* ---------- fim do turno ---------- */
 function dEndTurn(){
   ['A','B'].forEach(sd => { const S = dS(sd); S.wide = false; S.quick = false; S.crafty = false; S.mat = false; S.active.forEach(i => { if(i != null){ S.prot[i] = false; if(S.endure) S.endure[i] = false; S.flinch[i] = false; S.hh[i] = false; } }); });
-  battle.redir = { A: null, B: null };
+  battle.redir = { A: null, B: null }; battle.redirPowder = { A: false, B: false };
   // dano de status e habilidades
   ['A','B'].forEach(sd => dActives(sd).forEach(({ idx }) => {
+    { const ho = hydrationCure(sd, idx); if(ho) dLog(LF.hydration(dP(idx).name, ho)); }   // Hydration: antes do dano de status
     const S = dS(sd), p = dP(idx), st = getStatusOf(sd, idx); if(S.hp[idx] <= 0) return;
     { const ih = ingrainHealAmount(sd, idx); if(ih > 0){ S.hp[idx] += ih; dLog(LF.heal({ name: p.name, heal: ih, label: 'Ingrain', hpAfter: S.hp[idx], hpMax: p.hpMax })); } }
     const mg = normKey(p.ability || '') === 'magic guard', max = p.hpMax; let dmg = 0, heal = 0, label = '';
@@ -10047,6 +10182,7 @@ function dEndTurn(){
     if(S.hp[idx] <= 0) return;
     const ab = normKey(p.ability || '');
     { const hv = harvestLine(sd, idx); if(hv) dLog(hv); }   // Harvest
+    { const rd = rainDishHeal(sd, idx); if(rd) dLog(LF.heal({ name: p.name, heal: rd, label: 'Rain Dish', hpAfter: S.hp[idx], hpMax: max })); }
     if(ab === 'speed boost') dWith(sd, idx, () => { if(canChangeStage(sd, 'Spe', 1)) dLog(`${dNm(sd, idx)} Speed Boost: ${fmtStageChange(changeStage(sd, 'Spe', 1))}.`); });
     if(ab === 'solar power' && sunOnFor(sd, idx) && !weatherEndsThisTurn()){ const b = S.hp[idx], d = Math.min(b, Math.max(1, Math.floor(max / 8))); S.hp[idx] = b - d; dLog(`${dNm(sd, idx)} Solar Power: −${d} HP.${S.hp[idx] <= 0 ? ' Nocauteado!' : ''}`); }
     if(ab === 'dry skin' && !umbrellaOf(sd, idx)){
