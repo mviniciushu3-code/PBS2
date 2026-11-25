@@ -689,7 +689,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 35; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 36; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
 const ICON_TRASH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
@@ -860,7 +860,11 @@ const HARDCODED_STATUS_MOVES = {
 
 const RANDOM_ITEMS_POOL = ['Silk Scarf','Charcoal','Mystic Water','Magnet','Miracle Seed','Never-Melt Ice','Black Belt','Poison Barb','Soft Sand','Sharp Beak','Twisted Spoon','Silver Powder','Hard Stone','Spell Tag','Dragon Fang','Black Glasses','Metal Coat','Fairy Feather','Choice Band','Choice Specs','Choice Scarf','Life Orb','Assault Vest','Leftovers','Focus Sash','Safety Goggles','Heavy-Duty Boots','Air Balloon','White Herb','Sitrus Berry','Grassy Seed','Electric Seed','Psychic Seed','Misty Seed','Cell Battery','Eviolite','Weakness Policy','Expert Belt','Wise Glasses','Muscle Band','Normal Gem'];
 
+// Só na BATALHA (prepareBattleSide) __battleGroundFn é definido: aí o "no chão" segue Gravity, Ingrain, Magnet Rise etc.
+// Na aba Calculadora ele é sempre null e nada muda.
+let __battleGroundFn = null;
 function ehGrounded(dexEntry, abilityUsedRaw, itemRaw){
+  if(typeof __battleGroundFn === 'function') return __battleGroundFn(dexEntry, abilityUsedRaw, itemRaw);
   if(dexEntry.Type1 === 'Flying' || dexEntry.Type2 === 'Flying') return false;
   if(abilityUsedRaw === 'Levitate') return false;
   if(itemRaw && normKey(itemRaw) === normKey('Air Balloon')) return false;
@@ -2247,7 +2251,7 @@ function arenaTrapHolder(side, idx){
   const p = battle.sharedPrepared[idx]; if(!p) return null;
   if(p.type1 === 'Ghost' || p.type2 === 'Ghost') return null;
   if(normKey(p.item || '') === 'shed shell') return null;
-  if(!isGroundedPrep(p)) return null;
+  if(!battleGroundedIdx(side, idx)) return null;
   const opp = side === 'A' ? 'B' : 'A', O = battle.sides[opp];
   const foes = battle.format === 'doubles' ? dActives(opp).filter(x => dAlive(opp, x.idx)).map(x => x.idx) : (O.hp[O.activePokeIdx] > 0 ? [O.activePokeIdx] : []);
   for(const j of foes){
@@ -2260,7 +2264,7 @@ function arenaTrapHolder(side, idx){
   return null;
 }
 function getVoluntarySwitchTargets(side){
-  return arenaTrapHolder(side, battle.sides[side].activePokeIdx) ? [] : getAvailableSwitchTargets(side);
+  return switchLockText(side, battle.sides[side].activePokeIdx) ? [] : getAvailableSwitchTargets(side);
 }
 
 // ================== ENTRY HAZARDS (armadilhas de entrada) — Singles e Doubles ==================
@@ -2286,7 +2290,11 @@ function applyEntryHazards(side){
   const idx = s.activePokeIdx, p = battle.sharedPrepared[idx];
   if(!p || !(s.hp[idx] > 0) || !HAZARD_KEYS.some(k => hz[k] > 0)) return [];
   const out = [], nm = `<b>${p.name}</b>`, T = [p.type1, p.type2].filter(Boolean);
-  const boots = normKey(p.item || '') === 'heavy-duty boots', grounded = isGroundedPrep(p), mg = normKey(p.ability || '') === 'magic guard';
+  const boots = normKey(p.item || '') === 'heavy-duty boots', grounded = battleGroundedIdx(side, idx), mg = normKey(p.ability || '') === 'magic guard';
+  // Cada efeito guarda o quadro do HP NAQUELE momento (Singles: _snap · Doubles: _dsnap), para a barra animar um dano por vez.
+  const dbl = battle.format === 'doubles';
+  const _push = out.push;
+  out.push = function(...xs){ xs.forEach(x => { if(dbl) x._dsnap = dViewSnap(); else x._snap = snapView(); }); return _push.apply(this, xs); };
   const hurt = (frac, label) => {
     if(mg || s.hp[idx] <= 0) return;
     const d = Math.max(1, Math.floor(p.hpMax * frac)), b = s.hp[idx];
@@ -2315,6 +2323,162 @@ function hazardBadgesHtml(side){
   const hz = battle && battle.sides && battle.sides[side] && battle.sides[side].hazards; if(!hz) return '';
   const b = HAZARD_KEYS.filter(k => hz[k] > 0).map(k => `<span class="hz-badge" title="${HAZARD_NAME[k]}${HAZARD_MAX[k] > 1 ? ' — camada ' + hz[k] + '/' + HAZARD_MAX[k] : ''}">${HAZARD_ICON[k]}${HAZARD_MAX[k] > 1 ? `<sub>${hz[k]}</sub>` : ''}</span>`);
   return b.length ? `<span class="hz-badges">${b.join('')}</span>` : '';
+}
+// ================== CHÃO / AR (grounded) e efeitos voláteis — Singles e Doubles ==================
+//  Por Pokémon em campo: side.vol[idx] = { ingrain, magnetRise (turnos), tele (turnos de Telekinesis), smacked (Smack Down/Thousand Arrows), healBlock }.
+//  Somem quando o Pokémon sai de campo; Baton Pass transfere Ingrain, Magnet Rise e Telekinesis (Mega Gengar perde a Telekinesis).
+//  Campo: battle.gravity = turnos restantes (5, contando o turno em que foi usada).
+//  Ordem de "está no chão": Gravity, Iron Ball, Ingrain e Smack Down/Thousand Arrows ATERRAM sempre;
+//  senão Magnet Rise e Telekinesis deixam no ar; senão Flying, Levitate, Eelevate e Air Balloon deixam no ar.
+const GRAVITY_TURNS = 5, MAGNET_RISE_TURNS = 5, TELEKINESIS_TURNS = 3;
+const GRAVITY_ACC_MULT = 6840 / 4096;   // precisão de todos os golpes (exceto OHKO) sob Gravity
+const GRAVITY_BLOCKED = new Set(['bounce','fly','flying press','high jump kick','jump kick','magnet rise','sky drop','splash','telekinesis']);   // não podem ser escolhidos sob Gravity
+const GRAVITY_SEMI_CANCEL = new Set(['fly','bounce']);   // em andamento quando a Gravity é usada: cancelados na hora
+const OHKO_MOVES = new Set(['fissure','sheer cold','guillotine','horn drill']);
+const GROUNDING_HIT_MOVES = new Set(['smack down','thousand arrows']);
+const FORCE_SWITCH_STATUS = new Set(['roar','whirlwind']);
+const VOL_TARGET_STATUS = new Set(['roar','whirlwind','telekinesis']);   // golpes de status com alvo (no Doubles o alvo é escolhido)
+function telekinesisImmune(p){ const n = normKey((p && p.name) || ''); return n === 'gengar-mega' || n === 'mega gengar' || /^(diglett|dugtrio)(-|$)/.test(n) || n === 'sandygast' || n === 'palossand'; }
+function isMegaGengar(p){ const n = normKey((p && p.name) || ''); return n === 'gengar-mega' || n === 'mega gengar'; }
+function volOf(side, idx){ const S = battle.sides[side]; if(!S.vol) S.vol = {}; return S.vol[idx] || (S.vol[idx] = {}); }
+function volPeek(side, idx){ const S = battle && battle.sides && battle.sides[side]; return (S && S.vol && S.vol[idx]) || {}; }
+function gravityOn(){ return !!(battle && battle.gravity > 0); }
+function gravityBlocks(name){ return gravityOn() && GRAVITY_BLOCKED.has(normKey(baseMoveNameFromKey(name || ''))); }
+// p = { type1, type2, ability, item }; side/idx = posição em campo (null = fora de campo: sem efeitos voláteis)
+let __battleInitPrep = false;   // true enquanto uma batalha NOVA prepara os Pokémon (ignora o estado da batalha anterior)
+function groundedRule(p, side, idx, noField){
+  if(!p) return true;
+  if(!noField && gravityOn()) return true;
+  if(normKey(p.item || '') === 'iron ball') return true;
+  const v = side ? volPeek(side, idx) : {};
+  if(v.ingrain || v.smacked) return true;
+  if(v.magnetRise > 0 || v.tele > 0) return false;
+  return isGroundedPrep(p);
+}
+function battleGroundedIdx(side, idx){ return groundedRule(battle && battle.sharedPrepared ? battle.sharedPrepared[idx] : null, side, idx); }
+// Lado em que o Pokémon (índice do time) está EM CAMPO, ou null.
+function fieldSideOf(idx){
+  if(!battle || !battle.sides) return null;
+  for(const sd of ['A','B']){ const S = battle.sides[sd]; if(!S) continue;
+    if(battle.format === 'doubles' ? (S.active || []).includes(idx) : S.activePokeIdx === idx) return sd; }
+  return null;
+}
+// Posição do DEFENSOR durante o cálculo de dano (dCalc no Doubles marca battle._defLoc).
+function defLocOf(p){
+  if(!battle || !battle.sides || !p) return null;
+  const L = battle._defLoc; if(L && L.idx === p.pokeIdx) return L;
+  const sd = fieldSideOf(p.pokeIdx); return sd ? { side: sd, idx: p.pokeIdx } : null;
+}
+// Ao entrar em campo: quem sai perde os efeitos voláteis; com Baton Pass eles passam para quem entra.
+function volOnEnter(side, oldIdx, newIdx, batonPass){
+  const S = battle.sides[side]; if(!S.vol) S.vol = {};
+  const old = (oldIdx != null && oldIdx !== newIdx) ? (S.vol[oldIdx] || {}) : {};
+  const nv = {};
+  if(batonPass){
+    if(old.ingrain) nv.ingrain = true;
+    if(old.magnetRise > 0) nv.magnetRise = old.magnetRise;
+    if(old.tele > 0 && !isMegaGengar(battle.sharedPrepared[newIdx])) nv.tele = old.tele;
+  }
+  const changed = !!(old.ingrain || old.magnetRise > 0 || old.tele > 0 || old.smacked) || Object.keys(S.vol[newIdx] || {}).length > 0 || Object.keys(nv).length > 0;
+  if(oldIdx != null && oldIdx !== newIdx) delete S.vol[oldIdx];
+  S.vol[newIdx] = nv;
+  if(changed) refreshBattlePrepared();
+}
+// Gravity: liga por 5 turnos, cancela Fly/Bounce em andamento e tira a Telekinesis de todos. Devolve as linhas de log.
+function activateGravity(){
+  battle.gravity = GRAVITY_TURNS;
+  const out = [`A gravidade se intensificou! (${GRAVITY_TURNS} turnos)`], dbl = battle.format === 'doubles';
+  ['A','B'].forEach(sd => {
+    const S = battle.sides[sd];
+    const ids = dbl ? (S.active || []).filter(i => i != null && S.hp[i] > 0) : (S.hp[S.activePokeIdx] > 0 ? [S.activePokeIdx] : []);
+    ids.forEach(i => {
+      const p = battle.sharedPrepared[i]; if(!p) return;
+      const sm = dbl ? (S.semis && S.semis[i]) : (S.semi && S.semi.idx === i ? S.semi : null);
+      if(sm && GRAVITY_SEMI_CANCEL.has(sm.base)){ if(dbl) S.semis[i] = null; else S.semi = null; out.push(`<b>${p.name}</b> foi puxado para o chão e perdeu ${sm.name}!`); }
+      const v = volPeek(sd, i);
+      if(v.tele > 0){ v.tele = 0; out.push(`<b>${p.name}</b> deixou de flutuar (Telekinesis acabou).`); }
+    });
+  });
+  refreshBattlePrepared();
+  return out;
+}
+// Fim do turno: contagem da Gravity, do Magnet Rise e da Telekinesis. Devolve { lines, changed }.
+function tickGroundEffects(){
+  const lines = []; let changed = false;
+  ['A','B'].forEach(sd => {
+    const S = battle.sides[sd]; if(!S.vol) return;
+    const ids = battle.format === 'doubles' ? (S.active || []).filter(i => i != null) : [S.activePokeIdx];
+    ids.forEach(i => {
+      const v = S.vol[i]; if(!v) return;
+      const p = battle.sharedPrepared[i], alive = S.hp[i] > 0;
+      if(v.magnetRise > 0){ v.magnetRise--; if(v.magnetRise === 0){ changed = true; if(alive && p) lines.push(LF.volEnd(p.name, 'Magnet Rise')); } }
+      if(v.tele > 0){ v.tele--; if(v.tele === 0){ changed = true; if(alive && p) lines.push(LF.volEnd(p.name, 'Telekinesis')); } }
+    });
+  });
+  if(battle.gravity > 0){ battle.gravity--; if(battle.gravity === 0){ changed = true; lines.push(LF.gravityEnd()); } }
+  return { lines, changed };
+}
+// Ingrain: recupera 1/16 do HP máx. no fim do turno (Big Root +30%). Heal Block impede a cura.
+function ingrainHealAmount(side, idx){
+  const S = battle.sides[side], p = battle.sharedPrepared[idx], v = volPeek(side, idx);
+  if(!p || !(S.hp[idx] > 0) || !v.ingrain || v.healBlock > 0 || S.hp[idx] >= p.hpMax) return 0;
+  let h = Math.max(1, Math.floor(p.hpMax / 16));
+  if(normKey(p.item || '') === 'big root') h = pokeRound(h * 5324 / 4096);
+  return Math.min(h, p.hpMax - S.hp[idx]);
+}
+// Ingrain impede a troca voluntária (Ghost, Shed Shell e Smoke Ball ainda trocam; pivôs e Baton Pass sempre trocam).
+function ingrainTraps(side, idx){
+  const p = battle.sharedPrepared[idx];
+  if(!p || !volPeek(side, idx).ingrain) return false;
+  if(p.type1 === 'Ghost' || p.type2 === 'Ghost') return false;
+  const it = normKey(p.item || '');
+  return it !== 'shed shell' && it !== 'smoke ball';
+}
+// Bloqueio de troca voluntária: Arena Trap do oponente ou Ingrain. Devolve o texto do motivo ou null.
+function switchLockText(side, idx){
+  const t = arenaTrapHolder(side, idx); if(t) return `Preso por Arena Trap de ${t.name}`;
+  if(ingrainTraps(side, idx)) return 'Enraizado (Ingrain): não pode trocar';
+  return null;
+}
+// Golpes que fixam o alvo no chão (Smack Down / Thousand Arrows): tiram Magnet Rise e Telekinesis. Devolve o texto do log ('' se nada mudou).
+function applyGroundingHit(side, idx){
+  const p = battle.sharedPrepared[idx]; if(!p) return '';
+  const v = volOf(side, idx), wasAir = !battleGroundedIdx(side, idx), lost = [];
+  if(v.magnetRise > 0){ v.magnetRise = 0; lost.push('Magnet Rise'); }
+  if(v.tele > 0){ v.tele = 0; lost.push('Telekinesis'); }
+  v.smacked = true;
+  if(!wasAir && !lost.length) return '';
+  refreshBattlePrepared();
+  return `<b>${p.name}</b> foi derrubado ao chão!${lost.length ? ' (perdeu ' + lost.join(' e ') + ')' : ''}`;
+}
+// Telekinesis: motivo de falha contra o alvo, ou null.
+function telekinesisFail(tSide, tIdx){
+  const p = battle.sharedPrepared[tIdx], v = volPeek(tSide, tIdx);
+  if(!p) return 'sem alvo';
+  if(v.ingrain) return p.name + ' está enraizado (Ingrain)';
+  if(v.smacked) return p.name + ' foi derrubado ao chão';
+  if(telekinesisImmune(p)) return p.name + ' não pode ser afetado';
+  if(v.tele > 0) return p.name + ' já está flutuando';
+  return null;
+}
+// Golpes contra um alvo sob Telekinesis sempre acertam (exceto OHKO), a menos que o alvo esteja semi-invulnerável.
+function teleSureHit(tSide, tIdx, mk, semi){ return volPeek(tSide, tIdx).tele > 0 && !OHKO_MOVES.has(mk) && !(semi && semi.kind !== 'charge'); }
+// Eelevate: +1 no maior stat (sem HP), igual ao Beast Boost: stats sem stages, sem item e sem status. Empate: Atk > Def > SpA > SpD > Spe.
+const BEAST_STAT_ORDER = ['Atk','Def','SpA','SpD','Spe'];
+function beastBoostStat(p){
+  const dex = p && findDexEntry(p.name); if(!dex) return null;
+  let best = null, bv = -1;
+  BEAST_STAT_ORDER.forEach(st => { const v = calcAtkFinal(Number(dex[st]) || 0, (p.evs || {})[st], p.nature, st, []); if(v > bv){ bv = v; best = st; } });
+  return best;
+}
+// Ícones à esquerda do nome (junto dos hazards): efeitos voláteis do Pokémon em campo.
+function volBadgesHtml(side, idx){
+  const v = volPeek(side, idx), b = [];
+  if(v.ingrain) b.push(['🌱', 'Ingrain']);
+  if(v.magnetRise > 0) b.push(['🧲', `Magnet Rise — ${v.magnetRise}t`]);
+  if(v.tele > 0) b.push(['🪶', `Telekinesis — ${v.tele}t`]);
+  if(v.smacked) b.push(['⬇️', 'Derrubado ao chão (Smack Down / Thousand Arrows)']);
+  return b.length ? `<span class="hz-badges">${b.map(([i, t]) => `<span class="hz-badge" title="${t}">${i}</span>`).join('')}</span>` : '';
 }
 const PRIORITY_GUARD_ABILITIES = new Set(['armor tail', 'queenly majesty']);
 function priorityGuardHolder(attacker, moveKey, sideMons){
@@ -2356,7 +2520,9 @@ function prepareBattleSide(pokeIdx, env){
     const opts = { weather: document.getElementById('weatherSelect').value, terrain: document.getElementById('terrainSelect').value };
     if(env){ opts.weather = env.weather; opts.terrain = env.terrain; poke.pokemonWeather = env.weather; poke.pokemonTerrain = env.terrain; }
     __seedsDisabled = true; __auraDynamic = true;
-    let teamResults; try{ ({ teamResults } = calcularTime([poke], opts)); } finally { __seedsDisabled = false; __auraDynamic = false; }
+    { const _nf = __battleInitPrep || !battle, _fs = _nf ? null : fieldSideOf(pokeIdx);
+      __battleGroundFn = (dex, ab, it) => groundedRule({ type1: dex.Type1, type2: dex.Type2, ability: ab, item: it }, _fs, pokeIdx, _nf); }
+    let teamResults; try{ ({ teamResults } = calcularTime([poke], opts)); } finally { __seedsDisabled = false; __auraDynamic = false; __battleGroundFn = null; }
     if(!teamResults[0]) return null;
     const pr = teamResults[0];
     const dex = findDexEntry(pr.pokeName);
@@ -2404,6 +2570,7 @@ function battleMoveAccuracy(moveNameKey, moveInfo){
   let acc = moveInfo ? (moveInfo.Accuracy ?? 100) : 100;
   if(ACCURACY_OVERRIDES[k] !== undefined) acc = ACCURACY_OVERRIDES[k];
   if(k === 'blizzard' && battle && battle.weather === 'snow') acc = 101;
+  if(gravityOn() && acc < 101 && !OHKO_MOVES.has(k)) acc = Math.min(100, pokeRound(acc * GRAVITY_ACC_MULT));   // Gravity: ×6840/4096 (exceto OHKO)
   return acc;
 }
 // MULTISTRIKE NA BATALHA (Singles e Doubles usam as mesmas funções):
@@ -2439,7 +2606,11 @@ function attackerIgnoresAbility(attacker){ return ['mold breaker','teravolt','tu
 function abilityTypeImmunity(attacker, defender, moveType, moveKey){
   if(attackerIgnoresAbility(attacker)) return null;
   const ab = normKey(defender.ability || '');
-  if(moveType === 'Ground' && ab === 'levitate' && normKey(baseMoveNameFromKey(moveKey)) !== 'thousand arrows') return 'Levitate';
+  if(moveType === 'Ground' && (ab === 'levitate' || ab === 'eelevate') && normKey(baseMoveNameFromKey(moveKey)) !== 'thousand arrows'){
+    // Gravity / Iron Ball / Ingrain / Smack Down tiram a imunidade (o Pokémon fica no chão)
+    const _loc = defLocOf(defender);
+    if(!(_loc && battleGroundedIdx(_loc.side, _loc.idx))) return ab === 'levitate' ? 'Levitate' : 'Eelevate';
+  }
   if(moveType === 'Fire' && ab === 'flash fire') return 'Flash Fire';
   if(moveType === 'Water' && ab === 'water absorb') return 'Water Absorb';
   if(moveType === 'Water' && ab === 'dry skin') return 'Dry Skin';
@@ -2484,6 +2655,15 @@ function computeBattleDamage(attacker, defender, moveResult, roll, isCrit, atkSt
   let t1 = defender.type1 ? (chart[defender.type1] !== undefined ? chart[defender.type1] : 1) : 1;
   let t2 = defender.type2 ? (chart[defender.type2] !== undefined ? chart[defender.type2] : 1) : 1;
   if(isFreezeDryMove(baseMoveNameFromKey(moveResult.moveKey || ''))){ if(defender.type1 === 'Water') t1 = 2; if(defender.type2 === 'Water') t2 = 2; } // Freeze-Dry: Water sempre ×2
+  // Golpes Ground: no chão (Gravity, Iron Ball, Ingrain, Smack Down) o tipo Flying deixa de ser imune; no ar
+  // (Air Balloon, Magnet Rise, Telekinesis) o alvo é imune. Thousand Arrows acerta quem está no ar (Flying ×1).
+  if(d.moveType === 'Ground' && battle && battle.sides){
+    const _loc = defLocOf(defender), _ta = normKey(baseMoveNameFromKey(moveResult.moveKey || '')) === 'thousand arrows';
+    if(_loc){
+      if(_ta || battleGroundedIdx(_loc.side, _loc.idx)){ if(defender.type1 === 'Flying') t1 = 1; if(defender.type2 === 'Flying') t2 = 1; }
+      else t1 = 0;
+    }
+  }
   const _immAb = abilityTypeImmunity(attacker, defender, d.moveType, moveResult.moveKey);
   if(_immAb) t1 = 0; // Levitate / Flash Fire / Water Absorb / Dry Skin: imunidade
   const _bpLabels = (d.bpModifierLabels || []).slice();
@@ -2494,6 +2674,7 @@ function computeBattleDamage(attacker, defender, moveResult, roll, isCrit, atkSt
     const _asd = battleSideOfPrepared(attacker);
     if(_asd && flashFireActive(_asd)){ bpVal = Math.trunc(bpVal * 1.5); _bpLabels.push('Flash Fire (×1.5)'); }
   }
+  if(gravityOn() && normKey(baseMoveNameFromKey(moveResult.moveKey || '')) === 'grav apple'){ bpVal = Math.trunc(bpVal * 1.5); _bpLabels.push('Grav Apple sob Gravity (×1.5)'); }
   let val = Math.trunc((atkVal * bpVal / defVal) * 0.44) + 2;
   const baseVal = val; let burned = false;
   const steps = [];
@@ -2582,13 +2763,14 @@ function refreshBattlePrepared(){
     if(p) battle.sharedPrepared[key] = p;
   }
 }
+// Sem nenhum golpe usável (sem PP ou bloqueado pela Gravity): só resta Struggle.
 function sideHasNoPP(side){
-  if(!battlePPEnabled) return false;
+  if(!battlePPEnabled && !gravityOn()) return false;
   const s = battle.sides[side];
   const pool = s.pp[s.activePokeIdx] || {};
   const keys = Object.keys(pool);
   if(keys.length === 0) return false;
-  return keys.every(k => pool[k] <= 0);
+  return keys.every(k => (battlePPEnabled && pool[k] <= 0) || gravityBlocks(k));
 }
 function getBattleMoveByKey(prepared, key){
   if(!prepared) return null;
@@ -2602,7 +2784,7 @@ function defaultActionFor(side){
   if(!act) return null;
   const s = battle.sides[side];
   const pool = s.pp[s.activePokeIdx] || {};
-  const hasPP = k => !battlePPEnabled || pool[k] === undefined || pool[k] > 0;
+  const hasPP = k => (!battlePPEnabled || pool[k] === undefined || pool[k] > 0) && !gravityBlocks(k);
   const dm = act.moveResults.find(m => hasPP(baseMoveNameFromKey(m.moveKey)));
   if(dm) return buildAction(side, 'move', dm.moveKey);
   if(sideHasNoPP(side) && act.struggle) return buildAction(side, 'move', act.struggle.moveKey);
@@ -2655,6 +2837,7 @@ function tickEnvironment(turnLog){
     turnLog.actions.push({ type: 'terrain-end', terrain: battle.terrain });
     battle.terrain = 'none'; battle.terrainInfo = null; changed = true;
   }
+  { const g = tickGroundEffects(); g.lines.forEach(t => turnLog.actions.push({ type: 'note', text: t })); if(g.changed) changed = true; }
   if(changed) refreshBattlePrepared();
 }
 
@@ -2722,7 +2905,7 @@ function buildAction(side, actionType, actionData){
   if(actionType === 'switch'){
     const idx = Number(actionData);
     if(!getAvailableSwitchTargets(side).includes(idx)) return null;
-    if(arenaTrapHolder(side, battle.sides[side].activePokeIdx)) return null;   // preso por Arena Trap
+    if(switchLockText(side, battle.sides[side].activePokeIdx)) return null;   // preso por Arena Trap ou Ingrain
     return { side, type: 'switch', priority: SWITCH_PRIORITY, speed: getEffectiveSpeed(side, battle.sides[side].activePokeIdx), targetIdx: idx };
   }
   return null;
@@ -2832,6 +3015,7 @@ function cpuChooseAction(side){
   const availableMoves = active.moveResults.filter(m => {
     if(normKey(baseMoveNameFromKey(m.moveKey)) === 'gigaton hammer' && battle.sides[side].lastMoveKey === 'gigaton hammer') return false;
     if(EXPLOSIVE_MOVES.has(normKey(baseMoveNameFromKey(m.moveKey))) && (normKey(active.ability || '') === 'damp' || normKey(opp.ability || '') === 'damp')) return false;
+    if(gravityBlocks(m.moveKey)) return false;   // Gravity: não pode ser escolhido
     if(!battlePPEnabled) return true;
     const ppKey = baseMoveNameFromKey(m.moveKey);
     const cur = ppPool[ppKey];
@@ -2841,7 +3025,7 @@ function cpuChooseAction(side){
   
   if(movesToConsider.length === 0) return null;
 
-  if(battlePPEnabled && availableMoves.length === 0 && active.struggle){
+  if((battlePPEnabled || gravityOn()) && availableMoves.length === 0 && active.struggle){
     const swNP = getVoluntarySwitchTargets(side);
     if(logic === 'random'){
       if(swNP.length && battleRandom() < 0.5) return buildAction(side, 'switch', swNP[Math.floor(battleRandom() * swNP.length)]);
@@ -3136,8 +3320,10 @@ function executeAction(action, ordered, actionIdx){
   if(action.type === 'switch'){
     const s = battle.sides[action.side];
     const fromName = getSidePrepared(action.side).name;
+    const _oldIdx = s.activePokeIdx;
     setCursed(s, s.activePokeIdx, false); setCursed(s, action.targetIdx, false);
     s.activePokeIdx = action.targetIdx;
+    volOnEnter(action.side, _oldIdx, action.targetIdx, false);
     s.recharge = false;
     s.lastMoveKey = null;
     s.sub = 0;
@@ -3147,9 +3333,10 @@ function executeAction(action, ordered, actionIdx){
     s.lastProtectTurn = -10;
     s.lastProtectAcc = 101;
     s.toxicCounter[action.targetIdx] = 0;
+    const _snap = snapView();   // quadro da entrada (HP antes das armadilhas): a barra anima o dano de cada hazard depois
     const weatherChanges = applyEntryWeather(action.side, false, true);
     const toName = getSidePrepared(action.side).name;
-    return { side: action.side, type: 'switch', fromName, toName, weatherChanges };
+    return { side: action.side, type: 'switch', fromName, toName, weatherChanges, _snap };
   }
   
   const attacker = getSidePrepared(action.side);
@@ -3163,14 +3350,62 @@ function executeAction(action, ordered, actionIdx){
   const attackerStatus = getStatusOf(action.side, attackerActiveIdx);
 
   if(action.type === 'status-move'){
+    if(gravityBlocks(action.move.Name)) return { side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.Name, reason: 'bloqueado pela Gravity' };
     if(!consumePP(action.side, attackerActiveIdx, action.move.Name)){
       return { side: action.side, type: 'move-nop', reason: 'sem PP', attackerName: attacker.name, moveName: action.move.Name };
     }
     markRevealed(action.side, attackerActiveIdx, action.move.Name); attackerSideState.lastMoveKey = moveNameKey;
-    const acc = action.move.Accuracy ?? 101;
+    // Precisão: battleMoveAccuracy (Gravity ×6840/4096). Alvo sob Telekinesis e a própria Telekinesis sempre acertam.
+    const _tSureS = moveNameKey === 'telekinesis' || teleSureHit(defSide, defenderSideState.activePokeIdx, moveNameKey, getSemi(defSide));
+    const acc = _tSureS ? 101 : battleMoveAccuracy(moveNameKey, action.move);
     const accRoll = battleRandom() * 100;
     if(battleAccuracyEnabled && acc < 101 && accRoll >= acc){
       return { side: action.side, type: 'move-miss', attackerName: attacker.name, moveName: action.move.Name };
+    }
+    const _failS = r => ({ side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.Name, reason: r });
+    const _txtS = t => ({ side: action.side, type: 'move-text', attackerName: attacker.name, moveName: action.move.Name, text: t });
+    if(moveNameKey === 'gravity'){
+      if(gravityOn()) return _failS('a Gravity já está ativa');
+      return _txtS(activateGravity().join(' '));
+    }
+    if(moveNameKey === 'ingrain'){
+      const _v = volOf(action.side, attackerActiveIdx);
+      if(_v.ingrain) return _failS(attacker.name + ' já está enraizado');
+      _v.ingrain = true; refreshBattlePrepared();
+      return _txtS(`${attacker.name} fincou raízes no chão!`);
+    }
+    if(moveNameKey === 'magnet rise'){
+      const _v = volOf(action.side, attackerActiveIdx);
+      if(_v.ingrain) return _failS(attacker.name + ' está enraizado (Ingrain)');
+      if(_v.magnetRise > 0) return _failS('Magnet Rise já está ativo');
+      _v.magnetRise = MAGNET_RISE_TURNS; refreshBattlePrepared();
+      return _txtS(`${attacker.name} passou a flutuar com eletromagnetismo! (${MAGNET_RISE_TURNS} turnos)${battleGroundedIdx(action.side, attackerActiveIdx) ? ' (mas continua no chão)' : ''}`);
+    }
+    if(moveNameKey === 'telekinesis' || FORCE_SWITCH_STATUS.has(moveNameKey)){
+      const _dIdx = defenderSideState.activePokeIdx;
+      { const _spv = protectionVerdict(moveNameKey, { status: true, foeStatus: true, priority: getMovePriority(action.move.Name), spread: false, contact: false }, Object.assign({ prot: defenderSideState.protected || null }, defenderSideState.sideProt || {}));
+        if(_spv.blocked) return { side: action.side, type: 'blocked', attackerName: attacker.name, moveName: action.move.Name, defenderName: defender.name, by: _spv.by }; }
+      const _ds = getSemi(defSide);
+      if(_ds && _ds.kind !== 'charge' && normKey(attacker.ability||'') !== 'no guard' && normKey(defender.ability||'') !== 'no guard')
+        return { side: action.side, type: 'move-miss', attackerName: attacker.name, moveName: action.move.Name, semiDodge: defender.name };
+      if(moveNameKey === 'telekinesis'){
+        if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
+        const _tf = telekinesisFail(defSide, _dIdx); if(_tf) return _failS(_tf);
+        volOf(defSide, _dIdx).tele = TELEKINESIS_TURNS; refreshBattlePrepared();
+        return _txtS(`${defender.name} foi erguido no ar! (${TELEKINESIS_TURNS} turnos)${battleGroundedIdx(defSide, _dIdx) ? ' (mas continua no chão)' : ''}`);
+      }
+      // Roar / Whirlwind: o alvo sai e entra um Pokémon aleatório do banco (as armadilhas de entrada agem).
+      if(volPeek(defSide, _dIdx).ingrain) return _failS(defender.name + ' está enraizado (Ingrain)');
+      const _cands = getAvailableSwitchTargets(defSide);
+      if(!_cands.length) return _failS('sem Pokémon para entrar');
+      const _to = _cands[Math.floor(battleRandom() * _cands.length)], ds = defenderSideState;
+      setCursed(ds, _dIdx, false); setCursed(ds, _to, false);
+      ds.activePokeIdx = _to; volOnEnter(defSide, _dIdx, _to, false);
+      ds.recharge = false; ds.lastMoveKey = null; ds.sub = 0; ds.semi = null; ds.flinched = false; ds.currentEntryTurn = battle.turn;
+      ds.stages = {Atk:0,Def:0,SpA:0,SpD:0,Spe:0,Acc:0,Eva:0}; ds.protected = false; ds.lastProtectTurn = -10; ds.lastProtectAcc = 101; ds.toxicCounter[_to] = 0;
+      const _snap = snapView();
+      const _wc = applyEntryWeather(defSide, false, true).map(c => Object.assign({ side: defSide }, c));
+      return Object.assign(_txtS(LF.dragged(defender.name, getSidePrepared(defSide).name)), { weatherChanges: _wc, _snap });
     }
     if(moveNameKey === 'substitute' || moveNameKey === 'shed tail'){
       const isShed = moveNameKey === 'shed tail';
@@ -3286,7 +3521,11 @@ function executeAction(action, ordered, actionIdx){
   if(moveNameKey === 'gigaton hammer' && attackerSideState.lastMoveKey === 'gigaton hammer'){
     return { side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.moveName, reason: 'não pode ser usado em turnos seguidos' };
   }
+  if(!action.semiAttack && gravityBlocks(action.move.moveKey)){
+    return { side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.moveName, reason: 'bloqueado pela Gravity' };
+  }
   let preNote = '';
+  if(action.semiAttack && !attackerSideState.semi) return { side: action.side, type: 'skip', reason: 'semi-cancel' };   // Fly/Bounce cancelado (Gravity / Smack Down) antes de atacar
   if(action.semiAttack){ attackerSideState.semi = null; }
   else if(SEMI_MOVES[moveNameKey]){
     const _sunSkip = chargeSkipActive(moveNameKey, attacker);
@@ -3384,12 +3623,14 @@ function executeAction(action, ordered, actionIdx){
   const _mtAcc = (action.move.detail && action.move.detail.moveType) || (moveInfo && moveInfo.Type) || '';
   const _dAb = normKey(defender.ability || '');
   const stormNoMiss = !dSemi && !attackerIgnoresAbility(attacker) && ((_mtAcc === 'Water' && _dAb === 'storm drain') || (_mtAcc === 'Electric' && _dAb === 'lightning rod'));
-  const acc = (noGuardOn || stormNoMiss) ? 101 : battleMoveAccuracy(moveNameKey, moveInfo);
+  const _teleS = teleSureHit(defSide, defenderSideState.activePokeIdx, moveNameKey, dSemi);   // Telekinesis no alvo: sempre acerta
+  const acc = (noGuardOn || stormNoMiss || _teleS) ? 101 : battleMoveAccuracy(moveNameKey, moveInfo);
   if(battleAccuracyEnabled && acc < 101 && accRoll >= acc){
     return { side: action.side, type: 'move-miss', attackerName: attacker.name, moveName: action.move.moveName };
   }
+  let _semiCut = false;
   if(dSemi && SEMI_GROUND_CANCEL.has(moveNameKey) && (dSemi.base === 'fly' || dSemi.base === 'bounce')){
-    defenderSideState.semi = null;
+    defenderSideState.semi = null; _semiCut = true;
     preNote += ` ${defender.name} foi derrubado e perdeu ${dSemi.name}!`;
   }
 
@@ -3540,6 +3781,14 @@ function executeAction(action, ordered, actionIdx){
   if(dealt > 0 && !subbed && normKey(defender.ability || '') === 'stamina' && s.hp[s.activePokeIdx] > 0 && canChangeStage(defSide, 'Def', 1)){
     secEffects.push(`${defender.name} ${fmtStageChange(changeStage(defSide, 'Def', 1))} (Stamina)`);
   }
+  // Smack Down / Thousand Arrows: o alvo fica no chão (perde Magnet Rise e Telekinesis)
+  if(GROUNDING_HIT_MOVES.has(moveNameKey) && dealt > 0 && !subbed){ const _gt = applyGroundingHit(defSide, s.activePokeIdx); if(_gt && !_semiCut) hitNote += ' ' + _gt; }
+  // Eelevate: nocauteou com golpe de dano => +1 no maior stat (não ativa se o nocaute encerra a batalha)
+  if(!subbed && s.hp[s.activePokeIdx] <= 0 && attackerSideState.hp[attackerActiveIdx] > 0 && normKey(attacker.ability || '') === 'eelevate'
+     && (singlesSideAlive(defSide) || (battle.mode === 'pvc' && Number(battle.infiniteMode) > 0))){
+    const _bst = beastBoostStat(attacker);
+    if(_bst && canChangeStage(action.side, _bst, 1)) secEffects.push(LF.eelevate(attacker.name, fmtStageChange(changeStage(action.side, _bst, 1))));
+  }
   if(dealt > 0 && !subbed && s.hp[s.activePokeIdx] > 0 && ((action.move.detail && action.move.detail.moveType) || (moveInfo && moveInfo.Type)) === 'Water'){
     const _it = normKey(defender.item || '');
     const _di = s.activePokeIdx;
@@ -3634,6 +3883,7 @@ function serializeSideStatus(s){
     itemUsed: JSON.parse(JSON.stringify(s.itemUsed || {})),
     faintCount: s.faintCount || 0,
     prevAlive: JSON.parse(JSON.stringify(s.prevAlive || {})),
+    vol: JSON.parse(JSON.stringify(s.vol || {})),
   };
 }
 function restoreSideStatus(s, data){
@@ -3651,6 +3901,7 @@ function restoreSideStatus(s, data){
   s.itemUsed = JSON.parse(JSON.stringify(data.itemUsed || {}));
   s.faintCount = data.faintCount || 0;
   s.prevAlive = JSON.parse(JSON.stringify(data.prevAlive || {}));
+  s.vol = JSON.parse(JSON.stringify(data.vol || {}));
 }
 function snapshotBattle(){
   return {
@@ -3664,6 +3915,7 @@ function snapshotBattle(){
     terrain: battle.terrain,
     weatherInfo: battle.weatherInfo ? JSON.parse(JSON.stringify(battle.weatherInfo)) : null,
     terrainInfo: battle.terrainInfo ? JSON.parse(JSON.stringify(battle.terrainInfo)) : null,
+    gravity: battle.gravity || 0,
     sides: {
       A: { roster: [...battle.sides.A.roster], hp: {...battle.sides.A.hp}, activePokeIdx: battle.sides.A.activePokeIdx, recharge: battle.sides.A.recharge, currentEntryTurn: battle.sides.A.currentEntryTurn || 0, flinched: battle.sides.A.flinched || false, pp: JSON.parse(JSON.stringify(battle.sides.A.pp || {})), stages: {...battle.sides.A.stages}, protected: battle.sides.A.protected, lastProtectTurn: battle.sides.A.lastProtectTurn, lastProtectAcc: battle.sides.A.lastProtectAcc, lastProtectStreak: battle.sides.A.lastProtectStreak || 0, sideProt: battle.sides.A.sideProt ? Object.assign({}, battle.sides.A.sideProt) : null, endure: !!battle.sides.A.endure, hazards: battle.sides.A.hazards ? Object.assign({}, battle.sides.A.hazards) : null, statusData: serializeSideStatus(battle.sides.A) },
       B: { roster: [...battle.sides.B.roster], hp: {...battle.sides.B.hp}, activePokeIdx: battle.sides.B.activePokeIdx, recharge: battle.sides.B.recharge, currentEntryTurn: battle.sides.B.currentEntryTurn || 0, flinched: battle.sides.B.flinched || false, pp: JSON.parse(JSON.stringify(battle.sides.B.pp || {})), stages: {...battle.sides.B.stages}, protected: battle.sides.B.protected, lastProtectTurn: battle.sides.B.lastProtectTurn, lastProtectAcc: battle.sides.B.lastProtectAcc, lastProtectStreak: battle.sides.B.lastProtectStreak || 0, sideProt: battle.sides.B.sideProt ? Object.assign({}, battle.sides.B.sideProt) : null, endure: !!battle.sides.B.endure, hazards: battle.sides.B.hazards ? Object.assign({}, battle.sides.B.hazards) : null, statusData: serializeSideStatus(battle.sides.B) },
@@ -3686,6 +3938,7 @@ function restoreSnapshot(snap){
   battle.terrain = snap.terrain || 'none';
   battle.weatherInfo = snap.weatherInfo ? JSON.parse(JSON.stringify(snap.weatherInfo)) : null;
   battle.terrainInfo = snap.terrainInfo ? JSON.parse(JSON.stringify(snap.terrainInfo)) : null;
+  battle.gravity = snap.gravity || 0;
   battle.pausedTurn = null;
   if(snap.pokeBuild){
     Object.keys(snap.pokeBuild).forEach(k => { const b = snap.pokeBuild[k], p = currentPokemons[k]; if(!b || !p) return;
@@ -3696,6 +3949,7 @@ function restoreSnapshot(snap){
   battle.sides.B = { roster: [...snap.sides.B.roster], hp: {...snap.sides.B.hp}, activePokeIdx: snap.sides.B.activePokeIdx, recharge: snap.sides.B.recharge, currentEntryTurn: snap.sides.B.currentEntryTurn || 0, flinched: snap.sides.B.flinched || false, pp: JSON.parse(JSON.stringify(snap.sides.B.pp || {})), stages: {...(snap.sides.B.stages||{Atk:0,Def:0,SpA:0,SpD:0,Spe:0,Acc:0,Eva:0})}, protected: snap.sides.B.protected||false, lastProtectTurn: snap.sides.B.lastProtectTurn!==undefined?snap.sides.B.lastProtectTurn:-10, lastProtectAcc: snap.sides.B.lastProtectAcc||101, lastProtectStreak: snap.sides.B.lastProtectStreak||0, sideProt: snap.sides.B.sideProt||null, endure: !!snap.sides.B.endure, hazards: snap.sides.B.hazards ? Object.assign({}, snap.sides.B.hazards) : null };
   if (snap.sides.A.statusData) restoreSideStatus(battle.sides.A, snap.sides.A.statusData);
   if (snap.sides.B.statusData) restoreSideStatus(battle.sides.B, snap.sides.B.statusData);
+  if(['A','B'].some(sd => Object.values(battle.sides[sd].vol || {}).some(v => v && Object.keys(v).length))) refreshBattlePrepared();   // Ingrain / Magnet Rise / Telekinesis mudam o "no chão" dos preparados
   battle.awaitingReplacement = snap.awaitingReplacement ? {...snap.awaitingReplacement} : null;
   battle.cpuWaiting = !!snap.cpuWaiting;
   battle.pendingAction.A = deserializeAction(snap.pendingAction.A, 'A');
@@ -3859,8 +4113,10 @@ function tryPickCpuReplacement(side){
 }
 function cpuSendOut(side, pick, actions){
   const S = battle.sides[side];
+  const _oldIdx = S.activePokeIdx;
   setCursed(S, S.activePokeIdx, false); setCursed(S, pick, false);
   S.activePokeIdx = pick;
+  volOnEnter(side, _oldIdx, pick, false);
   S.recharge = false;
   S.currentEntryTurn = battle.turn; S.lastMoveKey = null;
   S.stages = {Atk:0,Def:0,SpA:0,SpD:0,Spe:0,Acc:0,Eva:0};
@@ -3868,18 +4124,40 @@ function cpuSendOut(side, pick, actions){
   S.lastProtectAcc = 101;
   S.sub = 0;
   S.toxicCounter[pick] = 0;
+  const _snap = snapView();
   const weatherCh = applyEntryWeather(side, true, true);
-  actions.push({ side, type: 'auto-switch', toName: getSidePrepared(side).name });
+  actions.push({ side, type: 'auto-switch', toName: getSidePrepared(side).name, _snap });
   weatherCh.forEach(ch => actions.push({ side, ...ch }));
+  trackFaints();
+  return S.hp[pick] > 0;
+}
+// A CPU manda Pokémon até um entrar SEM ser nocauteado pelas armadilhas de entrada (ou acabar o time). true = alguém ficou em campo.
+function cpuSendOutChain(side, knownOppIdx, actions){
+  for(let g = 0; g < 12; g++){
+    const pick = cpuPickReplacement(side, knownOppIdx);
+    if(pick === null || pick === undefined) return false;
+    if(cpuSendOut(side, pick, actions)) return true;
+  }
+  return false;
+}
+function singlesSideAlive(sd){ const S = battle.sides[sd]; return S.roster.some(i => S.hp[i] > 0); }
+// Singles: depois de um nocaute fora da ordem normal (armadilhas na entrada), encerra a batalha se algum lado ficou sem Pokémon.
+function singlesEndIfOut(turnLog){
+  const N = Number(battle.infiniteMode) || 0, inf = battle.mode === 'pvc' && N > 0;
+  if(inf) ['A','B'].forEach(sd => { let g = 0; while(!singlesSideAlive(sd) && g++ < 30 && infiniteRefill(sd, N, turnLog)); });
+  const a = singlesSideAlive('A'), b = singlesSideAlive('B');
+  if(a && b) return false;
+  battle.finished = true; battle.winner = (!a && !b) ? 'draw' : (a ? 'A' : 'B');
+  battle.awaitingReplacement = null; battle.cpuWaiting = false;
+  pushEndOfBattleLog(turnLog);
+  return true;
 }
 // A CPU estava esperando eu escolher o meu Pokémon (os dois caíram no mesmo turno).
 function cpuEnterAfterWait(entry){
   if(!battle.cpuWaiting) return;
   battle.cpuWaiting = false;
   const knows = !battleSetup.hideMyLead;
-  const pick = cpuPickReplacement('B', knows ? battle.sides.A.activePokeIdx : null);
-  if(pick === null || pick === undefined) return;
-  cpuSendOut('B', pick, entry.actions);
+  cpuSendOutChain('B', knows ? battle.sides.A.activePokeIdx : null, entry.actions);
 }
 
 function applyEndOfTurnStatusDamage(turnLog){
@@ -3912,6 +4190,15 @@ function applyEndOfTurnStatusDamage(turnLog){
       s.hp[idx] = Math.min(maxHp, before + heal);
       turnLog.actions.push({ side, type: 'status-heal', name: prepared.name, heal: s.hp[idx] - before, label, hpAfter: s.hp[idx], hpMax: maxHp });
     }
+  }
+}
+// Ingrain: cura no fim do turno (antes de queimadura/veneno).
+function applyEndOfTurnIngrain(turnLog){
+  for(const side of ['A', 'B']){
+    const s = battle.sides[side], idx = s.activePokeIdx, pr = battle.sharedPrepared[idx];
+    const h = ingrainHealAmount(side, idx); if(!(h > 0) || !pr) continue;
+    s.hp[idx] += h;
+    turnLog.actions.push({ side, type: 'status-heal', name: pr.name, heal: h, label: 'Ingrain', hpAfter: s.hp[idx], hpMax: pr.hpMax });
   }
 }
 function applyEndOfTurnCurse(turnLog){
@@ -3983,8 +4270,10 @@ function doPivotSwitch(side, idx, pv, turnLog){
   const keepStages = pv.passStages ? { ...s.stages } : { Atk:0, Def:0, SpA:0, SpD:0, Spe:0 };
   const keepSub = pv.passSub ? (s.sub || 0) : 0;
   const keepCurse = !!pv.passStages && isCursed(s, s.activePokeIdx);   // Baton Pass transfere a maldição
+  const _oldIdx = s.activePokeIdx;
   setCursed(s, s.activePokeIdx, false); setCursed(s, idx, false);
   s.activePokeIdx = idx;
+  volOnEnter(side, _oldIdx, idx, !!pv.passStages);   // Baton Pass transfere Ingrain / Magnet Rise / Telekinesis
   if(keepCurse) setCursed(s, idx, true);
   s.recharge = false;
   s.lastMoveKey = null;
@@ -3995,8 +4284,9 @@ function doPivotSwitch(side, idx, pv, turnLog){
   s.lastProtectTurn = -10;
   s.lastProtectAcc = 101;
   s.toxicCounter[idx] = 0;
+  const _snap = snapView();
   const wc = applyEntryWeather(side, false, true);
-  turnLog.actions.push({ side, type: 'switch', fromName, toName: getSidePrepared(side).name, viaMove: pv.via });
+  turnLog.actions.push({ side, type: 'switch', fromName, toName: getSidePrepared(side).name, viaMove: pv.via, _snap });
   (wc || []).forEach(ch => turnLog.actions.push({ side, ...ch }));
 }
 function confirmPivot(side, idx){
@@ -4158,6 +4448,7 @@ function runTurn(ctx, startIdx){
   battle.sides.A.sideProt = null; battle.sides.B.sideProt = null;
   battle.sides.A.endure = false; battle.sides.B.endure = false;
 
+  applyEndOfTurnIngrain(turnLog);
   applyEndOfTurnStatusDamage(turnLog);
   applyEndOfTurnCurse(turnLog);
   applyEndOfTurnAbilities(turnLog);
@@ -4189,7 +4480,7 @@ function runTurn(ctx, startIdx){
   }
 
   const aw = { A: aFainted, B: bFainted };
-  if(infiniteCpu){ ['A','B'].forEach(sd => { if(aw[sd] && infiniteRefill(sd, Number(battle.infiniteMode), turnLog)) aw[sd] = false; }); }
+  if(infiniteCpu){ ['A','B'].forEach(sd => { let _g = 0; while(aw[sd] && _g++ < 30 && infiniteRefill(sd, Number(battle.infiniteMode), turnLog)) aw[sd] = !(battle.sides[sd].hp[battle.sides[sd].activePokeIdx] > 0); }); }
 
   if(aw.A || aw.B){
     battle.cpuWaiting = false;
@@ -4201,11 +4492,10 @@ function runTurn(ctx, startIdx){
         battle.cpuWaiting = true;
       } else {
         // Só a CPU caiu (ela vê o meu ativo) ou eu quero ver a escolha dela antes (ela escolhe às cegas).
-        const pick = cpuPickReplacement('B', aw.A ? null : battle.sides.A.activePokeIdx);
-        if(pick !== null && pick !== undefined){
-          cpuSendOut('B', pick, turnLog.actions);
-          aw.B = false;
-        }
+        // Se o Pokémon dela cair nas armadilhas de entrada, ela manda outro na hora (o turno só acaba quando alguém fica em campo).
+        cpuSendOutChain('B', aw.A ? null : battle.sides.A.activePokeIdx, turnLog.actions);
+        aw.B = false;
+        if(singlesEndIfOut(turnLog)){ pushSnapshot(); renderBattle(); return; }
       }
     }
     if(!aw.A && !aw.B){
@@ -4238,8 +4528,10 @@ function confirmReplacement(side, idx){
   if(battle.pausedTurn && battle.pausedTurn.pivot && battle.pausedTurn.pivot.side === side) return confirmPivot(side, idx);
   const logEntry = newTurnLog(battle.turn);
   freezeBattleView(logEntry);
+  const _oldIdx = s.activePokeIdx;
   setCursed(s, s.activePokeIdx, false); setCursed(s, idx, false);
   s.activePokeIdx = idx;
+  volOnEnter(side, _oldIdx, idx, false);
   s.recharge = false;
   s.lastMoveKey = null;
   s.currentEntryTurn = battle.turn;
@@ -4248,14 +4540,26 @@ function confirmReplacement(side, idx){
   s.lastProtectAcc = 101;
   s.sub = 0;
   s.toxicCounter[idx] = 0;
+  const _snap = snapView();   // quadro da entrada (HP antes das armadilhas)
   const weatherChanges = applyEntryWeather(side, true, true);
   if(battle.awaitingReplacement) battle.awaitingReplacement[side] = false;
   if(battle.pendingReplacement) battle.pendingReplacement[side] = null;
-  logEntry.actions.push({ side, type: 'auto-switch', toName: getSidePrepared(side).name });
+  logEntry.actions.push({ side, type: 'auto-switch', toName: getSidePrepared(side).name, _snap });
   weatherChanges.forEach(ch => logEntry.actions.push({ side, ...ch }));
-  if(side === 'A' && battle.cpuWaiting && !(battle.awaitingReplacement && battle.awaitingReplacement.A)) cpuEnterAfterWait(logEntry);
   battle.log.push(logEntry);
   battle._presentLog = logEntry;
+  // Nocauteado pelas armadilhas de entrada: escolhe outro em seguida. O turno não avança e o adversário não age
+  // até um Pokémon entrar sem cair (ou o último cair).
+  if(!(s.hp[idx] > 0)){
+    s.sub = 0; trackFaints();
+    if(singlesEndIfOut(logEntry)){ pushSnapshot(); renderBattle(); return; }
+    if(!battle.awaitingReplacement) battle.awaitingReplacement = { A: false, B: false };
+    battle.awaitingReplacement[side] = true;
+  }
+  if(side === 'A' && battle.cpuWaiting && !(battle.awaitingReplacement && battle.awaitingReplacement.A)){
+    cpuEnterAfterWait(logEntry);
+    if(singlesEndIfOut(logEntry)){ pushSnapshot(); renderBattle(); return; }
+  }
 
   const stillAwaiting = battle.awaitingReplacement && (battle.awaitingReplacement.A || battle.awaitingReplacement.B);
   if(!stillAwaiting){
@@ -4351,7 +4655,7 @@ function keepOrDefaultAction(side){
       const noPP = battlePPEnabled && pool[ppKey] !== undefined && pool[ppKey] <= 0;
       const gh = prev.type === 'move' && normKey(baseMoveNameFromKey(key)) === 'gigaton hammer' && st.lastMoveKey === 'gigaton hammer';
       const struggleOk = !prev.move.isStruggle || sideHasNoPP(side);
-      if(!noPP && !gh && struggleOk) return rebuilt;
+      if(!noPP && !gh && struggleOk && !gravityBlocks(ppKey)) return rebuilt;
     }
   }
   return defaultActionFor(side);
@@ -4407,10 +4711,11 @@ function initBattle(){
   if(rosterA.length === 0 || rosterB.length === 0){ alert('Selecione pelo menos 1 Pokémon para cada lado.'); return; }
 
   const shared = {};
-  for(const idx of new Set([...rosterA, ...rosterB])){
+  __battleInitPrep = true;
+  try { for(const idx of new Set([...rosterA, ...rosterB])){
     const p = prepareBattleSide(idx);
     if(p && p.moveResults.length > 0) shared[idx] = p;
-  }
+  } } finally { __battleInitPrep = false; }
   const validA = rosterA.filter(i => shared[i]);
   const validB = rosterB.filter(i => shared[i]);
   if(validA.length === 0 || validB.length === 0){ alert('Erro ao preparar Pokémon (faltam golpes de dano).'); return; }
@@ -4768,6 +5073,12 @@ const LF = {
     return `<b>${n}</b> usou <b>${mv || 'Protect'}</b>! ${T[normKey(mv || 'protect')] || 'Está protegido.'}`;
   },
   hazardSet: (n, mv, txt) => `<b>${n}</b> usou <b>${mv}</b>! ${txt}`,
+  moveText: (n, mv, txt) => `<b>${n}</b> usou <b>${mv}</b>! ${txt}`,
+  heal: a => `<b>${a.name}</b> recuperou <span style="color:var(--mint);">${a.heal} HP</span> por ${a.label}! (${a.hpAfter}/${a.hpMax})`,
+  gravityEnd: () => 'A gravidade voltou ao normal.',
+  volEnd: (n, what) => `O efeito de <b>${what}</b> em <b>${n}</b> acabou.`,
+  dragged: (from, to) => `<b>${from}</b> foi forçado a sair e <b>${to}</b> foi arrastado para o campo!`,
+  eelevate: (n, txt) => `Eelevate de <b>${n}</b>: ${txt}.`,
   protectFail: (n, mv) => `<b>${n}</b> usou <b>${mv || 'Protect'}</b>, mas falhou!`,
   boost: (n, mv, txt) => `<b>${n}</b> usou <b>${mv}</b>! (${txt})`,
   curse: a => `<b>${a.attackerName}</b> usou <b>${a.moveName}</b>! Cortou ${a.cost} do próprio HP (${a.hpAfter}/${a.hpMax}) e amaldiçoou <b>${a.defenderName}</b>!${a.fainted ? ' <b>' + a.attackerName + '</b> desmaiou!' : ''}`,
@@ -4857,7 +5168,9 @@ function battleLogHtml(){
       if(a.type === 'blocked') return `<div class="action-line">${LF.blocked(a)}</div>`;
       if(a.type === 'status-sub') return `<div class="action-line">${LF.sub(a.attackerName, a.moveName, a.cost, a.subHp)}</div>`;
       if(a.type === 'status-pivot') return `<div class="action-line">${LF.pivot(a.attackerName, a.moveName)}</div>`;
-      if(a.type === 'status-heal') return `<div class="action-line"><b>${a.name}</b> recuperou <span style="color:var(--mint);">${a.heal} HP</span> por ${a.label}! (${a.hpAfter}/${a.hpMax})</div>`;
+      if(a.type === 'status-heal') return `<div class="action-line">${LF.heal(a)}</div>`;
+      if(a.type === 'move-text') return `<div class="action-line">${LF.moveText(a.attackerName, a.moveName, a.text)}</div>`;
+      if(a.type === 'note') return `<div class="action-line">${a.text}</div>`;
       if(a.type === 'ability-boost') return `<div class="action-line"><b>${a.name}</b>: ${a.text}</div>`;
       if(a.type === 'status-protect') return `<div class="action-line">${LF.protect(a.attackerName, a.moveName)}</div>`;
       if(a.type === 'protect-failed') return `<div class="action-line">${LF.protectFail(a.attackerName, a.moveName)}</div>`;
@@ -4977,7 +5290,7 @@ function topCardMovesHtml(side, c){
   const attackerStatus = getStatusOf(side, s.activePokeIdx);
   const showHpMode = openHpDamage.has(skey(side));
   const tgtCurHP = battle.sides[oppSide].hp[battle.sides[oppSide].activePokeIdx];
-  const noDmgPP = battlePPEnabled && !!active.struggle && active.moveResults.every(mm => (ppPool[baseMoveNameFromKey(mm.moveKey)] ?? 1) <= 0);
+  const noDmgPP = (battlePPEnabled && !!active.struggle && active.moveResults.every(mm => (ppPool[baseMoveNameFromKey(mm.moveKey)] ?? 1) <= 0)) || (gravityOn() && !!active.struggle && sideHasNoPP(side));
   const hideMoves = isCpu && battleHideCpuMoves;
   const rev = (s.revealed || {})[s.activePokeIdx] || [];
   const dmgList = noDmgPP ? [active.struggle] : (hideMoves ? active.moveResults.filter(mm => rev.includes(normKey(baseMoveNameFromKey(mm.moveKey)))) : active.moveResults);
@@ -5000,13 +5313,14 @@ function topCardMovesHtml(side, c){
     const ppCur = battlePPEnabled ? (ppPool[ppKey] !== undefined ? ppPool[ppKey] : ppMax) : ppMax;
     const noPP = !m.isStruggle && battlePPEnabled && ppCur <= 0;
     const ghBlock = normKey(ppKey) === 'gigaton hammer' && s.lastMoveKey === 'gigaton hammer';
+    const grBlock = !m.isStruggle && gravityBlocks(ppKey);
     const acc = _ng ? 101 : battleMoveAccuracy(ppKey, info);
     const rcTag = RECHARGE_MOVES.has(normKey(ppKey)) ? ' 🔋' : '';
     const sel = canAct ? !!(action && action.type === 'move' && action.move.moveKey === m.moveKey) : cpuPreviewMove[side] === m.moveKey;
-    const dis = canAct && (noPP || ghBlock);
+    const dis = canAct && (noPP || ghBlock || grBlock);
     const t = moveTypeOf(m);
     const attrs = canAct ? `data-side="${side}" data-action-type="move" data-action-value="${m.moveKey}"` : `data-cpu-move="${m.moveKey}" data-cpu-side="${side}"`;
-    return `<button type="button" class="battle-action-btn cpu-move${typeClsOf(t)}${sel ? ' selected' : ''}" ${attrs} style="${typeVarOf(t)}${dis ? 'opacity:.4;cursor:not-allowed;' : ''}"${dis ? ' disabled' : ''}${ghBlock ? ' title="Não pode ser usado em turnos seguidos"' : ''}>
+    return `<button type="button" class="battle-action-btn cpu-move${typeClsOf(t)}${sel ? ' selected' : ''}" ${attrs} style="${typeVarOf(t)}${dis || grBlock ? 'opacity:.4;cursor:not-allowed;' : ''}"${dis ? ' disabled' : ''}${ghBlock ? ' title="Não pode ser usado em turnos seguidos"' : (grBlock ? ' title="Bloqueado pela Gravity"' : '')}>
       ${m.isStruggle ? '' : moveDelX(side, 'damage', m.moveKey)}<div class="battle-action-title">${m.moveName}${rcTag}</div>
       <div class="battle-action-sub">${battlePDText(side, m, overrideBP)}</div>
       <div class="btn-foot"><span>${acc < 101 ? 'Acc ' + acc : ''}</span><span style="${noPP ? 'color:var(--coral)' : ''}">${m.isStruggle ? 'sem PP' : (battlePPEnabled ? ppCur + '/' + ppMax : '')}</span></div>
@@ -5018,11 +5332,12 @@ function topCardMovesHtml(side, c){
     const ppCur = battlePPEnabled ? (ppPool[sm.Name] !== undefined ? ppPool[sm.Name] : ppMax) : ppMax;
     const noPP = battlePPEnabled && ppCur <= 0;
     const acc = battleMoveAccuracy(sm.Name, sm);
+    const grBlock = gravityBlocks(sm.Name);
     const sel = canAct && !!(action && action.type === 'status-move' && normKey(action.move.Name) === normKey(sm.Name));
-    const dis = canAct && noPP;
+    const dis = canAct && (noPP || grBlock);
     const t = sm.Type || '';
     const attrs = canAct ? `data-side="${side}" data-action-type="status-move" data-action-value="${sm.Name}"` : `data-cpu-status="${sm.Name}"`;
-    return `<button type="button" class="battle-action-btn cpu-move${typeClsOf(t)}${sel ? ' selected' : ''}" ${attrs} style="${typeVarOf(t)}${dis ? 'opacity:.4;cursor:not-allowed;' : (canAct ? '' : 'cursor:default;')}"${dis ? ' disabled' : ''}>
+    return `<button type="button" class="battle-action-btn cpu-move${typeClsOf(t)}${sel ? ' selected' : ''}" ${attrs} style="${typeVarOf(t)}${dis || grBlock ? 'opacity:.4;cursor:not-allowed;' : (canAct ? '' : 'cursor:default;')}"${dis ? ' disabled' : ''}${grBlock ? ' title="Bloqueado pela Gravity"' : ''}>
       ${moveDelX(side, 'status', sm.Name)}<div class="battle-action-title">${sm.Name}</div>
       <div class="battle-action-sub">Status</div>
       <div class="btn-foot"><span>${acc < 101 ? 'Acc ' + acc : ''}</span><span style="${noPP ? 'color:var(--coral)' : ''}">${battlePPEnabled ? ppCur + '/' + ppMax : ''}</span></div>
@@ -5175,8 +5490,9 @@ function battleSideCardInner(side){
       }
       const sub = subParts.join(' · ');
       const ghBlock = normKey(ppKey) === 'gigaton hammer' && s.lastMoveKey === 'gigaton hammer';
+      const grBlock = gravityBlocks(ppKey);
       const _t = moveTypeOf(m);
-      const btnStyle = (noPP || ghBlock) ? `style="${typeVarOf(_t)}opacity:.4;cursor:not-allowed;" disabled${ghBlock ? ' title="Não pode ser usado em turnos seguidos"' : ''}` : `style="${typeVarOf(_t)}"`;
+      const btnStyle = (noPP || ghBlock || grBlock) ? `style="${typeVarOf(_t)}opacity:.4;cursor:not-allowed;" disabled${ghBlock ? ' title="Não pode ser usado em turnos seguidos"' : (grBlock ? ' title="Bloqueado pela Gravity"' : '')}` : `style="${typeVarOf(_t)}"`;
       const ppColor = noPP ? 'color:var(--coral)' : '';
       allMoveBtns.push(`<button type="button" class="battle-action-btn${typeClsOf(_t)}${sel?' selected':''}" data-side="${side}" data-action-type="move" data-action-value="${m.moveKey}" ${btnStyle}>
         ${moveDelX(side, 'damage', m.moveKey)}<div class="battle-action-title">${m.moveName}${rcTag}</div>
@@ -5193,7 +5509,8 @@ function battleSideCardInner(side){
       const subParts = [];
       const sub = subParts.join(' · ');
       const _st = sm.Type || '';
-      const btnStyle = noPP ? `style="${typeVarOf(_st)}opacity:.4;cursor:not-allowed;" disabled` : `style="${typeVarOf(_st)}"`;
+      const grBlock = gravityBlocks(sm.Name);
+      const btnStyle = (noPP || grBlock) ? `style="${typeVarOf(_st)}opacity:.4;cursor:not-allowed;" disabled${grBlock ? ' title="Bloqueado pela Gravity"' : ''}` : `style="${typeVarOf(_st)}"`;
       const ppColor = noPP ? 'color:var(--coral)' : '';
       const _sAcc = battleMoveAccuracy(sm.Name, sm);
       allMoveBtns.push(`<button type="button" class="battle-action-btn${typeClsOf(_st)}${sel?' selected':''}" data-side="${side}" data-action-type="status-move" data-action-value="${sm.Name}" ${btnStyle}>
@@ -5274,9 +5591,9 @@ function battleSideCardInner(side){
 
   let switchHtml = '';
   if(isPlayer && !isAwaiting && !isRecharging && !isSemi && !battle.finished && !dblLock){
-    const _trap = arenaTrapHolder(side, s.activePokeIdx);
+    const _trap = switchLockText(side, s.activePokeIdx);
     const switches = _trap ? [] : getAvailableSwitchTargets(side);
-    const btns = _trap ? `<div style="color:var(--coral);font-size:11px;font-family:var(--font-mono);">🔒 Preso por Arena Trap de ${_trap.name}</div>` : switches.length ? switches.map(i => {
+    const btns = _trap ? `<div style="color:var(--coral);font-size:11px;font-family:var(--font-mono);">🔒 ${_trap}</div>` : switches.length ? switches.map(i => {
       const p = battle.sharedPrepared[i];
       const hpp = s.hp[i];
       const pctS = p.hpMax > 0 ? Math.floor((hpp/p.hpMax)*100) : 0;
@@ -5359,7 +5676,7 @@ function battleSideCardInner(side){
     <span class="hp-num-big">${_hf} / ${active.hpMax}</span>
     <span class="hp-pct-big" style="color:${_corOf(_pctOf(_hf))};">(${_pctOf(_hf)}%)</span>
   </div>`;
-  const nameHpHtml = `<div class="battle-poke-name-center">${hazardBadgesHtml(side)}${active.name}</div>
+  const nameHpHtml = `<div class="battle-poke-name-center">${hazardBadgesHtml(side)}${volBadgesHtml(side, s.activePokeIdx)}${active.name}</div>
   <div data-hp-anim="${_hf},${hp},${active.hpMax}" data-hp-side="${skey(side)}">${hpText}${battleHpBarHtml(_hf, active.hpMax)}</div>${(s.sub || 0) > 0 ? `<div style="text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--amber);margin-top:4px;">🧸 Substituto: ${s.sub} HP</div>` : ''}${isCursed(s, s.activePokeIdx) ? `<div style="text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--violet,#A855F7);margin-top:4px;">👻 Amaldiçoado (−¼ HP por turno)</div>` : ''}`;
 
   let contentHtml;
@@ -5726,10 +6043,12 @@ function dropMon(side, idx){
 }
 function activateInfinite(side, idx, turnLog){
   const S = battle.sides[side];
+  const _oldIdx = S.activePokeIdx;
   S.activePokeIdx = idx; S.recharge = false; S.lastMoveKey = null; S.currentEntryTurn = battle.turn;
+  volOnEnter(side, _oldIdx, idx, false);
   S.stages = {Atk:0,Def:0,SpA:0,SpD:0,Spe:0,Acc:0,Eva:0}; S.protected = false; S.lastProtectTurn = -10; S.lastProtectAcc = 101;
-  applyEntryWeather(side, true, true).forEach(ch => turnLog.actions.push({ side, ...ch }));
   turnLog.actions.push({ side, type: 'auto-switch', toName: battle.sharedPrepared[idx].name });
+  applyEntryWeather(side, true, true).forEach(ch => turnLog.actions.push({ side, ...ch }));
 }
 function infiniteRefill(side, N, turnLog){
   const S = battle.sides[side], other = side === 'A' ? 'B' : 'A';
@@ -6087,6 +6406,7 @@ function renderBattleInner(){
       ${battleManual.terrain ? envSelectHtml('terrain') : terrainChip}
       ${auraBarVisible() ? auraSelectHtml('data-aura-sel="battle" class="aura-sel-battle"', 'font-family:var(--font-mono);font-size:11px;') : ''}
       ${_dbl ? dblFieldChips() : ''}
+      ${battle.gravity > 0 ? `<div class="env-chip"><span class="env-label">Gravity</span><span class="env-value">${battle.gravity}t</span></div>` : ''}
       ${true ? `<button type="button" class="battle-toolbar-btn log-pos-btn" data-toggle-log-pos title="Mover o log: coluna à direita ou no meio, entre os cards da CPU e do player" style="margin-left:auto;">${battleLogMid ? '➡ Log à direita' : '⬍ Log no meio'}</button>` : ''}
       <button type="button" class="battle-toolbar-btn log-size-btn" data-toggle-log-size title="Reduzir/expandir a caixa do log">${battleLogCompact ? '⤢ Expandir' : '⤡ Reduzir'}</button>
     </div>
@@ -7652,6 +7972,9 @@ function dLog(html, head){
   battle._tl.lines.push(html); battle._tl.heads.push(head || null); battle._tl.snaps.push(dViewSnap()); battle._dpend = battle._tl;
   (battle._tl.atts || (battle._tl.atts = [])).length = battle._tl.lines.length - 1; battle._tl.atts.push(battle._curAtt ? { sd: battle._curAtt.sd, slot: battle._curAtt.slot } : null);   // quem está agindo nesta linha (para deslizar o card no celular)
 }
+// Linha de entrada em campo (troca / envio). O dEnter logo em seguida faz essa linha já mostrar quem entrou, com o HP
+// de ANTES das armadilhas — assim a barra anima o dano de cada hazard na linha seguinte.
+function dLogEntry(html){ dLog(html); battle._entryMark = battle._tl.lines.length - 1; }
 function dNewTL(turn){ return { turn, lines: [], heads: [], snaps: [], atts: [], actions: [], hp0: dViewSnap() }; }
 function dViewSnap(){
   const o = {};
@@ -7788,11 +8111,12 @@ function dCalc(aSd, aIdx, dSd, dIdx, move, roll, crit, obp, noMulti){
   const sv = [A.activePokeIdx, Dd.activePokeIdx, A.flashFire, Dd.currentEntryTurn];
   Dd.activePokeIdx = dIdx; A.activePokeIdx = aIdx;
   A.flashFire = A.ff[aIdx] ? { idx: aIdx, entry: A.currentEntryTurn || 0 } : null;
+  const _dl = battle._defLoc; battle._defLoc = { side: dSd, idx: dIdx };
   try { return computeBattleDamage(dP(aIdx), dP(dIdx), move, roll, crit, dStg(aSd, aIdx), dStg(dSd, dIdx), obp, getStatusOf(aSd, aIdx), noMulti); }
-  finally { Dd.activePokeIdx = sv[1]; A.activePokeIdx = sv[0]; A.flashFire = sv[2]; }
+  finally { Dd.activePokeIdx = sv[1]; A.activePokeIdx = sv[0]; A.flashFire = sv[2]; battle._defLoc = _dl; }
 }
 function dMoveKind(m, isStatus){
-  if(isStatus){ if(normKey(m.Name) === 'helping hand') return 'ally'; const _pl = statusMovePlan(m); return (_pl && _pl.target.length) ? 'single' : 'self'; }
+  if(isStatus){ if(normKey(m.Name) === 'helping hand') return 'ally'; if(VOL_TARGET_STATUS.has(normKey(m.Name))) return 'single'; const _pl = statusMovePlan(m); return (_pl && _pl.target.length) ? 'single' : 'self'; }
   if(m.isStruggle) return 'single';
   return (m.detail && m.detail.isSpreadCapable) ? 'spread' : 'single';
 }
@@ -7824,7 +8148,8 @@ function dblInit(){
   const rosterA = battleSetup.A.filter(i => currentPokemons[i]), rosterB = battleSetup.B.filter(i => currentPokemons[i]);
   if(!rosterA.length || !rosterB.length){ alert('Selecione pelo menos 1 Pokémon para cada lado.'); return; }
   const shared = {};
-  for(const idx of new Set([...rosterA, ...rosterB])){ const p = prepareBattleSide(idx); if(p && p.moveResults.length > 0) shared[idx] = p; }
+  __battleInitPrep = true;
+  try { for(const idx of new Set([...rosterA, ...rosterB])){ const p = prepareBattleSide(idx); if(p && p.moveResults.length > 0) shared[idx] = p; } } finally { __battleInitPrep = false; }
   const validA = rosterA.filter(i => shared[i]), validB = rosterB.filter(i => shared[i]);
   if(!validA.length || !validB.length){ alert('Erro ao preparar Pokémon (faltam golpes de dano).'); return; }
   const pickLeads = (valid, l1, l2) => { let l = [...new Set([l1, l2].filter(i => i != null && valid.includes(i)))]; for(const i of valid){ if(l.length >= 2) break; if(!l.includes(i)) l.push(i); } return l.slice(0, 2); };
@@ -7858,23 +8183,27 @@ function dblInit(){
 }
 
 /* ---------- entrada em campo ---------- */
-function dEnter(sd, slot, idx, afterFaint, initial){
+function dEnter(sd, slot, idx, afterFaint, initial, batonPass){
   const S = dS(sd);
+  const _old = S.active[slot];
   if(S.active[slot] != null) setCursed(S, S.active[slot], false);
   setCursed(S, idx, false);
   S.active[slot] = idx; dSyncActive(sd);
+  volOnEnter(sd, _old, idx, !!batonPass);   // Baton Pass transfere Ingrain / Magnet Rise / Telekinesis
   S.stg[idx] = dEmptyStg(); S.prot[idx] = false; if(S.protStreak) S.protStreak[idx] = 0; if(S.endure) S.endure[idx] = false; S.flinch[idx] = false; S.rech[idx] = false; S.semis[idx] = null; S.subs[idx] = 0;
   S.lastMove[idx] = null; S.toxicCounter[idx] = 0; S.lastProtectTurn[idx] = -10; S.lastProtectAcc[idx] = 101; S.ff[idx] = false; S.hh[idx] = false; S.rageN[idx] = 0;
   S.entry[idx] = initial ? 0 : battle.turn; S.currentEntryTurn = S.entry[idx];
+  { const L = battle._tl, mk = battle._entryMark; battle._entryMark = null;
+    if(L && mk != null && mk === L.lines.length - 1) L.snaps[mk] = Object.assign({}, L.snaps[mk], { [sd]: dViewSnap()[sd] }); }
   const p = dP(idx);
   const ch = dWith(sd, idx, () => applyEntryWeather(sd, afterFaint, !initial));
   ch.forEach(c => {
-    if(c.type === 'hazard') dLog(c.text);
+    if(c.type === 'hazard'){ dLog(c.text); if(c._dsnap) battle._tl.snaps[battle._tl.snaps.length - 1] = c._dsnap; }
     else if(c.type === 'weather-change') dLog(LF.weatherChange(dP(idx).name, c.weather));
     else if(c.type === 'terrain-change') dLog(LF.terrainChange(dP(idx).name, c.terrain));
     else if(c.type === 'seed-activate') dLog(LF.seed(Object.assign({}, c, { name: c.name || dP(idx).name })));
   });
-  if(normKey(p.ability || '') === 'intimidate'){
+  if(S.hp[idx] > 0 && normKey(p.ability || '') === 'intimidate'){   // nocauteado pelas armadilhas de entrada: a habilidade não ativa
     const o = dOpp(sd);
     dActives(o).forEach(t => {
       const ab = normKey(dP(t.idx).ability || '');
@@ -7887,7 +8216,7 @@ function dEnter(sd, slot, idx, afterFaint, initial){
 function dDoSwitch(sd, slot, to){
   const S = dS(sd), old = S.active[slot];
   if(!S.roster.includes(to) || S.hp[to] <= 0 || S.active.includes(to)){ dLog(`${dNm(sd, old)} tentou trocar, mas falhou.`); return null; }
-  dLog(LF.switchMsg(sd, dP(old).name, dP(to).name));
+  dLogEntry(LF.switchMsg(sd, dP(old).name, dP(to).name));
   dEnter(sd, slot, to, false); return null;
 }
 
@@ -8010,6 +8339,8 @@ function dMoveAct(a, order){
   const mk = normKey(baseMoveNameFromKey(m.moveKey)), info = findMoveInfo(baseMoveNameFromKey(m.moveKey));
   const nm = dNm(sd, idx), mn = m.moveName;
   let note = '';
+  if(!a.semiAttack && gravityBlocks(m.moveKey)){ dLog(LF.moveFail(att.name, mn, 'bloqueado pela Gravity')); return null; }
+  if(a.semiAttack && !S.semis[idx]) return null;   // Fly/Bounce cancelado (Gravity / Smack Down) antes de atacar
   if(a.semiAttack){ S.semis[idx] = null; }
   else if(SEMI_MOVES[mk]){
     const _sunSkip = chargeSkipActive(mk, att);
@@ -8166,10 +8497,11 @@ function dHit(a, tSd, tIdx, o){
   const mtype = (m.detail && m.detail.moveType) || (info && info.Type) || '';
   const dAb = normKey(def.ability || '');
   const stormNoMiss = !dsemi && !attackerIgnoresAbility(att) && ((mtype === 'Water' && dAb === 'storm drain') || (mtype === 'Electric' && dAb === 'lightning rod'));
-  const acc = (noGuard || stormNoMiss) ? 101 : battleMoveAccuracy(mk, info);
+  const acc = (noGuard || stormNoMiss || teleSureHit(tSd, tIdx, mk, dsemi)) ? 101 : battleMoveAccuracy(mk, info);   // Telekinesis no alvo: sempre acerta
   const accRoll = battleRandom() * 100;
   if(battleAccuracyEnabled && acc < 101 && accRoll >= acc){ dLog(sp ? `↳ errou <b>${def.name}</b>!` : LF.miss({ attackerName: att.name, moveName: m.moveName })); o.headDone = true; return res; }
-  if(dsemi && SEMI_GROUND_CANCEL.has(mk) && (dsemi.base === 'fly' || dsemi.base === 'bounce')){ flushHead(); T.semis[tIdx] = null; dLog(`${dn} foi derrubado e perdeu ${dsemi.name}!`); }
+  let semiCut = false;
+  if(dsemi && SEMI_GROUND_CANCEL.has(mk) && (dsemi.base === 'fly' || dsemi.base === 'bounce')){ flushHead(); T.semis[tIdx] = null; semiCut = true; dLog(`${dn} foi derrubado e perdeu ${dsemi.name}!`); }
   // Absorção por habilidade
   const imm = abilityTypeImmunity(att, def, mtype, m.moveKey);
   if(['Flash Fire','Water Absorb','Dry Skin','Storm Drain','Volt Absorb','Motor Drive','Lightning Rod'].includes(imm)){
@@ -8237,6 +8569,13 @@ function dHit(a, tSd, tIdx, o){
   if(HAZARD_ON_HIT[mk] && S.hp[idx] > 0 && setHazard(tSd, HAZARD_ON_HIT[mk])) dLog(hazardSetText(tSd, HAZARD_ON_HIT[mk]));
   if(HAZARD_CLEAR_USER.has(mk) && dealt > 0 && clearHazards(sd)) dLog(`As armadilhas do campo de <b>${sideTitle(sd)}</b> foram removidas!`);
   if(dealt > 0 && !subbed){ T.rageN[tIdx] = (T.rageN[tIdx] || 0) + Math.max(1, hitsDone); }
+  // Smack Down / Thousand Arrows: o alvo fica no chão (perde Magnet Rise e Telekinesis)
+  if(GROUNDING_HIT_MOVES.has(mk) && dealt > 0 && !subbed){ const gt = applyGroundingHit(tSd, tIdx); if(gt && !semiCut) dLog(gt); }
+  // Eelevate: nocauteou com golpe de dano => +1 no maior stat (não ativa se o nocaute encerra a batalha)
+  if(!subbed && T.hp[tIdx] <= 0 && S.hp[idx] > 0 && tSd !== sd && normKey(att.ability || '') === 'eelevate' && !dSideDead(tSd)){
+    const bst = beastBoostStat(att);
+    if(bst) dWith(sd, idx, () => { if(canChangeStage(sd, bst, 1)) dLog(LF.eelevate(att.name, fmtStageChange(changeStage(sd, bst, 1)))); });
+  }
   if(dealt > 0 && !subbed){
     if(dAb === 'sand spit'){ if(dWith(tSd, tIdx, () => setBattleWeather('sand', tSd, battle.turn))){ refreshBattlePrepared(); dLog(`${dn} levantou uma tempestade de areia!`); } }
     else if(dAb === 'seed sower'){ if(dWith(tSd, tIdx, () => setBattleTerrain('grassy', tSd, battle.turn))){ refreshBattlePrepared(); dLog(`${dn} criou o Grassy Terrain!`); } }
@@ -8270,10 +8609,56 @@ function dHit(a, tSd, tIdx, o){
 /* ---------- golpes de status ---------- */
 function dStatusAct(a){
   const sd = a.side, S = dS(sd), idx = a.idx, att = dP(idx), m = a.move, mk = normKey(m.Name), nm = dNm(sd, idx), o = dOpp(sd);
+  if(gravityBlocks(m.Name)){ dLog(LF.moveFail(att.name, m.Name, 'bloqueado pela Gravity')); return null; }
   if(!consumePP(sd, idx, m.Name)){ dLog(LF.nop(att.name, m.Name, 'sem PP')); return null; }
   markRevealed(sd, idx, m.Name); S.lastMove[idx] = mk;
   const H = `<b>${att.name}</b> usou <b>${m.Name}</b>`;
   const fail = r => { dLog(LF.moveFail(att.name, m.Name, r)); return null; };
+  if(mk === 'gravity'){
+    if(gravityOn()) return fail('a Gravity já está ativa');
+    const gl = activateGravity(); dLog(LF.moveText(att.name, m.Name, gl[0])); gl.slice(1).forEach(t => dLog(t)); return null;
+  }
+  if(mk === 'ingrain'){
+    const v = volOf(sd, idx); if(v.ingrain) return fail(att.name + ' já está enraizado');
+    v.ingrain = true; refreshBattlePrepared(); dLog(LF.moveText(att.name, m.Name, `${att.name} fincou raízes no chão!`)); return null;
+  }
+  if(mk === 'magnet rise'){
+    const v = volOf(sd, idx);
+    if(v.ingrain) return fail(att.name + ' está enraizado (Ingrain)');
+    if(v.magnetRise > 0) return fail('Magnet Rise já está ativo');
+    v.magnetRise = MAGNET_RISE_TURNS; refreshBattlePrepared();
+    dLog(LF.moveText(att.name, m.Name, `${att.name} passou a flutuar com eletromagnetismo! (${MAGNET_RISE_TURNS} turnos)${battleGroundedIdx(sd, idx) ? ' (mas continua no chão)' : ''}`)); return null;
+  }
+  if(mk === 'telekinesis' || FORCE_SWITCH_STATUS.has(mk)){
+    // alvo escolhido (nunca o próprio usuário); sem alvo válido => primeiro oponente em campo
+    const foes = dActives(o);
+    let t = (a.tgt && !(a.tgt.sd === sd && S.active[a.tgt.slot] === idx)) ? a.tgt : null;
+    let tIdx = t ? dS(t.sd).active[t.slot] : null;
+    if(tIdx == null || !dAlive(t.sd, tIdx)){ t = null; tIdx = null; if(foes[0]){ t = { sd: o, slot: foes[0].slot }; tIdx = foes[0].idx; } }
+    if(!t) return fail('sem alvo');
+    if(t.sd === o){ const rd = battle.redir && battle.redir[o]; if(rd != null && dAlive(o, rd)){ tIdx = rd; t = { sd: o, slot: dS(o).active.indexOf(rd) }; } }
+    const T = dS(t.sd), tp = dP(tIdx);
+    { const spv = protectionVerdict(mk, { status: true, foeStatus: t.sd !== sd, priority: getMovePriority(m.Name), spread: false, contact: false }, { prot: T.prot[tIdx] || null, wide: T.wide, quick: T.quick, crafty: T.crafty, mat: T.mat });
+      if(spv.blocked){ dLog(LF.blocked({ attackerName: att.name, moveName: m.Name, defenderName: tp.name, by: spv.by })); return null; } }
+    const tsm = T.semis[tIdx];
+    if(tsm && tsm.kind !== 'charge' && normKey(att.ability || '') !== 'no guard' && normKey(tp.ability || '') !== 'no guard'){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name, semiDodge: tp.name })); return null; }
+    if(mk === 'telekinesis'){
+      if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
+      const tf = telekinesisFail(t.sd, tIdx); if(tf) return fail(tf);
+      volOf(t.sd, tIdx).tele = TELEKINESIS_TURNS; refreshBattlePrepared();
+      dLog(LF.moveText(att.name, m.Name, `${tp.name} foi erguido no ar! (${TELEKINESIS_TURNS} turnos)${battleGroundedIdx(t.sd, tIdx) ? ' (mas continua no chão)' : ''}`)); return null;
+    }
+    const acc = teleSureHit(t.sd, tIdx, mk, tsm) ? 101 : battleMoveAccuracy(mk, m);
+    if(battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name })); return null; }
+    // Roar / Whirlwind: o alvo sai e entra um Pokémon aleatório do banco (as armadilhas de entrada agem).
+    if(volPeek(t.sd, tIdx).ingrain) return fail(tp.name + ' está enraizado (Ingrain)');
+    const bench = dBench(t.sd);
+    if(!bench.length) return fail('sem Pokémon para entrar');
+    const to = bench[Math.floor(battleRandom() * bench.length)];
+    dLogEntry(LF.moveText(att.name, m.Name, LF.dragged(tp.name, dP(to).name)));
+    dEnter(t.sd, T.active.indexOf(tIdx), to, false);
+    return null;
+  }
   if(mk === 'substitute' || mk === 'shed tail'){
     const shed = mk === 'shed tail', cost = shed ? Math.ceil(att.hpMax / 2) : Math.floor(att.hpMax / 4), sub = Math.floor(att.hpMax / 4);
     if((S.subs[idx] || 0) > 0) return fail('já possui um substituto');
@@ -8342,7 +8727,7 @@ function dStatusAct(a){
         const tsm = T.semis[tg.idx];
         if(tsm && tsm.kind !== 'charge' && normKey(att.ability || '') !== 'no guard' && normKey(tp.ability || '') !== 'no guard'){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name, semiDodge: tp.name })); return null; }
         if((T.subs[tg.idx] || 0) > 0 && tg.sd !== sd && !SOUND_STAT_MOVES.has(mk)) return fail('o substituto de ' + tp.name + ' bloqueou');
-        const acc = m.Accuracy ?? 101;
+        const acc = teleSureHit(tg.sd, tg.idx, mk, tsm) ? 101 : battleMoveAccuracy(mk, m);   // Gravity ×6840/4096 · Telekinesis no alvo: sempre acerta
         if(battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name })); return null; }
       }
       const txt = applyStatusPlan(plan, {
@@ -8379,8 +8764,8 @@ function dPivot(a, pos, pv){
 }
 function dPivotDo(sd, slot, oldIdx, to, pv){
   const S = dS(sd), oldStg = Object.assign({}, dStg(sd, oldIdx)), oldSub = S.subs[oldIdx] || 0, oldCurse = isCursed(S, oldIdx);
-  dLog(LF.switchMsg(sd, dP(oldIdx).name, dP(to).name, pv.via));
-  dEnter(sd, slot, to, false);
+  dLogEntry(LF.switchMsg(sd, dP(oldIdx).name, dP(to).name, pv.via));
+  dEnter(sd, slot, to, false, false, pv.pass && !pv.subOnly);
   if(pv.pass && !pv.subOnly && oldCurse) setCursed(S, to, true);   // Baton Pass transfere a maldição
   if(pv.pass && !pv.subOnly) S.stg[to] = oldStg;
   if(pv.pass && oldSub > 0) S.subs[to] = oldSub;
@@ -8398,6 +8783,7 @@ function dEndTurn(){
   // dano de status e habilidades
   ['A','B'].forEach(sd => dActives(sd).forEach(({ idx }) => {
     const S = dS(sd), p = dP(idx), st = getStatusOf(sd, idx); if(S.hp[idx] <= 0) return;
+    { const ih = ingrainHealAmount(sd, idx); if(ih > 0){ S.hp[idx] += ih; dLog(LF.heal({ name: p.name, heal: ih, label: 'Ingrain', hpAfter: S.hp[idx], hpMax: p.hpMax })); } }
     const mg = normKey(p.ability || '') === 'magic guard', max = p.hpMax; let dmg = 0, heal = 0, label = '';
     if(st === 'Burned'){ dmg = mg ? 0 : Math.floor(max / 16); label = 'queimadura'; }
     else if(st === 'Poisoned' || st === 'Badly Poisoned'){
@@ -8431,7 +8817,7 @@ function dTickEnv(){
     if(!S.active.includes(wi.setter.idx) || S.hp[wi.setter.idx] <= 0){ battle.weather = 'none'; battle.weatherInfo = null; dLog('O clima extremo se dissipou.'); refreshBattlePrepared(); }
   }
   tickEnvironment(fake);
-  fake.actions.forEach(x => { if(x.type === 'weather-end') dLog(LF.weatherEnd(x.weather)); else if(x.type === 'terrain-end') dLog(LF.terrainEnd(x.terrain)); });
+  fake.actions.forEach(x => { if(x.type === 'weather-end') dLog(LF.weatherEnd(x.weather)); else if(x.type === 'terrain-end') dLog(LF.terrainEnd(x.terrain)); else if(x.type === 'note') dLog(x.text); });
 }
 function dInfiniteRefill(sd, N){
   const S = dS(sd), other = dOpp(sd);
@@ -8447,16 +8833,31 @@ function dInfiniteRefill(sd, N){
   dLog(`${sd === 'A' ? 'Seu' : 'O'} time foi substituído por ${created.length} novos Pokémon!`);
   return true;
 }
-function dAfterTurn(){
-  const aDead = dSideDead('A'), bDead = dSideDead('B');
+// Fim de batalha (algum lado sem Pokémon). true = acabou.
+function dFinishIfOut(){
   const inf = battle.mode === 'pvc' && Number(battle.infiniteMode) > 0;
   if(inf && battle.infiniteMode >= 3){ ['A','B'].forEach(sd => { if(dSideDead(sd)) dInfiniteRefill(sd, Number(battle.infiniteMode)); }); }
   const aD = dSideDead('A'), bD = dSideDead('B');
-  if(aD || bD){
-    battle.finished = true; battle.winner = aD && bD ? 'draw' : (aD ? 'B' : 'A');
-    if(battle.winner === 'draw'){ dLog(LF.lose('A')); dLog(LF.lose('B')); } else { dLog(LF.lose(battle.winner === 'A' ? 'B' : 'A')); dLog(LF.win(battle.winner)); }
-    dblPush(); renderBattle(); return;
+  if(!aD && !bD) return false;
+  battle.finished = true; battle.winner = aD && bD ? 'draw' : (aD ? 'B' : 'A'); battle.need = null; battle.cpuRep = null;
+  if(battle.winner === 'draw'){ dLog(LF.lose('A')); dLog(LF.lose('B')); } else { dLog(LF.lose(battle.winner === 'A' ? 'B' : 'A')); dLog(LF.win(battle.winner)); }
+  dblPush(); renderBattle(); return true;
+}
+// Põe um Pokémon do banco no lugar vazio. Se ele cair nas armadilhas de entrada, entra o próximo (até alguém ficar ou o banco acabar).
+// pickFn(bench) escolhe quem entra; null = o primeiro do banco.
+function dFillSlot(sd, slot, pickFn){
+  const S = dS(sd);
+  for(let g = 0; g < 12; g++){
+    const bench = dBench(sd); if(!bench.length) return false;
+    const pick = pickFn ? pickFn(bench) : bench[0];
+    dLogEntry(LF.autoSwitch(sd, dP(pick).name));
+    dEnter(sd, slot, pick, true); dTrackFaints();
+    if(S.hp[pick] > 0) return true;
   }
+  return false;
+}
+function dAfterTurn(){
+  if(dFinishIfOut()) return;
   // Substituições
   // REGRA: a CPU JAMAIS entra em campo antes de o player humano escolher o seu (nocaute duplo/simultâneo).
   const need = { A: [], B: [] }, cpuWait = [];
@@ -8468,30 +8869,37 @@ function dAfterTurn(){
     empty.slice(k).forEach(slot => { S.active[slot] = null; });
     if(!k){ dSyncActive(sd); return; }
     if(!dHuman(sd)){ cpuWait.push(sd); return; }          // CPU: adiada até o(s) humano(s) escolherem
-    if(bench.length <= empty.length){ empty.slice(0, k).forEach((slot, n) => dEnter(sd, slot, bench[n], true)); return; }
+    if(bench.length <= empty.length){ empty.slice(0, k).forEach(slot => dFillSlot(sd, slot)); return; }
     need[sd] = empty.slice(0, k);
   });
+  if(dFinishIfOut()) return;
   if(need.A.length || need.B.length){ battle.need = need; battle.cpuRep = cpuWait; dblPush(); renderBattle(); return; }
   dCpuEnterPending(cpuWait);
+  if(dFinishIfOut()) return;
   dNextTurn();
 }
 // Entrada da CPU no campo — só chamada depois que todos os humanos já escolheram (ver dAfterTurn / dReplacePick).
 function dCpuEnterPending(list){
   (list || []).forEach(sd => {
-    const S = dS(sd), bench = dBench(sd), empty = [];
+    const S = dS(sd), empty = [];
     S.active.forEach((i, slot) => { if(i == null || S.hp[i] <= 0) empty.push(slot); });
-    const k = Math.min(empty.length, bench.length);
-    if(!k){ dSyncActive(sd); return; }
-    if(bench.length <= empty.length){ empty.slice(0, k).forEach((slot, n) => dEnter(sd, slot, bench[n], true)); return; }
-    empty.slice(0, k).forEach(slot => { const pick = dCpuReplacePick(sd); dLog(LF.autoSwitch(sd, dP(pick).name)); dEnter(sd, slot, pick, true); });
+    empty.forEach(slot => dFillSlot(sd, slot, bench => bench.length === 1 ? bench[0] : dCpuReplacePick(sd)));
+    dSyncActive(sd);
   });
 }
 function dReplacePick(sd, idx){
   const nd = battle.need; if(!nd || !nd[sd].length || !dBench(sd).includes(idx)) return;
   const slot = nd[sd].shift();
-  dLog(LF.autoSwitch(sd, dP(idx).name));
-  dEnter(sd, slot, idx, true);
-  if(!nd.A.length && !nd.B.length){ const _cw = battle.cpuRep; battle.cpuRep = null; battle.need = null; dCpuEnterPending(_cw); dNextTurn(); } else renderBattle();
+  dLogEntry(LF.autoSwitch(sd, dP(idx).name));
+  dEnter(sd, slot, idx, true); dTrackFaints();
+  // Nocauteado pelas armadilhas de entrada: o mesmo lugar pede outro Pokémon em seguida (o adversário espera).
+  if(!(dS(sd).hp[idx] > 0)){
+    const b = dBench(sd).length;
+    if(b > 0) nd[sd].unshift(slot);
+    if(nd[sd].length > b) nd[sd] = nd[sd].slice(0, b);
+    if(dSideDead(sd) && dFinishIfOut()) return;
+  }
+  if(!nd.A.length && !nd.B.length){ const _cw = battle.cpuRep; battle.cpuRep = null; battle.need = null; dCpuEnterPending(_cw); if(dFinishIfOut()) return; dNextTurn(); } else renderBattle();
 }
 function dNextTurn(){
   battle.need = null; battle.await = null;
@@ -8529,7 +8937,7 @@ function dCpuReplacePick(sd){
 function dCpuChoose(sd, slot){
   const S = dS(sd), idx = S.active[slot], p = dP(idx), o = dOpp(sd), st = getStatusOf(sd, idx);
   const foes = dActives(o), ally = dActives(sd).filter(x => x.idx !== idx);
-  const pool = S.pp[idx] || {}, hasPP = k => !battlePPEnabled || pool[k] === undefined || pool[k] > 0;
+  const pool = S.pp[idx] || {}, hasPP = k => (!battlePPEnabled || pool[k] === undefined || pool[k] > 0) && !gravityBlocks(k);
   let best = null, bestScore = -1;
   const cand = (score, ch) => { score += Math.random() * 0.02; if(score > bestScore){ bestScore = score; best = ch; } };
   const frac = (tSd, tIdx, mv, base) => {
@@ -8575,7 +8983,7 @@ function dCpuChoose(sd, slot){
     else if(k === 'substitute'){ sc = (S.subs[idx] || 0) <= 0 && S.hp[idx] / p.hpMax > 0.5 ? 0.12 : 0; }
     if(sc > 0) cand(sc, { type: 'status-move', key: sm.Name, tgt: null });
   }
-  const bench = arenaTrapHolder(sd, idx) ? [] : dBench(sd).filter(i => !D.cpuTaken.has(i));
+  const bench = switchLockText(sd, idx) ? [] : dBench(sd).filter(i => !D.cpuTaken.has(i));
   if(bench.length && bestScore < 0.12 && Math.random() < 0.5){
     const sw = dCpuReplacePick(sd); if(!D.cpuTaken.has(sw)){ D.cpuTaken.add(sw); return { type: 'switch', idx: sw }; }
   }
@@ -8727,7 +9135,7 @@ function dPickAction(sd, slot, type, value){
   const prev = b.dd[sd][slot] || b.dp[sd][slot];
   const clearPick = () => { if(D.ui.pick && D.ui.pick.sd === sd && D.ui.pick.slot === slot) D.ui.pick = null; };
   if(type === 'switch'){
-    if(arenaTrapHolder(sd, idx)) return false;   // preso por Arena Trap
+    if(switchLockText(sd, idx)) return false;   // preso por Arena Trap ou Ingrain
     const to = Number(value), other = b.dp[sd][1 - slot] || b.dd[sd][1 - slot];
     if(other && other.type === 'switch' && other.idx === to) return false;
     b.dd[sd][slot] = { type: 'switch', idx: to, tgt: null }; b.dp[sd][slot] = null; clearPick(); return true;
