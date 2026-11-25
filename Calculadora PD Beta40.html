@@ -425,6 +425,12 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   .hz-badges{ display:inline-flex; gap:3px; margin-right:8px; vertical-align:middle; font-size:12px; }
   .hz-badge{ border:1px solid var(--line); border-radius:6px; padding:0 4px; background:var(--panel); line-height:18px; cursor:help; }
   .hz-badge sub{ font-size:9px; font-family:var(--font-mono); }
+  .cond-badges{ display:inline-flex; gap:3px; align-items:center; font-size:12px; }
+  .cond-badge.off{ opacity:.3; }
+  .cond-more{ border:1px solid var(--line); border-radius:6px; padding:0 5px; background:var(--panel); color:var(--text-dim); font-family:var(--font-mono); font-size:10px; line-height:18px; cursor:pointer; }
+  .cond-panel{ margin-top:6px; padding:6px 8px; border:1px solid var(--line); border-radius:8px; background:var(--panel); font-family:var(--font-mono); font-size:11px; color:var(--text-dim); text-align:left; display:flex; flex-direction:column; gap:3px; }
+  .cond-row b{ color:var(--text); }
+  .cond-row.off{ opacity:.45; }
   .calc-all-icon{ background:none; border:1px solid var(--line); border-radius:6px; padding:0 5px; font-size:12px; line-height:18px; cursor:pointer; margin-left:6px; opacity:.65; vertical-align:middle; }
   .calc-all-icon:hover{ opacity:1; }
   .calc-all-icon.on{ border-color:var(--mint); opacity:1; }
@@ -691,7 +697,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 39; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 40; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
 const ICON_TRASH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
@@ -1049,6 +1055,7 @@ let battlePPEnabled = true;
 const battleUsePDR = true;
 let battleShowDamageAsPercent = true;
 let openStatsPanels = new Set();
+let openCondPanels = new Set();   // painéis de condições (hazards / status / voláteis) abertos: chave "lado:idx"
 let cpuPreviewMove = {};
 let battleGearOpen = false, battleGearSub = null;   // battleGearSub: 'geral' | 'arceus' | null (sanfona: só o grupo clicado fica aberto)
 // Modo Arceus: liga todas as opções de edição (desligado por padrão). Guarda o estado anterior para restaurar ao desligar.
@@ -1076,7 +1083,8 @@ function syncArceusBtn(){
   b.style.borderColor = arceusMode ? 'var(--amber)' : ''; b.style.color = arceusMode ? 'var(--amber)' : '';
 }
 let battleSecEffects = true;
-let battleManual = { weather:false, terrain:false, item:false, ability:false, build:false, status:false, mega:false };   // mega = Mega ilimitada (o modo Arceus liga) // status manual: desligado por padrão
+let battleSecAlways = false;   // ⚙️ Geral: efeitos secundários SEMPRE ativam (101%) — desligado por padrão
+let battleManual = { weather:false, terrain:false, item:false, ability:false, build:false, status:false, mega:false, conds:false };   // conds = seta de condições sempre visível (o modo Arceus liga)   // mega = Mega ilimitada (o modo Arceus liga) // status manual: desligado por padrão
 let battleCalcView = false, battleCalcAll = false, calcAllOverride = {};   // battleCalcAll: no log de cálculo mostra TODAS as etapas (inclusive as ×1)
 let openPreviewRolls = new Set();
 let openHpDamage = new Set();
@@ -1283,7 +1291,7 @@ document.getElementById('fileInput').addEventListener('change', async (e)=>{
     for(let r=1;r<getSheetRowCount(dexSheet);r++){
       const nameVal = getCell(dexSheet,E,r);
       if(nameVal==null || nameVal==='') continue;
-      const abilities = [getCell(dexSheet,P,r),getCell(dexSheet,Q,r),getCell(dexSheet,R,r)].filter(a=>typeof a==='string' && a.trim());
+      const abilities = [...new Set([getCell(dexSheet,P,r),getCell(dexSheet,Q,r),getCell(dexSheet,R,r)].filter(a=>typeof a==='string' && a.trim()).map(a=>a.trim()))];   // sem espaços sobrando (a planilha tem 'Intimidate ' etc.) e sem repetidas
       DEX[normKey(nameVal)] = {
         Name:String(nameVal).trim(),
         HP:Number(getCell(dexSheet,F,r)), Atk:Number(getCell(dexSheet,G,r)), Def:Number(getCell(dexSheet,H,r)),
@@ -2598,8 +2606,9 @@ function abilityStartChanges(sd, idx, afterFaint){
   const ab = p.ability, startTurn = battle.turn + (afterFaint ? 1 : 0);
   let env = false;
   withMon(sd, idx, () => {
-    if(ENTRY_WEATHER_AB[ab]){ setBattleWeather(ENTRY_WEATHER_AB[ab], sd, startTurn); out.push({ type: 'weather-change', weather: ENTRY_WEATHER_AB[ab], name: p.name }); env = true; }
-    if(ENTRY_TERRAIN_AB[ab]){ setBattleTerrain(ENTRY_TERRAIN_AB[ab], sd, startTurn); out.push({ type: 'terrain-change', terrain: ENTRY_TERRAIN_AB[ab], name: p.name }); env = true; }
+    // Só ativa (e só aparece no log) se o clima/terreno ainda não estiver ativo: a habilidade não estende a duração.
+    if(ENTRY_WEATHER_AB[ab] && setBattleWeather(ENTRY_WEATHER_AB[ab], sd, startTurn)){ out.push({ type: 'weather-change', weather: ENTRY_WEATHER_AB[ab], name: p.name }); env = true; }
+    if(ENTRY_TERRAIN_AB[ab] && setBattleTerrain(ENTRY_TERRAIN_AB[ab], sd, startTurn)){ out.push({ type: 'terrain-change', terrain: ENTRY_TERRAIN_AB[ab], name: p.name }); env = true; }
   });
   if(env) refreshBattlePrepared();
   if(normKey(ab || '') === 'intimidate') intimidateLines(sd, idx).forEach(t => out.push({ type: 'note', text: t }));
@@ -2726,6 +2735,60 @@ function beastBoostStat(p){
   BEAST_STAT_ORDER.forEach(st => { const v = calcAtkFinal(Number(dex[st]) || 0, (p.evs || {})[st], p.nature, st, []); if(v > bv){ bv = v; best = st; } });
   return best;
 }
+// ===== Condições do Pokémon em campo (canto esquerdo do card) =====
+//  Hazards do lado, status não volátil e efeitos voláteis. Até 3 ícones; a seta mostra todos. Segurar (ou passar o mouse) mostra o texto.
+//  Modo Arceus "🔎 Condições sempre visíveis": a seta aparece sempre e lista TODAS as condições (ativas e inativas).
+const NV_STATUS_INFO = {
+  'Burned': ['🔥', 'Queimado', 'perde 1/16 do HP no fim do turno; dano físico ×0,5'],
+  'Poisoned': ['🟣', 'Envenenado', 'perde 1/8 do HP no fim do turno'],
+  'Badly Poisoned': ['💜', 'Envenenado (grave)', 'perde 1/16, 2/16, 3/16... do HP no fim de cada turno'],
+  'Paralyzed': ['🟡', 'Paralisado', 'Spe ×0,5 e 25% de chance de não agir'],
+  'Asleep': ['💤', 'Dormindo', 'não age; 25% de acordar por turno, acorda no máximo no 3º turno'],
+  'Frozen': ['🧊', 'Congelado', 'não age; 25% de descongelar por turno, no máximo no 3º turno (golpe de Fire descongela)'],
+};
+function condList(side, idx){
+  const S = battle.sides[side], p = battle.sharedPrepared[idx], hz = S.hazards || {}, v = volPeek(side, idx), out = [];
+  const add = (on, icon, label, text, sub) => out.push({ on: !!on, icon, label, text, sub: sub || '' });
+  add(hz.sr > 0, HAZARD_ICON.sr, 'Stealth Rock', 'ao entrar perde HP conforme a fraqueza a Rock (1/8 com dano neutro)');
+  add(hz.steel > 0, HAZARD_ICON.steel, 'G-Max Steelsurge', 'ao entrar perde HP conforme a fraqueza a Steel (1/8 com dano neutro)');
+  add(hz.spikes > 0, HAZARD_ICON.spikes, 'Spikes', 'ao entrar (no chão) perde 1/8, 1/6 ou 1/4 do HP (1, 2 ou 3 camadas)', hz.spikes > 0 ? hz.spikes + '/3' : '');
+  add(hz.tspikes > 0, HAZARD_ICON.tspikes, 'Toxic Spikes', 'ao entrar (no chão) fica envenenado; 2 camadas = veneno grave', hz.tspikes > 0 ? hz.tspikes + '/2' : '');
+  add(hz.web > 0, HAZARD_ICON.web, 'Sticky Web', 'ao entrar (no chão) perde 1 de Spe');
+  const st = getStatusOf(side, idx);
+  Object.keys(NV_STATUS_INFO).forEach(k => { const [i, l, t] = NV_STATUS_INFO[k]; add(st === k, i, l, t); });
+  add(v.confused > 0, '💫', 'Confuso', '1/3 de chance de se ferir em vez de agir; some ao sair de campo');
+  add(isCursed(S, idx), '👻', 'Amaldiçoado (Curse)', 'perde 1/4 do HP no fim de cada turno');
+  add(v.ingrain, '🌱', 'Ingrain', 'recupera 1/16 do HP por turno, fica no chão e não pode trocar');
+  add(v.magnetRise > 0, '🧲', 'Magnet Rise', 'flutuando: imune a golpes Ground', v.magnetRise > 0 ? v.magnetRise + 't' : '');
+  add(v.tele > 0, '🪶', 'Telekinesis', 'no ar: imune a Ground e todo golpe contra ele acerta', v.tele > 0 ? v.tele + 't' : '');
+  add(v.smacked, '⬇️', 'Derrubado (Smack Down)', 'fica no chão até sair de campo');
+  const sub = battle.format === 'doubles' ? ((S.subs || {})[idx] || 0) : (S.activePokeIdx === idx ? (S.sub || 0) : 0);
+  add(sub > 0, '🧸', 'Substituto', 'recebe os golpes no lugar do Pokémon', sub > 0 ? sub + ' HP' : '');
+  add(v.gastro, '🚫', 'Gastro Acid', 'habilidade suprimida');
+  add(v.traced, '🔁', 'Trace', v.traced ? 'copiou ' + v.traced : 'habilidade copiada de um oponente');
+  const cl = choiceLockOf(side, idx);
+  add(cl, '🔒', 'Preso pelo item Choice', cl ? 'só pode usar ' + ((findMoveInfo(cl) || {}).Name || cl) : 'só pode usar o primeiro golpe escolhido');
+  add(battle.megaOv && battle.megaOv[idx], '💎', 'Mega Evoluído', p ? p.name : '');
+  return out;
+}
+function condBadgesHtml(side, idx){
+  if(!battle || idx == null || !battle.sharedPrepared[idx]) return { head: '', panel: '' };
+  const all = !!battleManual.conds, list = condList(side, idx), on = list.filter(c => c.on);
+  if(!on.length && !all) return { head: '', panel: '' };
+  const key = side + ':' + idx, open = openCondPanels.has(key), MAX = 3;
+  const esc = t => String(t).replace(/"/g, '&quot;');
+  const info = c => esc(`${c.label}${c.sub ? ' (' + c.sub + ')' : ''}: ${c.on ? c.text : 'inativo'}`);
+  const icon = c => `<span class="hz-badge cond-badge${c.on ? '' : ' off'}" data-cond-info="${info(c)}" title="${info(c)}">${c.icon}${c.sub ? `<sub>${c.sub.replace(/\/.*$/, '')}</sub>` : ''}</span>`;
+  const more = on.length > MAX || all;
+  const head = `<span class="cond-badges">${on.slice(0, MAX).map(icon).join('')}${more ? `<button type="button" class="cond-more" data-cond-toggle="${key}" title="Ver todas as condições">${open ? '◂' : '▸'}${on.length > MAX ? ' +' + (on.length - MAX) : ''}</button>` : ''}</span>`;
+  const rows = (all ? list : on).map(c => `<div class="cond-row${c.on ? '' : ' off'}">${c.icon} <b>${c.label}</b>${c.sub ? ' (' + c.sub + ')' : ''} — ${c.on ? c.text : 'inativo'}</div>`).join('');
+  return { head, panel: open ? `<div class="cond-panel">${rows}</div>` : '' };
+}
+function condToast(text){
+  let el = document.getElementById('condToast');
+  if(!el){ el = document.createElement('div'); el.id = 'condToast'; el.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:300;background:var(--panel);border:1px solid var(--line);color:var(--text);font-family:var(--font-mono);font-size:12px;padding:8px 14px;border-radius:10px;box-shadow:0 4px 18px rgba(0,0,0,.4);pointer-events:none;transition:opacity .2s;max-width:90vw;text-align:center;'; document.body.appendChild(el); }
+  el.textContent = text; el.style.opacity = '1'; clearTimeout(el._t); el._t = setTimeout(() => { el.style.opacity = '0'; }, 2600);
+}
 // Ícones à esquerda do nome (junto dos hazards): efeitos voláteis do Pokémon em campo.
 function volBadgesHtml(side, idx){
   const v = volPeek(side, idx), b = [];
@@ -2776,6 +2839,12 @@ function confusionCheck(sd, idx){
 }
 // Golpes de status que confundem o alvo (com mudança de stage NO ALVO antes): Swagger Atk +2, Flatter SpA +1.
 const CONFUSE_STATUS = { 'confuse ray': null, 'sweet kiss': null, 'swagger': ['Atk', 2], 'flatter': ['SpA', 1] };
+// ===== Itens Choice (Band / Specs / Scarf): depois de usar um golpe, o Pokémon fica preso nele até sair de campo =====
+//  vol.choice = golpe travado. Só vale enquanto ele ainda segura um item Choice (perdeu o item pelo Trick => livre).
+const CHOICE_ITEMS = new Set(['choice band','choice specs','choice scarf']);
+function choiceLockOf(side, idx){ if(!battle || idx == null) return null; const v = volPeek(side, idx); return (v.choice && CHOICE_ITEMS.has(heldItem(side, idx))) ? v.choice : null; }
+function choiceBlocks(side, idx, name){ const c = choiceLockOf(side, idx); return !!c && normKey(baseMoveNameFromKey(name || '')) !== c; }
+function choiceLockSet(side, idx, name){ if(CHOICE_ITEMS.has(heldItem(side, idx)) && !volPeek(side, idx).choice) volOf(side, idx).choice = normKey(baseMoveNameFromKey(name || '')); }
 // ===== Focus Band: 10% de chance de segurar com 1 HP (cada hit de um multistrike testa de novo) =====
 function focusBandSaves(sd, idx){ return heldItem(sd, idx) === 'focus band' && battleRandom() < 0.1; }
 // ===== Absorções por habilidade (o golpe não tem efeito) =====
@@ -2820,13 +2889,15 @@ function trickApply(aSd, aIdx, tSd, tIdx){
   const nameA = ia ? pa.item : '', nameB = ib ? pb.item : '';
   if(!battle.itemOv) battle.itemOv = {};
   battle.itemOv[aIdx] = nameB; battle.itemOv[tIdx] = nameA;
-  [[aSd, aIdx], [tSd, tIdx]].forEach(([sd, i]) => { const S = battle.sides[sd]; if(S.itemUsed) delete S.itemUsed[i]; });
+  [[aSd, aIdx], [tSd, tIdx]].forEach(([sd, i]) => { const S = battle.sides[sd]; if(S.itemUsed) delete S.itemUsed[i]; delete volOf(sd, i).choice; });
   refreshBattlePrepared();
-  return { text: `<b>${pa.name}</b> trocou de item com <b>${pb.name}</b>! ${pa.name} recebeu ${nameB ? '<b>' + nameB + '</b>' : 'nada'}; ${pb.name} recebeu ${nameA ? '<b>' + nameA + '</b>' : 'nada'}.` };
+  const _seeds = applySeedActivations().map(c => ' ' + LF.seed(c)).join('');   // item novo age na hora (ex.: Seeds com o terreno ativo)
+  return { text: `<b>${pa.name}</b> trocou de item com <b>${pb.name}</b>! ${pa.name} recebeu ${nameB ? '<b>' + nameB + '</b>' : 'nada'}; ${pb.name} recebeu ${nameA ? '<b>' + nameA + '</b>' : 'nada'}.${_seeds}` };
 }
 // ===== MEGA EVOLUÇÃO NA BATALHA (Singles e Doubles) =====
 //  battle.megaOv[idx] = forma Mega atual · battle.megaUsed[lado] = já usou a Mega desta batalha ·
 //  battle.megaPend[lado][idx] = 'mega' | 'revert' (acontece no início do turno: depois das trocas, antes dos golpes).
+//  Botões: "💎 Mega Evoluir" / "↩️ Reverter Mega" (início do turno) e, no modo Arceus, "⏱️ Agora" (na hora).
 //  Uma Mega por batalha por lado. Ilimitada: ⚙️ Arceus → "Mega ilimitada" (ON no modo Arceus) e CPU no nível Fácil (Aleatório).
 //  Stats, velocidade (ordem do turno) e habilidade já valem no instante da Mega. A Mega continua ao sair de campo.
 function megaUnlimited(side){ return !!battleManual.mega || (battle.mode === 'pvc' && side === 'B' && battle.cpuLogic === 'random'); }
@@ -2954,13 +3025,13 @@ function megaBarHtml(side){
     if(unl || !other) mode = 'mega';
   }
   if(!mode) return '';
-  const on = P[idx] === mode, lbl = mode === 'mega' ? `💎 Mega Evoluir → ${target}` : '↩️ Reverter Mega';
+  const on = P[idx] === mode, lbl = mode === 'mega' ? '💎 Mega Evoluir' : '↩️ Reverter Mega';
   const tStyle = on ? 'border-color:var(--amber);color:var(--amber);' : '';
   const turnBtn = human ? `<button type="button" class="battle-toolbar-btn mega-btn" data-mega-side="${side}" data-mega-mode="${mode}" data-mega-when="turn" style="${tStyle}" title="${mode === 'mega' ? 'Mega Evolui no início do turno (depois das trocas, antes dos golpes)' : 'Volta à forma normal no início do turno'}">${lbl}${on ? ' ✓' : ''}</button>` : '';
-  const nowBtn = arc ? `<button type="button" class="battle-toolbar-btn mega-btn" data-mega-side="${side}" data-mega-mode="${mode}" data-mega-when="now" title="Modo Arceus: ${mode === 'mega' ? 'Mega Evolui' : 'reverte'} AGORA">⚡${human ? '' : ' ' + lbl}</button>` : '';
+  const nowBtn = arc ? `<button type="button" class="battle-toolbar-btn mega-btn" data-mega-side="${side}" data-mega-mode="${mode}" data-mega-when="now" title="Modo Arceus: ${mode === 'mega' ? 'Mega Evolui' : 'reverte'} AGORA, sem esperar o turno">⏱️ Agora${human ? '' : ' · ' + lbl}</button>` : '';
   return `<div class="mega-bar" style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:6px 0;">${turnBtn}${nowBtn}</div>`;
 }
-// ⚡ (modo Arceus): Mega / reversão na hora, fora do turno.
+// ⏱️ Agora (modo Arceus): Mega / reversão na hora, fora do turno.
 function megaNow(side, idx, revert){
   const r = megaApply(side, idx, revert); if(!r) return;
   if(battle.format === 'doubles'){
@@ -3018,7 +3089,7 @@ function prepareBattleSide(pokeIdx, env){
       const _de = findDexEntry(_form.name);
       if(_de){
         const has = a => !!a && _de.Abilities.some(x => normKey(x) === normKey(a));
-        if(!has(poke.abilityUsed)) poke.abilityUsed = _form.mega ? (_de.Abilities[0] || '') : (has(poke.megaBaseAbility) ? poke.megaBaseAbility : (escolherHabilidadeDano(_de) || _de.Abilities[0] || ''));
+        if(!has(poke.abilityUsed) && !(poke._manualAb && poke._manualAb === poke.abilityUsed)) poke.abilityUsed = _form.mega ? (_de.Abilities[0] || '') : (has(poke.megaBaseAbility) ? poke.megaBaseAbility : (escolherHabilidadeDano(_de) || _de.Abilities[0] || ''));
       }
     }
     if(_abOv !== null) poke.abilityUsed = _abOv;
@@ -3278,12 +3349,12 @@ function refreshBattlePrepared(){
 }
 // Sem nenhum golpe usável (sem PP ou bloqueado pela Gravity): só resta Struggle.
 function sideHasNoPP(side){
-  if(!battlePPEnabled && !gravityOn()) return false;
   const s = battle.sides[side];
+  if(!battlePPEnabled && !gravityOn() && !choiceLockOf(side, s.activePokeIdx)) return false;
   const pool = s.pp[s.activePokeIdx] || {};
   const keys = Object.keys(pool);
   if(keys.length === 0) return false;
-  return keys.every(k => (battlePPEnabled && pool[k] <= 0) || gravityBlocks(k));
+  return keys.every(k => (battlePPEnabled && pool[k] <= 0) || gravityBlocks(k) || choiceBlocks(side, s.activePokeIdx, k));
 }
 function getBattleMoveByKey(prepared, key){
   if(!prepared) return null;
@@ -3297,7 +3368,7 @@ function defaultActionFor(side){
   if(!act) return null;
   const s = battle.sides[side];
   const pool = s.pp[s.activePokeIdx] || {};
-  const hasPP = k => (!battlePPEnabled || pool[k] === undefined || pool[k] > 0) && !gravityBlocks(k);
+  const hasPP = k => (!battlePPEnabled || pool[k] === undefined || pool[k] > 0) && !gravityBlocks(k) && !choiceBlocks(side, s.activePokeIdx, k);
   const dm = act.moveResults.find(m => hasPP(baseMoveNameFromKey(m.moveKey)));
   if(dm) return buildAction(side, 'move', dm.moveKey);
   if(sideHasNoPP(side) && act.struggle) return buildAction(side, 'move', act.struggle.moveKey);
@@ -3529,6 +3600,7 @@ function cpuChooseAction(side){
     if(normKey(baseMoveNameFromKey(m.moveKey)) === 'gigaton hammer' && battle.sides[side].lastMoveKey === 'gigaton hammer') return false;
     if(EXPLOSIVE_MOVES.has(normKey(baseMoveNameFromKey(m.moveKey))) && (normKey(active.ability || '') === 'damp' || normKey(opp.ability || '') === 'damp')) return false;
     if(gravityBlocks(m.moveKey)) return false;   // Gravity: não pode ser escolhido
+    if(choiceBlocks(side, battle.sides[side].activePokeIdx, m.moveKey)) return false;   // preso pelo item Choice
     if(!battlePPEnabled) return true;
     const ppKey = baseMoveNameFromKey(m.moveKey);
     const cur = ppPool[ppKey];
@@ -3538,7 +3610,7 @@ function cpuChooseAction(side){
   
   if(movesToConsider.length === 0) return null;
 
-  if((battlePPEnabled || gravityOn()) && availableMoves.length === 0 && active.struggle){
+  if((battlePPEnabled || gravityOn() || choiceLockOf(side, battle.sides[side].activePokeIdx)) && availableMoves.length === 0 && active.struggle){
     const swNP = getVoluntarySwitchTargets(side);
     if(logic === 'random'){
       if(swNP.length && battleRandom() < 0.5) return buildAction(side, 'switch', swNP[Math.floor(battleRandom() * swNP.length)]);
@@ -3817,7 +3889,7 @@ function applySecondaryEffects(action, attacker, defender, moveInfo){
     const m = String(effect).match(/^(atk|def|spa|spd|spe|acc|eva)\s*([+-])\s*(\d+)$/i);
     const toUser = !!m && m[2] === '+';
     if(!toUser && blocked) return;
-    if(!(battleRandom() * 100 < Math.min(100, chance * (serene ? 2 : 1)))) return;
+    if(!battleSecAlways && !(battleRandom() * 100 < Math.min(100, chance * (serene ? 2 : 1)))) return;
     if(m){
       const stat = STAT[m[1].toLowerCase()], n = Number(m[3]);
       if(toUser){ out.push(`${attacker.name} ${fmtStageChange(changeStage(aSide, stat, n))}`); }
@@ -3878,6 +3950,7 @@ function executeAction(action, ordered, actionIdx){
       return { side: action.side, type: 'move-nop', reason: 'sem PP', attackerName: attacker.name, moveName: action.move.Name };
     }
     markRevealed(action.side, attackerActiveIdx, action.move.Name); attackerSideState.lastMoveKey = moveNameKey;
+    choiceLockSet(action.side, attackerActiveIdx, action.move.Name);
     // Precisão: battleMoveAccuracy (Gravity ×6840/4096). Alvo sob Telekinesis e a própria Telekinesis sempre acertam.
     const _tSureS = moveNameKey === 'telekinesis' || teleSureHit(defSide, defenderSideState.activePokeIdx, moveNameKey, getSemi(defSide));
     const acc = _tSureS ? 101 : battleMoveAccuracy(moveNameKey, action.move);
@@ -4087,6 +4160,7 @@ function executeAction(action, ordered, actionIdx){
 
   if(!action.move.isStruggle) markRevealed(action.side, attackerActiveIdx, baseMoveNameFromKey(action.move.moveKey));
   attackerSideState.lastMoveKey = moveNameKey;
+  if(!action.move.isStruggle) choiceLockSet(action.side, attackerActiveIdx, action.move.moveKey);
   if(EXPLOSIVE_MOVES.has(moveNameKey) && (normKey(attacker.ability || '') === 'damp' || normKey(defender.ability || '') === 'damp')){
     const _dp = normKey(defender.ability || '') === 'damp' ? defender.name : attacker.name;
     return { side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.moveName, reason: 'Damp de ' + _dp + ' impede explosões' };
@@ -5194,14 +5268,14 @@ function changeStatus(side, idx, newStatus){
   renderBattle();
 }
 
-function applyHeal(side, pokeIdx){
+function applyHeal(side, pokeIdx, healMode){
   const s = battle.sides[side];
   const prepared = battle.sharedPrepared[pokeIdx];
   if(!prepared) return false;
   const maxHp = prepared.hpMax;
   const currentHp = s.hp[pokeIdx];
   const isFainted = currentHp <= 0;
-  const mode = battle.healMode;
+  const mode = healMode || battle.healMode;
   let success = false;
   let healType = '';
   let newHp = currentHp;
@@ -5261,7 +5335,7 @@ function keepOrDefaultAction(side){
       const noPP = battlePPEnabled && pool[ppKey] !== undefined && pool[ppKey] <= 0;
       const gh = prev.type === 'move' && normKey(baseMoveNameFromKey(key)) === 'gigaton hammer' && st.lastMoveKey === 'gigaton hammer';
       const struggleOk = !prev.move.isStruggle || sideHasNoPP(side);
-      if(!noPP && !gh && struggleOk && !gravityBlocks(ppKey)) return rebuilt;
+      if(!noPP && !gh && struggleOk && !gravityBlocks(ppKey) && !choiceBlocks(side, st.activePokeIdx, ppKey)) return rebuilt;
     }
   }
   return defaultActionFor(side);
@@ -5928,14 +6002,14 @@ function topCardMovesHtml(side, c){
     const ppCur = battlePPEnabled ? (ppPool[ppKey] !== undefined ? ppPool[ppKey] : ppMax) : ppMax;
     const noPP = !m.isStruggle && battlePPEnabled && ppCur <= 0;
     const ghBlock = normKey(ppKey) === 'gigaton hammer' && s.lastMoveKey === 'gigaton hammer';
-    const grBlock = !m.isStruggle && gravityBlocks(ppKey);
+    const grBlock = !m.isStruggle && (gravityBlocks(ppKey) || choiceBlocks(side, s.activePokeIdx, ppKey));
     const acc = _ng ? 101 : battleMoveAccuracy(ppKey, info);
     const rcTag = RECHARGE_MOVES.has(normKey(ppKey)) ? ' 🔋' : '';
     const sel = canAct ? !!(action && action.type === 'move' && action.move.moveKey === m.moveKey) : cpuPreviewMove[side] === m.moveKey;
     const dis = canAct && (noPP || ghBlock || grBlock);
     const t = moveTypeOf(m);
     const attrs = canAct ? `data-side="${side}" data-action-type="move" data-action-value="${m.moveKey}"` : `data-cpu-move="${m.moveKey}" data-cpu-side="${side}"`;
-    return `<button type="button" class="battle-action-btn cpu-move${typeClsOf(t)}${sel ? ' selected' : ''}" ${attrs} style="${typeVarOf(t)}${dis || grBlock ? 'opacity:.4;cursor:not-allowed;' : ''}"${dis ? ' disabled' : ''}${ghBlock ? ' title="Não pode ser usado em turnos seguidos"' : (grBlock ? ' title="Bloqueado pela Gravity"' : '')}>
+    return `<button type="button" class="battle-action-btn cpu-move${typeClsOf(t)}${sel ? ' selected' : ''}" ${attrs} style="${typeVarOf(t)}${dis || grBlock ? 'opacity:.4;cursor:not-allowed;' : ''}"${dis ? ' disabled' : ''}${ghBlock ? ' title="Não pode ser usado em turnos seguidos"' : (grBlock ? ` title="${gravityBlocks(ppKey) ? 'Bloqueado pela Gravity' : 'Preso no golpe do item Choice'}"` : '')}>
       ${m.isStruggle ? '' : moveDelX(side, 'damage', m.moveKey)}<div class="battle-action-title">${m.moveName}${rcTag}</div>
       <div class="battle-action-sub">${battlePDText(side, m, overrideBP)}</div>
       <div class="btn-foot"><span>${acc < 101 ? 'Acc ' + acc : ''}</span><span style="${noPP ? 'color:var(--coral)' : ''}">${m.isStruggle ? 'sem PP' : (battlePPEnabled ? ppCur + '/' + ppMax : '')}</span></div>
@@ -5947,12 +6021,12 @@ function topCardMovesHtml(side, c){
     const ppCur = battlePPEnabled ? (ppPool[sm.Name] !== undefined ? ppPool[sm.Name] : ppMax) : ppMax;
     const noPP = battlePPEnabled && ppCur <= 0;
     const acc = battleMoveAccuracy(sm.Name, sm);
-    const grBlock = gravityBlocks(sm.Name);
+    const grBlock = gravityBlocks(sm.Name) || choiceBlocks(side, s.activePokeIdx, sm.Name);
     const sel = canAct && !!(action && action.type === 'status-move' && normKey(action.move.Name) === normKey(sm.Name));
     const dis = canAct && (noPP || grBlock);
     const t = sm.Type || '';
     const attrs = canAct ? `data-side="${side}" data-action-type="status-move" data-action-value="${sm.Name}"` : `data-cpu-status="${sm.Name}"`;
-    return `<button type="button" class="battle-action-btn cpu-move${typeClsOf(t)}${sel ? ' selected' : ''}" ${attrs} style="${typeVarOf(t)}${dis || grBlock ? 'opacity:.4;cursor:not-allowed;' : (canAct ? '' : 'cursor:default;')}"${dis ? ' disabled' : ''}${grBlock ? ' title="Bloqueado pela Gravity"' : ''}>
+    return `<button type="button" class="battle-action-btn cpu-move${typeClsOf(t)}${sel ? ' selected' : ''}" ${attrs} style="${typeVarOf(t)}${dis || grBlock ? 'opacity:.4;cursor:not-allowed;' : (canAct ? '' : 'cursor:default;')}"${dis ? ' disabled' : ''}${grBlock ? ` title="${gravityBlocks(sm.Name) ? 'Bloqueado pela Gravity' : 'Preso no golpe do item Choice'}"` : ''}>
       ${moveDelX(side, 'status', sm.Name)}<div class="battle-action-title">${sm.Name}</div>
       <div class="battle-action-sub">Status</div>
       <div class="btn-foot"><span>${acc < 101 ? 'Acc ' + acc : ''}</span><span style="${noPP ? 'color:var(--coral)' : ''}">${battlePPEnabled ? ppCur + '/' + ppMax : ''}</span></div>
@@ -6025,28 +6099,30 @@ function battleSideCardInner(side){
     resEspecial = active.resEspecial * (active.spdFinal ? stageVal(active.spdFinal, s.stages.SpD || 0) / active.spdFinal : 1);
   }
 
-  let oppRosterHtml = '';
-  if(side === 'B'){
-    oppRosterHtml = `<div class="opp-roster">
-      <div class="opp-roster-label">${battle.mode === 'pvc' ? 'Time do Oponente' : 'Time do Player 2'}${Number(battle.infiniteMode) ? ' (∞)' : ''}</div>
-      ${s.roster.map(i => {
-        const p = battle.sharedPrepared[i];
-        if(!p) return '';
-        const h = s.hp[i];
-        const pct = p.hpMax > 0 ? Math.floor((h/p.hpMax)*100) : 0;
-        const isActive = i === s.activePokeIdx;
-        const isDead = h <= 0;
-        const movesStr = p.moveResults.map(m => m.moveName).join(', ');
-        const statsStr = `Atk ${p.atkFinalClean} · SpA ${p.spaFinalClean} · Def ${p.defFinal} · SpD ${p.spdFinal} · Spe ${p.speFinal}`;
-        const statusStr = s.status && s.status[i] ? ` · Status: ${s.status[i]}` : '';
-        const titleAttr = `${p.name} ${h}/${p.hpMax} (${pct}%)\nAbility: ${p.ability||'—'} · Item: ${p.item||'—'}${statusStr}\nMoves: ${movesStr}\nStats: ${statsStr}`;
-        return `<div class="opp-roster-item${isActive?' active':''}${isDead?' dead':''}" title="${titleAttr.replace(/"/g,'&quot;')}">
-          <span>${p.name}${isActive?' ◀':''}</span>
-          <span>${h}/${p.hpMax} (${pct}%)</span>
-        </div>`;
-      }).join('')}
+  // Banco: o MESMO bloco para o Player 1 (embaixo) e para CPU / Player 2 (em cima, espelhado).
+  // Pode trocar => botões de troca; senão (CPU, preso, fora da vez) => botões só para ver (clique/segure = detalhes).
+  const _canSwitchNow = isPlayer && !isAwaiting && !isRecharging && !isSemi && !battle.finished && !dblLock;
+  const _trapTxt = _canSwitchNow ? switchLockText(side, s.activePokeIdx) : null;
+  const benchBlockHtml = () => {
+    const list = getAvailableSwitchTargets(side), can = _canSwitchNow && !_trapTxt;
+    const label = (side === 'B' && battle.mode === 'pvc') ? `🔄 Time do Oponente${Number(battle.infiniteMode) ? ' (∞)' : ''}` : '🔄 Trocar Pokémon';
+    const btns = list.length ? list.map(i => {
+      const p = battle.sharedPrepared[i], hpp = s.hp[i], pctS = p.hpMax > 0 ? Math.floor((hpp/p.hpMax)*100) : 0;
+      const sel = can && action && action.type === 'switch' && action.targetIdx === i;
+      const attrs = can ? `data-side="${side}" data-action-type="switch" data-action-value="${i}"` : `data-bench-view="${i}" title="Ver detalhes"`;
+      return `<button type="button" class="battle-action-btn${sel?' selected':''}" ${attrs}>
+        <div class="battle-action-title">${p.name}</div>
+        <div class="battle-action-sub">${hpp}/${p.hpMax} (${pctS}%)</div>
+      </button>`;
+    }).join('') : '<div style="color:var(--text-dim);font-size:11px;font-family:var(--font-mono);">Sem Pokémon disponíveis</div>';
+    const lock = _trapTxt ? `<div style="color:var(--coral);font-size:11px;font-family:var(--font-mono);margin-bottom:4px;">🔒 ${_trapTxt} — dá para ver o banco, mas não trocar</div>` : '';
+    return `<div class="battle-actions-group">
+      <div class="battle-actions-label">${label}</div>${lock}
+      <div class="battle-actions-grid">${btns}</div>
     </div>`;
-  }
+  };
+  let oppRosterHtml = '';
+  if(side === 'B') oppRosterHtml = `<div style="margin-bottom:10px;padding-bottom:8px;border-bottom:1px dashed var(--line);">${benchBlockHtml()}</div>`;
 
   let movesHtml = '';
   if(dblLock){
@@ -6105,9 +6181,9 @@ function battleSideCardInner(side){
       }
       const sub = subParts.join(' · ');
       const ghBlock = normKey(ppKey) === 'gigaton hammer' && s.lastMoveKey === 'gigaton hammer';
-      const grBlock = gravityBlocks(ppKey);
+      const grBlock = gravityBlocks(ppKey) || choiceBlocks(side, s.activePokeIdx, ppKey);
       const _t = moveTypeOf(m);
-      const btnStyle = (noPP || ghBlock || grBlock) ? `style="${typeVarOf(_t)}opacity:.4;cursor:not-allowed;" disabled${ghBlock ? ' title="Não pode ser usado em turnos seguidos"' : (grBlock ? ' title="Bloqueado pela Gravity"' : '')}` : `style="${typeVarOf(_t)}"`;
+      const btnStyle = (noPP || ghBlock || grBlock) ? `style="${typeVarOf(_t)}opacity:.4;cursor:not-allowed;" disabled${ghBlock ? ' title="Não pode ser usado em turnos seguidos"' : (grBlock ? ` title="${gravityBlocks(ppKey) ? 'Bloqueado pela Gravity' : 'Preso no golpe do item Choice'}"` : '')}` : `style="${typeVarOf(_t)}"`;
       const ppColor = noPP ? 'color:var(--coral)' : '';
       allMoveBtns.push(`<button type="button" class="battle-action-btn${typeClsOf(_t)}${sel?' selected':''}" data-side="${side}" data-action-type="move" data-action-value="${m.moveKey}" ${btnStyle}>
         ${moveDelX(side, 'damage', m.moveKey)}<div class="battle-action-title">${m.moveName}${rcTag}</div>
@@ -6124,8 +6200,8 @@ function battleSideCardInner(side){
       const subParts = [];
       const sub = subParts.join(' · ');
       const _st = sm.Type || '';
-      const grBlock = gravityBlocks(sm.Name);
-      const btnStyle = (noPP || grBlock) ? `style="${typeVarOf(_st)}opacity:.4;cursor:not-allowed;" disabled${grBlock ? ' title="Bloqueado pela Gravity"' : ''}` : `style="${typeVarOf(_st)}"`;
+      const grBlock = gravityBlocks(sm.Name) || choiceBlocks(side, s.activePokeIdx, sm.Name);
+      const btnStyle = (noPP || grBlock) ? `style="${typeVarOf(_st)}opacity:.4;cursor:not-allowed;" disabled${grBlock ? ` title="${gravityBlocks(sm.Name) ? 'Bloqueado pela Gravity' : 'Preso no golpe do item Choice'}"` : ''}` : `style="${typeVarOf(_st)}"`;
       const ppColor = noPP ? 'color:var(--coral)' : '';
       const _sAcc = battleMoveAccuracy(sm.Name, sm);
       allMoveBtns.push(`<button type="button" class="battle-action-btn${typeClsOf(_st)}${sel?' selected':''}" data-side="${side}" data-action-type="status-move" data-action-value="${sm.Name}" ${btnStyle}>
@@ -6205,24 +6281,7 @@ function battleSideCardInner(side){
   }
 
   let switchHtml = '';
-  if(isPlayer && !isAwaiting && !isRecharging && !isSemi && !battle.finished && !dblLock){
-    const _trap = switchLockText(side, s.activePokeIdx);
-    const switches = _trap ? [] : getAvailableSwitchTargets(side);
-    const btns = _trap ? `<div style="color:var(--coral);font-size:11px;font-family:var(--font-mono);">🔒 ${_trap}</div>` : switches.length ? switches.map(i => {
-      const p = battle.sharedPrepared[i];
-      const hpp = s.hp[i];
-      const pctS = p.hpMax > 0 ? Math.floor((hpp/p.hpMax)*100) : 0;
-      const sel = action && action.type === 'switch' && action.targetIdx === i;
-      return `<button type="button" class="battle-action-btn${sel?' selected':''}" data-side="${side}" data-action-type="switch" data-action-value="${i}">
-        <div class="battle-action-title">${p.name}</div>
-        <div class="battle-action-sub">${hpp}/${p.hpMax} (${pctS}%)</div>
-      </button>`;
-    }).join('') : '<div style="color:var(--text-dim);font-size:11px;font-family:var(--font-mono);">Sem Pokémon disponíveis</div>';
-    switchHtml = `<div class="battle-actions-group">
-      <div class="battle-actions-label">🔄 Trocar Pokémon</div>
-      <div class="battle-actions-grid">${btns}</div>
-    </div>`;
-  }
+  if(side === 'A' && isPlayer && !isAwaiting && !isRecharging && !isSemi && !battle.finished && !dblLock) switchHtml = benchBlockHtml();
 
   // ref = valor sem bônus (stage/clima). Bônus de Sand (SpD) / Snow (Def) aparece em verde, igual a um stage positivo.
   const _sv = (base, key, ref) => { const st = s.stages[key] || 0; const v = stageVal(base, st); const r = ref !== undefined ? ref : base;
@@ -6291,14 +6350,16 @@ function battleSideCardInner(side){
     <span class="hp-num-big">${_hf} / ${active.hpMax}</span>
     <span class="hp-pct-big" style="color:${_corOf(_pctOf(_hf))};">(${_pctOf(_hf)}%)</span>
   </div>`;
-  const nameHpHtml = `<div class="battle-poke-name-center">${hazardBadgesHtml(side)}${volBadgesHtml(side, s.activePokeIdx)}${active.name}</div>
+  const _cond = condBadgesHtml(side, s.activePokeIdx);
+  const nameHpHtml = `<div class="battle-poke-name-center">${active.name}</div>
   <div data-hp-anim="${_hf},${hp},${active.hpMax}" data-hp-side="${skey(side)}">${hpText}${battleHpBarHtml(_hf, active.hpMax)}</div>${(s.sub || 0) > 0 ? `<div style="text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--amber);margin-top:4px;">🧸 Substituto: ${s.sub} HP</div>` : ''}${isCursed(s, s.activePokeIdx) ? `<div style="text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--violet,#A855F7);margin-top:4px;">👻 Amaldiçoado (−¼ HP por turno)</div>` : ''}`;
 
   let contentHtml;
   if (side === 'A') {
     contentHtml = `<div style="position:relative;padding-bottom:8px;border-bottom:1px dashed var(--line);margin-bottom:10px;">
+      <div style="position:absolute;top:0;left:0;z-index:1;">${_cond.head}</div>
       <div style="position:absolute;top:0;right:0;${speedInfoStyle}">${speedInfoHtml}</div>
-      ${nameHpHtml}
+      ${nameHpHtml}${_cond.panel}
     </div>
     <div class="status-ability-row">${statusHtml}${abilityItemHtml}</div>
     ${resDisplayHtml}
@@ -6320,8 +6381,9 @@ function battleSideCardInner(side){
     ${lutarInline}
     ${switchHtml}
     <div style="position:relative;padding-top:8px;border-top:1px dashed var(--line);margin-top:10px;">
+      <div style="position:absolute;top:8px;left:0;z-index:1;">${_cond.head}</div>
       <div style="position:absolute;top:8px;right:0;${speedInfoStyle}">${speedInfoHtml}</div>
-      ${nameHpHtml}
+      ${nameHpHtml}${_cond.panel}
     </div>`;
   }
 
@@ -6545,7 +6607,9 @@ function manualChangeSP(idx, stat, value){
 }
 function manualChangeField(idx, field, value){
   const p = currentPokemons[idx]; if(!p || !battle) return;
-  if(field === 'item') p.item = value; else { p.ability = value; p.abilityUsed = value; }
+  if(field === 'item') p.item = value; else { p.ability = value; p.abilityUsed = value; p._manualAb = value; }
+  // habilidade trocada à mão substitui Trace / Gastro Acid deste Pokémon em campo
+  { const _fs = fieldSideOf(idx); if(field === 'ability' && _fs){ const v = volOf(_fs, idx); delete v.traced; delete v.gastro; } }
   refreshBattlePrepared();
   const actions = [];
   const prep = battle.sharedPrepared[idx];
@@ -6553,10 +6617,9 @@ function manualChangeField(idx, field, value){
   if(prep && sd0) actions.push({ side: sd0, type: 'manual-field', name: prep.name, field, value });
   if(field === 'item'){ ['A','B'].forEach(sd => { const S = battle.sides[sd]; if(S.itemUsed) delete S.itemUsed[idx]; }); applySeedActivations().forEach(c => actions.push(c)); }
   if(field === 'ability'){
-    ['A','B'].forEach(sd => {
-      const S = battle.sides[sd];
-      if(S.activePokeIdx === idx && S.hp[idx] > 0) applyEntryWeather(sd).forEach(ch => actions.push({ side: sd, ...ch }));
-    });
+    // efeito imediato da habilidade nova (Intimidate, Trace, clima/terreno...) — Singles e Doubles (os dois slots)
+    const _fs = fieldSideOf(idx);
+    if(_fs && battle.sides[_fs].hp[idx] > 0) withMon(_fs, idx, () => applyEntryWeather(_fs)).forEach(ch => actions.push(Object.assign({ side: _fs }, ch)));
   }
   refreshBattlePrepared();
   rebuildPendingActions();
@@ -6995,8 +7058,8 @@ function renderBattleInner(){
     <button type="button" class="battle-toolbar-btn" id="battleSecToggle" style="${battleSecEffects?'border-color:var(--mint);color:var(--mint);':''}" title="Efeitos secundários dos golpes">Efeitos 2º ${battleSecEffects?'ON':'OFF'}</button>
     <button type="button" class="battle-toolbar-btn" id="battleUndoRerollBtn" style="${battleUndoReroll?'border-color:var(--mint);color:var(--mint);':''}" title="Ao voltar o turno (Undo), gera novos valores aleatórios (rolls, crit, precisão, efeitos)">🎲 Undo novo RNG ${battleUndoReroll?'ON':'OFF'}</button>
     <button type="button" class="battle-toolbar-btn" id="battleGearBtn" style="${battleGearOpen?'border-color:var(--mint);color:var(--mint);':''}" title="Opções avançadas">⚙️</button>
-    ${battleGearOpen ? `<div class="battle-gear-panel"><div class="battle-gear-tabs"><button type="button" class="battle-toolbar-btn" data-gear-sub="geral" style="${battleGearSub==='geral'?'border-color:var(--mint);color:var(--mint);':''}">Geral ${battleGearSub==='geral'?'▾':'▸'}</button><button type="button" class="battle-toolbar-btn" data-gear-sub="arceus" style="${battleGearSub==='arceus'?'border-color:var(--amber);color:var(--amber);':''}">🔱 Arceus ${battleGearSub==='arceus'?'▾':'▸'}</button></div>${battleGearSub==='geral' ? `<div class="battle-gear-group"><div class="battle-gear-btns"><button type="button" class="battle-toolbar-btn" id="battleSwapPDBtn" title="Ordem dos valores de PD nos golpes">${battleSwapPD ? 'PD crescente' : 'PD decrescente'}</button>${battle.mode === 'pvc' ? `<button type="button" class="battle-toolbar-btn" id="battleHideMyBtn" style="${battleHideMyMoves?'border-color:var(--mint);color:var(--mint);':''}" title="A CPU só considera os meus golpes que ela já viu">🙈 Ocultar meus moves ${battleHideMyMoves?'ON':'OFF'}</button>
-    <button type="button" class="battle-toolbar-btn" id="battleHideCpuBtn" style="${battleHideCpuMoves?'border-color:var(--mint);color:var(--mint);':''}" title="Os golpes da CPU só aparecem depois de usados">🕵️ Ocultar moves da CPU ${battleHideCpuMoves?'ON':'OFF'}</button>` : ''}${battle.mode === 'pvc' ? `<button type="button" class="battle-toolbar-btn" id="battleCpuKnowsBtn" style="${!battleSetup.hideMyLead?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: ao escolher o próximo Pokémon, a CPU escolhe DEPOIS de mim e vê a minha escolha. Desligado: ela escolhe sem saber qual será o meu. (Não funciona junto com a opção ao lado.)">🧠 CPU sabe minha escolha ${!battleSetup.hideMyLead?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleIKnowBtn" style="${!battleSetup.hideCpuLead?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: a CPU escolhe ANTES e eu vejo o Pokémon dela antes de escolher o meu. Desligado: ela só entra depois que eu escolher. (Não funciona junto com a opção ao lado.)">👁 Eu sei a escolha da CPU ${!battleSetup.hideCpuLead?'ON':'OFF'}</button>` : ''}</div></div>` : ''}${battleGearSub==='arceus' ? `<div class="battle-gear-group"><div class="battle-gear-btns">${[['weather','Clima manual'],['terrain','Terreno manual'],['item','Item manual'],['ability','Habilidade manual'],['build','Build manual'],['status','Status manual'],['mega','💎 Mega ilimitada']].map(([k,l]) => `<button type="button" class="battle-toolbar-btn" data-manual="${k}" style="${battleManual[k]?'border-color:var(--mint);color:var(--mint);':''}">${l} ${battleManual[k]?'ON':'OFF'}</button>`).join('')}<button type="button" class="battle-toolbar-btn" id="battleEditMovesBtn" style="${battleEditMoves?'border-color:var(--mint);color:var(--mint);':''}" title="Mostra um ✕ em cada golpe para excluir e um + para adicionar golpes">✏️ Editar moves ${battleEditMoves?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleAuraBarBtn" style="${auraBarEnabled?'border-color:var(--mint);color:var(--mint);':''}" title="Mostra a barra de Aura ao lado do terreno mesmo sem Fairy Aura / Dark Aura / Aura Break em campo (ligar o modo Arceus não liga esta opção)">🌟 Barra de Aura ${auraBarEnabled?'ON':'OFF'}</button></div></div>` : ''}</div>` : ''}
+    ${battleGearOpen ? `<div class="battle-gear-panel"><div class="battle-gear-tabs"><button type="button" class="battle-toolbar-btn" data-gear-sub="geral" style="${battleGearSub==='geral'?'border-color:var(--mint);color:var(--mint);':''}">Geral ${battleGearSub==='geral'?'▾':'▸'}</button><button type="button" class="battle-toolbar-btn" data-gear-sub="arceus" style="${battleGearSub==='arceus'?'border-color:var(--amber);color:var(--amber);':''}">🔱 Arceus ${battleGearSub==='arceus'?'▾':'▸'}</button></div>${battleGearSub==='geral' ? `<div class="battle-gear-group"><div class="battle-gear-btns"><button type="button" class="battle-toolbar-btn" id="battleSecAlwaysBtn" style="${battleSecAlways?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: todo efeito secundário dos golpes ativa (101%). Imunidades (Shield Dust, Covert Cloak, tipo/habilidade) continuam valendo.">🎲 Efeito 2º sempre (101%) ${battleSecAlways?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleSwapPDBtn" title="Ordem dos valores de PD nos golpes">${battleSwapPD ? 'PD crescente' : 'PD decrescente'}</button>${battle.mode === 'pvc' ? `<button type="button" class="battle-toolbar-btn" id="battleHideMyBtn" style="${battleHideMyMoves?'border-color:var(--mint);color:var(--mint);':''}" title="A CPU só considera os meus golpes que ela já viu">🙈 Ocultar meus moves ${battleHideMyMoves?'ON':'OFF'}</button>
+    <button type="button" class="battle-toolbar-btn" id="battleHideCpuBtn" style="${battleHideCpuMoves?'border-color:var(--mint);color:var(--mint);':''}" title="Os golpes da CPU só aparecem depois de usados">🕵️ Ocultar moves da CPU ${battleHideCpuMoves?'ON':'OFF'}</button>` : ''}${battle.mode === 'pvc' ? `<button type="button" class="battle-toolbar-btn" id="battleCpuKnowsBtn" style="${!battleSetup.hideMyLead?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: ao escolher o próximo Pokémon, a CPU escolhe DEPOIS de mim e vê a minha escolha. Desligado: ela escolhe sem saber qual será o meu. (Não funciona junto com a opção ao lado.)">🧠 CPU sabe minha escolha ${!battleSetup.hideMyLead?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleIKnowBtn" style="${!battleSetup.hideCpuLead?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: a CPU escolhe ANTES e eu vejo o Pokémon dela antes de escolher o meu. Desligado: ela só entra depois que eu escolher. (Não funciona junto com a opção ao lado.)">👁 Eu sei a escolha da CPU ${!battleSetup.hideCpuLead?'ON':'OFF'}</button>` : ''}</div></div>` : ''}${battleGearSub==='arceus' ? `<div class="battle-gear-group"><div class="battle-gear-btns">${[['weather','Clima manual'],['terrain','Terreno manual'],['item','Item manual'],['ability','Habilidade manual'],['build','Build manual'],['status','Status manual'],['mega','💎 Mega ilimitada'],['conds','🔎 Condições sempre visíveis']].map(([k,l]) => `<button type="button" class="battle-toolbar-btn" data-manual="${k}" style="${battleManual[k]?'border-color:var(--mint);color:var(--mint);':''}">${l} ${battleManual[k]?'ON':'OFF'}</button>`).join('')}<button type="button" class="battle-toolbar-btn" id="battleEditMovesBtn" style="${battleEditMoves?'border-color:var(--mint);color:var(--mint);':''}" title="Mostra um ✕ em cada golpe para excluir e um + para adicionar golpes">✏️ Editar moves ${battleEditMoves?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleAuraBarBtn" style="${auraBarEnabled?'border-color:var(--mint);color:var(--mint);':''}" title="Mostra a barra de Aura ao lado do terreno mesmo sem Fairy Aura / Dark Aura / Aura Break em campo (ligar o modo Arceus não liga esta opção)">🌟 Barra de Aura ${auraBarEnabled?'ON':'OFF'}</button></div></div>` : ''}</div>` : ''}
   </div>`;
 
   const _dbl = battle.format === 'doubles';
@@ -7143,6 +7206,7 @@ function renderBattleInner(){
   });
   document.getElementById('battleTypeColorToggle')?.addEventListener('click', () => { battleTypeColors = !battleTypeColors; try{ localStorage.setItem('pd_typeColors', battleTypeColors ? '1' : '0'); }catch(e){} renderBattle(); });
   document.getElementById('battleSecToggle')?.addEventListener('click', () => { battleSecEffects = !battleSecEffects; renderBattle(); });
+  document.getElementById('battleSecAlwaysBtn')?.addEventListener('click', () => { battleSecAlways = !battleSecAlways; renderBattle(); });
   document.getElementById('battleUndoRerollBtn')?.addEventListener('click', () => { battleUndoReroll = !battleUndoReroll; renderBattle(); });
   document.getElementById('battleFastBtn')?.addEventListener('click', () => { battleFastMode = !battleFastMode; if(battleFastMode){ cancelPresentation(); renderBattle(); presFlushDeferred(); return; } renderBattle(); });
   document.getElementById('battleHideMyBtn')?.addEventListener('click', () => { battleHideMyMoves = !battleHideMyMoves; renderBattle(); });
@@ -7229,8 +7293,9 @@ function renderBattleInner(){
       e.stopPropagation();
       const targetIdx = Number(btn.dataset.healTarget);
       const side = btn.dataset.healSide;
+      const mode = battle.healMode;   // guarda o modo ANTES de limpar (antes a cura nunca era aplicada)
       battle.healMode = null;
-      presGateDefer(() => { applyHeal(side, targetIdx); pushSnapshot(); renderBattle(); });
+      presGateDefer(() => { if(battle) { applyHeal(side, targetIdx, mode); pushSnapshot(); renderBattle(); } });
       if(presActive()) renderBattle();
     });
   });
@@ -7251,7 +7316,10 @@ function renderBattleInner(){
       if(idx !== null && idx !== undefined) confirmReplacement(sd, idx);
     });
   });
-  document.getElementById('battleResetBtn')?.addEventListener('click', resetBattle);
+  document.getElementById('battleResetBtn')?.addEventListener('click', () => {
+    if(battle && !battle.finished && !confirm('Encerrar esta batalha e voltar ao menu? O progresso será perdido.')) return;
+    resetBattle();
+  });
 
   cont.querySelectorAll('[data-cpu-move]').forEach(el => el.addEventListener('click', e => {
     e.stopPropagation();
@@ -7294,6 +7362,15 @@ function renderBattleInner(){
     });
   });
 
+  cont.querySelectorAll('[data-bench-view]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); showBenchInfo(Number(b.dataset.benchView)); }));
+  cont.querySelectorAll('[data-cond-toggle]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const k = b.dataset.condToggle; if(openCondPanels.has(k)) openCondPanels.delete(k); else openCondPanels.add(k); renderBattle(); }));
+  cont.querySelectorAll('[data-cond-info]').forEach(b => {
+    let t = null;
+    b.addEventListener('pointerdown', () => { t = setTimeout(() => condToast(b.dataset.condInfo), 450); });
+    ['pointerup','pointerleave','pointercancel'].forEach(ev => b.addEventListener(ev, () => clearTimeout(t)));
+    b.addEventListener('click', e => { e.stopPropagation(); condToast(b.dataset.condInfo); });
+    b.addEventListener('contextmenu', e => e.preventDefault());
+  });
   cont.querySelectorAll('[data-mega-side]').forEach(b => b.addEventListener('click', e => {
     e.stopPropagation();
     const sd = b.dataset.megaSide, mode = b.dataset.megaMode;
@@ -9016,6 +9093,7 @@ function dMoveAct(a, order){
   if(!m.isStruggle) markRevealed(sd, idx, baseMoveNameFromKey(m.moveKey));
   if(mk === 'gigaton hammer' && S.lastMove[idx] === 'gigaton hammer'){ dLog(LF.moveFail(att.name, mn, 'não pode ser usado em turnos seguidos')); return null; }
   S.lastMove[idx] = mk;
+  if(!m.isStruggle) choiceLockSet(sd, idx, m.moveKey);
   if(EXPLOSIVE_MOVES.has(mk)){
     const damp = [...dActives('A'), ...dActives('B')].find(x => normKey(dP(x.idx).ability || '') === 'damp');
     if(damp){ dLog(LF.moveFail(att.name, mn, 'Damp de ' + dP(damp.idx).name + ' impede explosões')); return null; }
@@ -9119,7 +9197,7 @@ function dSec(sd, idx, tSd, tIdx, info, mk){
     const mm = String(effect).match(/^(atk|def|spa|spd|spe|acc|eva)\s*([+-])\s*(\d+)$/i);
     const toUser = !!mm && mm[2] === '+';
     if(!toUser && blocked) return;
-    if(!(battleRandom() * 100 < Math.min(100, chance * (serene ? 2 : 1)))) return;
+    if(!battleSecAlways && !(battleRandom() * 100 < Math.min(100, chance * (serene ? 2 : 1)))) return;
     if(mm){
       const stat = STAT[mm[1].toLowerCase()], n = Number(mm[3]);
       if(toUser){ if(dS(sd).hp[idx] > 0) dWith(sd, idx, () => dLog(`${dNm(sd, idx)} ${fmtStageChange(changeStage(sd, stat, n))}.`)); }
@@ -9295,6 +9373,7 @@ function dStatusAct(a){
   if(gravityBlocks(m.Name)){ dLog(LF.moveFail(att.name, m.Name, 'bloqueado pela Gravity')); return null; }
   if(!consumePP(sd, idx, m.Name)){ dLog(LF.nop(att.name, m.Name, 'sem PP')); return null; }
   markRevealed(sd, idx, m.Name); S.lastMove[idx] = mk;
+  choiceLockSet(sd, idx, m.Name);
   const H = `<b>${att.name}</b> usou <b>${m.Name}</b>`;
   const fail = r => { dLog(LF.moveFail(att.name, m.Name, r)); return null; };
   if(mk === 'gravity'){
@@ -9646,7 +9725,7 @@ function dCpuReplacePick(sd){
 function dCpuChoose(sd, slot){
   const S = dS(sd), idx = S.active[slot], p = dP(idx), o = dOpp(sd), st = getStatusOf(sd, idx);
   const foes = dActives(o), ally = dActives(sd).filter(x => x.idx !== idx);
-  const pool = S.pp[idx] || {}, hasPP = k => (!battlePPEnabled || pool[k] === undefined || pool[k] > 0) && !gravityBlocks(k);
+  const pool = S.pp[idx] || {}, hasPP = k => (!battlePPEnabled || pool[k] === undefined || pool[k] > 0) && !gravityBlocks(k) && !choiceBlocks(sd, idx, k);
   let best = null, bestScore = -1;
   const cand = (score, ch) => { score += Math.random() * 0.02; if(score > bestScore){ bestScore = score; best = ch; } };
   const frac = (tSd, tIdx, mv, base) => {
