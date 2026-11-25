@@ -425,6 +425,8 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   .hz-badges{ display:inline-flex; gap:3px; margin-right:8px; vertical-align:middle; font-size:12px; }
   .hz-badge{ border:1px solid var(--line); border-radius:6px; padding:0 4px; background:var(--panel); line-height:18px; cursor:help; }
   .hz-badge sub{ font-size:9px; font-family:var(--font-mono); }
+  /* Símbolo da Mega Evolução (imagem oficial enviada pelo usuário, 64px, recorte redondo) */
+  .mega-ico{ display:inline-block; width:16px; height:16px; vertical-align:-3px; background:url(data:image/png;base64,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) center/contain no-repeat; border-radius:50%; }
   .cond-badges{ display:inline-flex; gap:3px; align-items:center; font-size:12px; }
   .cond-badge.off{ opacity:.3; }
   .cond-more{ border:1px solid var(--line); border-radius:6px; padding:0 5px; background:var(--panel); color:var(--text-dim); font-family:var(--font-mono); font-size:10px; line-height:18px; cursor:pointer; }
@@ -705,7 +707,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 41; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 42; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
 const ICON_TRASH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
@@ -2479,7 +2481,7 @@ const ROCK_HEAD_NO_BLOCK = new Set(['steelbeam','mindblown']);
 const OHKO_MOVES = new Set(['fissure','sheer cold','guillotine','horn drill']);
 const GROUNDING_HIT_MOVES = new Set(['smack down','thousand arrows']);
 const FORCE_SWITCH_STATUS = new Set(['roar','whirlwind']);
-const VOL_TARGET_STATUS = new Set(['roar','whirlwind','telekinesis','gastro acid','trick','switcheroo','confuse ray','sweet kiss','swagger','flatter']);   // golpes de status com alvo (no Doubles o alvo é escolhido)
+const VOL_TARGET_STATUS = new Set(['roar','whirlwind','telekinesis','gastro acid','trick','switcheroo','confuse ray','sweet kiss','swagger','flatter','yawn']);   // golpes de status com alvo (no Doubles o alvo é escolhido)
 function telekinesisImmune(p){ const n = normKey((p && p.name) || ''); return n === 'gengar-mega' || n === 'mega gengar' || /^(diglett|dugtrio)(-|$)/.test(n) || n === 'sandygast' || n === 'palossand'; }
 function isMegaGengar(p){ const n = normKey((p && p.name) || ''); return n === 'gengar-mega' || n === 'mega gengar'; }
 function volOf(side, idx){ const S = battle.sides[side]; if(!S.vol) S.vol = {}; return S.vol[idx] || (S.vol[idx] = {}); }
@@ -2765,6 +2767,7 @@ function condList(side, idx){
   add(hz.tspikes > 0, HAZARD_ICON.tspikes, 'Toxic Spikes', 'ao entrar (no chão) fica envenenado; 2 camadas = veneno grave', hz.tspikes > 0 ? hz.tspikes + '/2' : '');
   add(hz.web > 0, HAZARD_ICON.web, 'Sticky Web', 'ao entrar (no chão) perde 1 de Spe');
   add(v.confused > 0, '💫', 'Confuso', '1/3 de chance de se ferir em vez de agir; some ao sair de campo');
+  add(v.yawn > 0, '😪', 'Sonolento (Yawn)', 'adormece no fim do próximo turno');
   add(isCursed(S, idx), '👻', 'Amaldiçoado (Curse)', 'perde 1/4 do HP no fim de cada turno');
   add(v.ingrain, '🌱', 'Ingrain', 'recupera 1/16 do HP por turno, fica no chão e não pode trocar');
   add(v.magnetRise > 0, '🧲', 'Magnet Rise', 'flutuando: imune a golpes Ground', v.magnetRise > 0 ? v.magnetRise + 't' : '');
@@ -2798,7 +2801,9 @@ function statusTurnBadgeHtml(side, idx){
   const S = battle.sides[side], p = battle.sharedPrepared[idx], st = getStatusOf(side, idx); if(!p) return '';
   const esc = t => String(t).replace(/"/g, '&quot;');
   const badge = (icon, txt, info) => `<span class="hz-badge status-turns" data-cond-info="${esc(info)}" title="${esc(info)}" style="margin-left:6px;">${icon} ${txt}</span>`;
-  if(st === 'Asleep'){ const n = (S.sleepCounter || {})[idx] || 0; return badge('💤', n + '/3', `Dormindo: ${n} turno(s) tentando agir. 25% de chance de acordar por turno; acorda no máximo no 3º.`); }
+  if(st === 'Asleep'){ const n = (S.sleepCounter || {})[idx] || 0, rs = S.restSleep && S.restSleep[idx];
+    if(rs) return badge('💤', n + '/' + rs, `Dormindo pelo Rest: ${n} de ${rs} turno(s). Acorda no turno seguinte ao último.`);
+    return badge('💤', n + '/3', `Dormindo: ${n} turno(s) tentando agir. 25% de chance de acordar por turno; acorda no máximo no 3º.`); }
   if(st === 'Frozen'){ const n = (S.frozenCounter || {})[idx] || 0; return badge('🧊', n + '/3', `Congelado: ${n} turno(s) tentando agir. 25% de chance de descongelar por turno; no máximo no 3º (golpe de Fire descongela).`); }
   if(st === 'Badly Poisoned'){
     const n = (S.toxicCounter || {})[idx] || 0;
@@ -2868,6 +2873,75 @@ const CHOICE_ITEMS = new Set(['choice band','choice specs','choice scarf']);
 function choiceLockOf(side, idx){ if(!battle || idx == null) return null; const v = volPeek(side, idx); return (v.choice && CHOICE_ITEMS.has(heldItem(side, idx))) ? v.choice : null; }
 function choiceBlocks(side, idx, name){ const c = choiceLockOf(side, idx); return !!c && normKey(baseMoveNameFromKey(name || '')) !== c; }
 function choiceLockSet(side, idx, name){ if(CHOICE_ITEMS.has(heldItem(side, idx)) && !volPeek(side, idx).choice) volOf(side, idx).choice = normKey(baseMoveNameFromKey(name || '')); }
+// ===== Rest / Sleep Talk / Yawn =====
+// Rest: HP cheio e dorme exatamente 2 turnos (Early Bird: 1). Cura outros status não voláteis. side.restSleep[idx] = turnos.
+function restFail(sd, idx){
+  const S = battle.sides[sd], p = battle.sharedPrepared[idx], ab = abOf(sd, idx);
+  if(volPeek(sd, idx).healBlock > 0) return 'Heal Block';
+  if(S.hp[idx] >= p.hpMax) return 'HP cheio';
+  if(ab === 'insomnia' || ab === 'vital spirit' || ab === 'comatose' || ab === 'purifying salt') return p.name + ' tem ' + p.ability;
+  if(leafGuardBlocks(sd, idx)) return 'Leaf Guard no sol';
+  if(['electric','misty'].includes(battle.terrain) && battleGroundedIdx(sd, idx)) return 'o terreno impede o sono';
+  if(fieldMons(sd).some(i => abOf(sd, i) === 'sweet veil')) return 'Sweet Veil';
+  return null;
+}
+function restApply(sd, idx){
+  const S = battle.sides[sd], p = battle.sharedPrepared[idx], b = S.hp[idx];
+  S.hp[idx] = p.hpMax; S.status[idx] = 'Asleep'; S.sleepCounter[idx] = 0; if(S.toxicCounter) S.toxicCounter[idx] = 0;
+  if(!S.restSleep) S.restSleep = {}; S.restSleep[idx] = abOf(sd, idx) === 'early bird' ? 1 : 2;
+  if(battle.format !== 'doubles' && window._stSnap && window._stSnap[sd]) window._stSnap[sd][idx] = 'Asleep';   // a mensagem do Rest já diz que dormiu
+  return `${p.name} dormiu e recuperou ${p.hpMax - b} HP (${p.hpMax}/${p.hpMax})! (dorme ${S.restSleep[idx]} turno${S.restSleep[idx] > 1 ? 's' : ''})`;
+}
+// Acordou? (sono do Rest: tempo fixo; sono comum: 25% por turno, no máximo no 3º)
+function sleepWakes(S, idx){
+  const cnt = S.sleepCounter[idx] || 0, rs = S.restSleep && S.restSleep[idx];
+  const awake = rs ? cnt > rs : (cnt >= 3 || battleRandom() < 0.25);
+  if(awake && S.restSleep) delete S.restSleep[idx];
+  return awake;
+}
+// Sleep Talk: golpe aleatório do moveset (menos Sleep Talk e golpes que ele não chama). O golpe chamado não gasta PP.
+const SLEEP_TALK_BAN = new Set(['sleep talk', 'focus punch', 'uproar', 'bide', 'belch', 'assist', 'copycat', 'metronome', 'mimic', 'mirror move', 'me first', 'chatter']);
+function sleepTalkBanned(k){ return SLEEP_TALK_BAN.has(k) || !!SEMI_MOVES[k]; }   // + golpes de dois turnos (SEMI_MOVES é definido mais abaixo)
+function sleepTalkPick(p){
+  const c = [];
+  (p.moveResults || []).forEach(m => { if(!m.isStruggle && !sleepTalkBanned(normKey(baseMoveNameFromKey(m.moveKey)))) c.push({ type: 'move', move: m }); });
+  (p.statusMoves || []).forEach(m => { if(!sleepTalkBanned(normKey(m.Name))) c.push({ type: 'status-move', move: m }); });
+  return c.length ? c[Math.floor(battleRandom() * c.length)] : null;
+}
+// Yawn: o alvo fica sonolento e dorme no fim do PRÓXIMO turno (vol.yawn = 2 ao usar).
+function yawnFail(sd, idx){
+  const p = battle.sharedPrepared[idx], ab = abOf(sd, idx);
+  if(getStatusOf(sd, idx) !== 'Healthy') return p.name + ' já tem um status';
+  if(ab === 'insomnia' || ab === 'vital spirit') return p.name + ' tem ' + p.ability;
+  if(leafGuardBlocks(sd, idx)) return 'Leaf Guard no sol';
+  if(volPeek(sd, idx).yawn > 0) return p.name + ' já está sonolento';
+  return null;
+}
+function yawnTickLines(){
+  const out = [];
+  ['A','B'].forEach(sd => fieldMons(sd).forEach(i => {
+    const v = volPeek(sd, i); if(!(v.yawn > 0)) return;
+    v.yawn--; if(v.yawn > 0) return;
+    delete v.yawn;
+    const S = battle.sides[sd], p = battle.sharedPrepared[i], ab = abOf(sd, i);
+    if(getStatusOf(sd, i) !== 'Healthy' || ab === 'insomnia' || ab === 'vital spirit' || leafGuardBlocks(sd, i)) return;
+    S.status[i] = 'Asleep'; S.sleepCounter[i] = 0; if(S.restSleep) delete S.restSleep[i];
+    out.push({ sd, idx: i, text: `<b>${p.name}</b> adormeceu por causa do Yawn!` });
+  }));
+  return out;
+}
+// ===== Flame Orb / Toxic Orb: no fim do turno (depois do dano de status) queimam / envenenam gravemente o portador =====
+function orbLines(onlySd, onlyIdx){
+  const out = [];
+  ['A','B'].forEach(sd => fieldMons(sd).forEach(i => {
+    if(onlySd !== undefined && (sd !== onlySd || i !== onlyIdx)) return;   // Doubles: só o Pokémon da vez
+    const S = battle.sides[sd], p = battle.sharedPrepared[i], it = heldItem(sd, i), ab = abOf(sd, i), T = [p.type1, p.type2];
+    if(getStatusOf(sd, i) !== 'Healthy' || leafGuardBlocks(sd, i) || ab === 'comatose' || ab === 'purifying salt') return;
+    if(it === 'flame orb' && !T.includes('Fire') && !['water veil','water bubble','thermal exchange'].includes(ab)){ S.status[i] = 'Burned'; out.push({ sd, idx: i, st: 'Burned', text: `Flame Orb: <b>${p.name}</b> agora está <b>Burned</b>.` }); }
+    else if(it === 'toxic orb' && (ab === 'corrosion' || (!T.includes('Poison') && !T.includes('Steel'))) && !['immunity','pastel veil'].includes(ab)){ S.status[i] = 'Badly Poisoned'; S.toxicCounter[i] = 0; out.push({ sd, idx: i, st: 'Badly Poisoned', text: `Toxic Orb: <b>${p.name}</b> agora está <b>Badly Poisoned</b>.` }); }
+  }));
+  return out;
+}
 // ===== Focus Band: 10% de chance de segurar com 1 HP (cada hit de um multistrike testa de novo) =====
 function focusBandSaves(sd, idx){ return heldItem(sd, idx) === 'focus band' && battleRandom() < 0.1; }
 // ===== Absorções por habilidade (o golpe não tem efeito) =====
@@ -2924,6 +2998,9 @@ function weatherSuppressed(){
   return ['A','B'].some(sd => fieldMons(sd).some(i => { const q = battle.sharedPrepared[i]; return q && ['cloud nine','air lock'].includes(normKey(q.ability || '')); }));
 }
 function sunOn(){ return !!battle && ['sun','harshsun'].includes(battle.weather) && !weatherSuppressed(); }
+// Utility Umbrella: o portador não é afetado por chuva nem sol (Protosynthesis e Orichalcum Pulse continuam valendo).
+function umbrellaOf(sd, idx){ return !!battle && sd != null && idx != null && heldItem(sd, idx) === 'utility umbrella'; }
+function sunOnFor(sd, idx){ return sunOn() && !umbrellaOf(sd, idx); }
 function abOf(sd, idx){ const p = battle.sharedPrepared[idx]; return normKey((p && p.ability) || ''); }
 function locOfPrepared(p){ if(!p || !battle || !battle.sides) return null; const sd = fieldSideOf(p.pokeIdx); return sd ? { side: sd, idx: p.pokeIdx } : null; }
 // O clima acaba no fim DESTE turno? (Solar Power não tira HP no turno em que o sol termina)
@@ -2935,14 +3012,14 @@ function weatherEndsThisTurn(){
 // Velocidade por habilidade: Chlorophyll ×2 no sol; Protosynthesis ×1,5 se o stat aumentado for Spe.
 function abilitySpeedMult(sd, idx){
   let m = 1;
-  if(abOf(sd, idx) === 'chlorophyll' && sunOn()) m *= 2;
+  if(abOf(sd, idx) === 'chlorophyll' && sunOnFor(sd, idx)) m *= 2;
   const pr = volPeek(sd, idx).proto; if(pr && pr.stat === 'Spe') m *= 1.5;
   return m;
 }
 // Flower Gift no lado (o próprio ou o aliado em campo) durante o sol: Atk e SpD ×1,5.
-function flowerGiftOn(sd){ return sunOn() && fieldMons(sd).some(i => abOf(sd, i) === 'flower gift'); }
+function flowerGiftOn(sd){ return fieldMons(sd).some(i => abOf(sd, i) === 'flower gift' && sunOnFor(sd, i)); }
 // Leaf Guard: no sol não recebe status não volátil (burn, poison, paralyze, freeze, sleep).
-function leafGuardBlocks(sd, idx){ return abOf(sd, idx) === 'leaf guard' && sunOn(); }
+function leafGuardBlocks(sd, idx){ return abOf(sd, idx) === 'leaf guard' && sunOnFor(sd, idx); }
 // ===== Protosynthesis: sol ou Booster Energy => maior stat (com stages, sem itens) ×1,3 (Spe ×1,5). Empate: Atk > Def > SpA > SpD > Spe =====
 function protoBestStat(sd, idx){
   const p = battle.sharedPrepared[idx], dex = p && findDexEntry(p.name); if(!dex) return 'Atk';
@@ -2968,7 +3045,7 @@ function protoCheck(sd, idx){
 // ===== Castform (Forecast) e Cherrim (Flower Gift): forma conforme o clima (só em campo) =====
 function battleWeatherForm(pokeIdx, speciesName, effAb, weather){
   const sp = normKey(limparNomeParaBusca(speciesName || '')), fs = fieldSideOf(pokeIdx);
-  const sup = weatherSuppressed();
+  const sup = weatherSuppressed() || (fs && umbrellaOf(fs, pokeIdx));   // Utility Umbrella: Castform / Cherrim ficam na forma normal
   if(/^castform/.test(sp)){
     let f = 'Castform';
     if(fs && effAb === 'forecast' && !sup){ if(['sun','harshsun'].includes(weather)) f = 'Castform-Sunny'; else if(['rain','heavyrain'].includes(weather)) f = 'Castform-Rainy'; else if(weather === 'snow') f = 'Castform-Snowy'; }
@@ -3018,8 +3095,8 @@ function postStepEffects(turnLog){
   heals.forEach(h => turnLog.actions.push(h)); lines.forEach(t => turnLog.actions.push({ type: 'note', text: t }));
 }
 
-// Símbolo da Mega Evolução (desenhado em SVG: círculo com a hélice em degradê, como o emblema dos jogos).
-const MEGA_ICON = `<svg class="mega-ico" viewBox="0 0 24 24" width="15" height="15" aria-label="Mega Evolução" style="vertical-align:-3px;"><defs><linearGradient id="megaGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5a3c"/><stop offset=".3" stop-color="#ffc83d"/><stop offset=".55" stop-color="#5fd38a"/><stop offset=".78" stop-color="#3fa9f5"/><stop offset="1" stop-color="#9b5cff"/></linearGradient></defs><circle cx="12" cy="12" r="10.4" fill="none" stroke="url(#megaGrad)" stroke-width="2.2"/><path d="M6.6 17.2c-.4-5.6 2.1-10 5.4-10 3 0 3.3 3.7.1 5.9-3.3 2.3-2.9 5.9.1 5.9 3.3 0 5.6-4.4 5.2-10" fill="none" stroke="url(#megaGrad)" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+// Símbolo da Mega Evolução: a imagem do emblema (CSS .mega-ico, embutida uma vez só no <style>).
+const MEGA_ICON = `<span class="mega-ico" role="img" aria-label="Mega Evolução"></span>`;
 // ===== MEGA EVOLUÇÃO NA BATALHA (Singles e Doubles) =====
 //  battle.megaOv[idx] = forma Mega atual · battle.megaUsed[lado] = já usou a Mega desta batalha ·
 //  battle.megaPend[lado][idx] = 'mega' | 'revert' (acontece no início do turno: depois das trocas, antes dos golpes).
@@ -3376,7 +3453,7 @@ function computeBattleDamage(attacker, defender, moveResult, roll, isCrit, atkSt
     const mulD = (m, name) => { defVal = Math.max(1, pokeRound(defVal * m)); _xDef.push({ name, mult: m }); };
     if(!_isFoulPlay){
       if(isPhysical && aAb === 'orichalcum pulse' && sunOn()) mulA(5461/4096, 'Orichalcum Pulse');
-      if(!isPhysical && aAb === 'solar power' && sunOn()) mulA(1.5, 'Solar Power');
+      if(!isPhysical && aAb === 'solar power' && aL && sunOnFor(aL.side, aL.idx)) mulA(1.5, 'Solar Power');
       if(isPhysical && aL && flowerGiftOn(aL.side)) mulA(1.5, 'Flower Gift');
       const ap = aL && volPeek(aL.side, aL.idx).proto;
       if(ap && ap.stat === (isPhysical ? 'Atk' : 'SpA')) mulA(5325/4096, 'Protosynthesis');
@@ -3423,7 +3500,8 @@ function computeBattleDamage(attacker, defender, moveResult, roll, isCrit, atkSt
   // Ordem dos Dmods: Spread, Parental Bond, Weather, Glaive Rush, Critical, Random, STAB/Adaptability, Type 1, Type 2, Burn, Other, Z-Move
   if(d.spreadMult && d.spreadMult !== 1) ap('Spread', d.spreadMult); else sk('Spread');
   if(d.parentalMult && d.parentalMult !== 1) ap('Parental Bond', d.parentalMult); else sk('Parental Bond');
-  if(d.weatherMult !== 1) ap('Weather', d.weatherMult); else sk('Weather');
+  const _umbD = (() => { if(!battle || !battle.sides || !['sun','harshsun','rain','heavyrain'].includes(battle.weather)) return false; const L = defLocOf(defender); return !!L && umbrellaOf(L.side, L.idx); })();
+  if(d.weatherMult !== 1 && !_umbD) ap('Weather', d.weatherMult); else sk(_umbD && d.weatherMult !== 1 ? 'Weather (Utility Umbrella)' : 'Weather');
   if(d.glaiveMult && d.glaiveMult !== 1) ap('Glaive Rush', d.glaiveMult); else sk('Glaive Rush');
   if(isCrit) ap('Critical', 1.5); else sk('Critical');
   ap('Roll', roll);
@@ -3689,6 +3767,7 @@ const SEMI_CHARGE_TEXT = { 'solar beam': 'absorveu a luz do sol', 'solar blade':
   'ice burn': 'está envolto em ar gélido', 'meteor beam': 'está cercado de energia cósmica', 'razor wind': 'criou um redemoinho de vento', 'skull bash': 'abaixou a cabeça', 'sky attack': 'está cercado de uma luz forte' };
 // Turno de carga pulado sem gastar o Power Herb: Solar Beam/Blade sob Sol (ou Mega Sol) e Electro Shot na chuva
 function chargeSkipActive(mk, p){
+  { const _fs = p && fieldSideOf(p.pokeIdx); if(_fs && umbrellaOf(_fs, p.pokeIdx) && (SOLAR_MOVES.has(mk) || mk === 'electro shot')) return normKey((p && p.ability) || '') === 'mega sol' && SOLAR_MOVES.has(mk); }
   if(SOLAR_MOVES.has(mk)) return solarNoCharge(p);
   return mk === 'electro shot' && !!battle && (battle.weather === 'rain' || battle.weather === 'heavyrain');
 }
@@ -4053,7 +4132,7 @@ function applySecondaryEffects(action, attacker, defender, moveInfo){
     if(key === 'confusion'){ if(applyConfusion(dSide, dIdx, true).ok) out.push(`${defender.name} ficou confuso`); return; }
     const st = { burn:'Burned', poison:'Poisoned', paralyze:'Paralyzed', freeze:'Frozen', sleep:'Asleep' }[key];
     if(!st || getStatusOf(dSide, dIdx) !== 'Healthy' || IMM[st]() || leafGuardBlocks(dSide, dIdx)) return;
-    dS.status[dIdx] = st; if(st === 'Asleep') dS.sleepCounter[dIdx] = 0;
+    dS.status[dIdx] = st; if(st === 'Asleep'){ dS.sleepCounter[dIdx] = 0; if(dS.restSleep) delete dS.restSleep[dIdx]; }
   });
   return out;
 }
@@ -4097,7 +4176,7 @@ function executeAction(action, ordered, actionIdx){
 
   if(action.type === 'status-move'){
     if(gravityBlocks(action.move.Name)) return { side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.Name, reason: 'bloqueado pela Gravity' };
-    if(!consumePP(action.side, attackerActiveIdx, action.move.Name)){
+    if(!action.noPP && !consumePP(action.side, attackerActiveIdx, action.move.Name)){
       return { side: action.side, type: 'move-nop', reason: 'sem PP', attackerName: attacker.name, moveName: action.move.Name };
     }
     markRevealed(action.side, attackerActiveIdx, action.move.Name); attackerSideState.lastMoveKey = moveNameKey;
@@ -4111,6 +4190,19 @@ function executeAction(action, ordered, actionIdx){
     }
     const _failS = r => ({ side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.Name, reason: r });
     const _txtS = t => ({ side: action.side, type: 'move-text', attackerName: attacker.name, moveName: action.move.Name, text: t });
+    if(moveNameKey === 'rest'){
+      if(action.viaSleepTalk) return _failS('não funciona pelo Sleep Talk');
+      const _rf = restFail(action.side, attackerActiveIdx); if(_rf) return _failS(_rf);
+      return _txtS(restApply(action.side, attackerActiveIdx));
+    }
+    if(moveNameKey === 'sleep talk'){
+      if(getStatusOf(action.side, attackerActiveIdx) !== 'Asleep') return _failS(attacker.name + ' não está dormindo');
+      const _pk = sleepTalkPick(attacker); if(!_pk) return _failS('nenhum golpe para chamar');
+      const _sub = { side: action.side, type: _pk.type, move: _pk.move, priority: 0, speed: 0, noPP: true, viaSleepTalk: true, pokeIdx: attackerActiveIdx };
+      const _r = executeAction(_sub, ordered, actionIdx);
+      _r._sleepTalkLine = LF.moveText(attacker.name, 'Sleep Talk', `Chamou <b>${_pk.type === 'move' ? _pk.move.moveName : _pk.move.Name}</b>!`);
+      return _r;
+    }
     if(moveNameKey === 'gravity'){
       if(gravityOn()) return _failS('a Gravity já está ativa');
       return _txtS(activateGravity().join(' '));
@@ -4129,7 +4221,7 @@ function executeAction(action, ordered, actionIdx){
       _v.magnetRise = MAGNET_RISE_TURNS; refreshBattlePrepared();
       return _txtS(`${attacker.name} passou a flutuar com eletromagnetismo! (${MAGNET_RISE_TURNS} turnos)${battleGroundedIdx(action.side, attackerActiveIdx) ? ' (mas continua no chão)' : ''}`);
     }
-    if(moveNameKey === 'telekinesis' || moveNameKey === 'gastro acid' || moveNameKey === 'trick' || moveNameKey === 'switcheroo' || (moveNameKey in CONFUSE_STATUS) || FORCE_SWITCH_STATUS.has(moveNameKey)){
+    if(moveNameKey === 'telekinesis' || moveNameKey === 'gastro acid' || moveNameKey === 'trick' || moveNameKey === 'switcheroo' || moveNameKey === 'yawn' || (moveNameKey in CONFUSE_STATUS) || FORCE_SWITCH_STATUS.has(moveNameKey)){
       const _dIdx = defenderSideState.activePokeIdx;
       { const _spv = protectionVerdict(moveNameKey, { status: true, foeStatus: true, priority: getMovePriority(action.move.Name), spread: false, contact: false }, Object.assign({ prot: defenderSideState.protected || null }, defenderSideState.sideProt || {}));
         if(_spv.blocked) return { side: action.side, type: 'blocked', attackerName: attacker.name, moveName: action.move.Name, defenderName: defender.name, by: _spv.by }; }
@@ -4141,6 +4233,12 @@ function executeAction(action, ordered, actionIdx){
         const _tf = telekinesisFail(defSide, _dIdx); if(_tf) return _failS(_tf);
         volOf(defSide, _dIdx).tele = TELEKINESIS_TURNS; refreshBattlePrepared();
         return _txtS(`${defender.name} foi erguido no ar! (${TELEKINESIS_TURNS} turnos)${battleGroundedIdx(defSide, _dIdx) ? ' (mas continua no chão)' : ''}`);
+      }
+      if(moveNameKey === 'yawn'){
+        if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
+        const _yf = yawnFail(defSide, _dIdx); if(_yf) return _failS(_yf);
+        volOf(defSide, _dIdx).yawn = 2;
+        return _txtS(`${defender.name} ficou sonolento!`);
       }
       if(moveNameKey === 'trick' || moveNameKey === 'switcheroo'){
         if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
@@ -4305,7 +4403,7 @@ function executeAction(action, ordered, actionIdx){
       return { side: action.side, type: 'semi-charge', attackerName: attacker.name, moveName: action.move.moveName, kind: SEMI_MOVES[moveNameKey], boost: _cb ? applyStageList(action.side, _cb) : '' };
     }
   }
-  if(!consumePP(action.side, attackerActiveIdx, baseMoveNameFromKey(action.move.moveKey))){
+  if(!action.noPP && !consumePP(action.side, attackerActiveIdx, baseMoveNameFromKey(action.move.moveKey))){
     return { side: action.side, type: 'move-nop', reason: 'sem PP', attackerName: attacker.name, moveName: action.move.moveName };
   }
 
@@ -4679,6 +4777,7 @@ function serializeSideStatus(s){
     faintCount: s.faintCount || 0,
     prevAlive: JSON.parse(JSON.stringify(s.prevAlive || {})),
     vol: JSON.parse(JSON.stringify(s.vol || {})),
+    restSleep: JSON.parse(JSON.stringify(s.restSleep || {})),
   };
 }
 function restoreSideStatus(s, data){
@@ -4697,6 +4796,7 @@ function restoreSideStatus(s, data){
   s.faintCount = data.faintCount || 0;
   s.prevAlive = JSON.parse(JSON.stringify(data.prevAlive || {}));
   s.vol = JSON.parse(JSON.stringify(data.vol || {}));
+  s.restSleep = JSON.parse(JSON.stringify(data.restSleep || {}));
 }
 function snapshotBattle(){
   return {
@@ -5019,12 +5119,12 @@ function applyEndOfTurnAbilities(turnLog){
       const _sr = changeStage(side, 'Spe', 1);
       turnLog.actions.push({ side, type: 'ability-boost', name: pr.name, text: 'Speed Boost: ' + fmtStageChange(_sr) });
     }
-    if(normKey(pr.ability || '') === 'solar power' && sunOn() && !weatherEndsThisTurn() && normKey(pr.ability || '') !== 'magic guard'){
+    if(normKey(pr.ability || '') === 'solar power' && sunOnFor(side, idx) && !weatherEndsThisTurn() && normKey(pr.ability || '') !== 'magic guard'){
       const before = s.hp[idx], dmg = Math.min(before, Math.max(1, Math.floor(pr.hpMax / 8)));
       s.hp[idx] = before - dmg;
       turnLog.actions.push({ side, type: 'ability-boost', name: pr.name, text: `Solar Power: −${dmg} HP (${before} → ${s.hp[idx]}/${pr.hpMax})${s.hp[idx] <= 0 ? ' — nocauteado!' : ''}` });
     }
-    if(normKey(pr.ability || '') === 'dry skin'){
+    if(normKey(pr.ability || '') === 'dry skin' && !umbrellaOf(side, idx)){
       const w = battle.weather;
       if((w === 'rain' || w === 'heavyrain') && s.hp[idx] < pr.hpMax){
         const before = s.hp[idx], heal = Math.min(pr.hpMax - before, Math.max(1, Math.floor(pr.hpMax / 8)));
@@ -5205,17 +5305,19 @@ function runTurn(ctx, startIdx){
       if (status === 'Asleep') {
         s.sleepCounter[activeIdx] = (s.sleepCounter[activeIdx] || 0) + 1;
         const cnt = s.sleepCounter[activeIdx];
-        let awake = false;
-        if (cnt >= 3) awake = true;
-        else if (battleRandom() < 0.25) awake = true;
+        const awake = sleepWakes(s, activeIdx);   // Rest: tempo fixo · sono comum: 25% por turno, no máximo no 3º
         if (awake) {
           s.status[activeIdx] = 'Healthy';
           s.sleepCounter[activeIdx] = 0;
           turnLog.actions.push({ side: action.side, type: 'wake', name: activePoke.name });
         } else {
           turnLog.actions.push({ side: action.side, type: 'still-asleep', name: activePoke.name });
-          s.semi = null; if(action.type === 'move' && !action.semiAttack) solarPrevented(action.side, activeIdx, action.move);
-          continue;
+          s.semi = null;
+          // Sleep Talk funciona dormindo: segue para o golpe
+          if(!(action.type === 'status-move' && normKey(action.move.Name) === 'sleep talk')){
+            if(action.type === 'move' && !action.semiAttack) solarPrevented(action.side, activeIdx, action.move);
+            continue;
+          }
         }
       } else if (status === 'Frozen') {
         s.frozenCounter[activeIdx] = (s.frozenCounter[activeIdx] || 0) + 1;
@@ -5261,7 +5363,9 @@ function runTurn(ctx, startIdx){
       const tSt = battle.sides[tSideK];
       if(tSt.hp[tSt.activePokeIdx] <= 0){ turnLog.actions.push({ side: action.side, type: 'skip', reason: 'target fainted', name: getSidePrepared(action.side).name }); continue; }
     }
+    const _preSnap = snapView();
     const res = executeAction(action, ordered, actIdx);
+    if(res && res._sleepTalkLine) turnLog.actions.push({ side: action.side, type: 'note', text: res._sleepTalkLine, _snap: _preSnap });
     turnLog.actions.push(res);
     trackFaints();
     diffStatus(turnLog);
@@ -5288,8 +5392,10 @@ function runTurn(ctx, startIdx){
 
   applyEndOfTurnIngrain(turnLog);
   applyEndOfTurnStatusDamage(turnLog);
+  orbLines().forEach(o => { turnLog.actions.push({ side: o.sd, type: 'note', text: o.text }); if(window._stSnap && window._stSnap[o.sd]) window._stSnap[o.sd][o.idx] = o.st; });   // Flame / Toxic Orb
   applyEndOfTurnCurse(turnLog);
   applyEndOfTurnAbilities(turnLog);
+  yawnTickLines().forEach(y => { turnLog.actions.push({ side: y.sd, type: 'note', text: y.text }); if(window._stSnap && window._stSnap[y.sd]) window._stSnap[y.sd][y.idx] = 'Asleep'; });
   tickEnvironment(turnLog);
   trackFaints();
   postStepEffects(turnLog);
@@ -5415,7 +5521,7 @@ function changeStatus(side, idx, newStatus){
   const oldStatus = s.status[idx] || 'Healthy';
   if(oldStatus === newStatus) return;
   s.status[idx] = newStatus;
-  s.sleepCounter[idx] = 0;
+  s.sleepCounter[idx] = 0; if(s.restSleep) delete s.restSleep[idx];
   s.frozenCounter[idx] = 0;
   if(newStatus !== 'Badly Poisoned') s.toxicCounter[idx] = 0;
   const prepared = battle.sharedPrepared[idx];
@@ -9232,8 +9338,8 @@ function dExec(a, order){
   const st = getStatusOf(sd, idx);
   if(st === 'Asleep'){
     S.sleepCounter[idx] = (S.sleepCounter[idx] || 0) + 1;
-    if(S.sleepCounter[idx] >= 3 || battleRandom() < 0.25){ S.status[idx] = 'Healthy'; S.sleepCounter[idx] = 0; dLog(LF.wake(dP(idx).name)); }
-    else { dLog(LF.stillAsleep(dP(idx).name)); S.semis[idx] = null; _sp(); return null; }
+    if(sleepWakes(S, idx)){ S.status[idx] = 'Healthy'; S.sleepCounter[idx] = 0; dLog(LF.wake(dP(idx).name)); }
+    else { dLog(LF.stillAsleep(dP(idx).name)); S.semis[idx] = null; if(!(a.type === 'status-move' && normKey(a.move.Name) === 'sleep talk')){ _sp(); return null; } }
   } else if(st === 'Frozen'){
     S.frozenCounter[idx] = (S.frozenCounter[idx] || 0) + 1;
     const mn = normKey(baseMoveNameFromKey(a.move.moveKey || a.move.Name)), mi = findMoveInfo(baseMoveNameFromKey(a.move.moveKey || a.move.Name));
@@ -9275,7 +9381,7 @@ function dMoveAct(a, order){
       dLog(LF.semiCharge(att.name, mn, SEMI_MOVES[mk], _cb ? _boost() : '')); return null;
     }
   }
-  if(!consumePP(sd, idx, baseMoveNameFromKey(m.moveKey))){ dLog(LF.nop(att.name, mn, 'sem PP')); return null; }
+  if(!a.noPP && !consumePP(sd, idx, baseMoveNameFromKey(m.moveKey))){ dLog(LF.nop(att.name, mn, 'sem PP')); return null; }
   if(!m.isStruggle) markRevealed(sd, idx, baseMoveNameFromKey(m.moveKey));
   if(mk === 'gigaton hammer' && S.lastMove[idx] === 'gigaton hammer'){ dLog(LF.moveFail(att.name, mn, 'não pode ser usado em turnos seguidos')); return null; }
   S.lastMove[idx] = mk;
@@ -9360,7 +9466,7 @@ function dMoveAct(a, order){
   return out;
 }
 function dSetStatus(tSd, tIdx, st, by){
-  const T = dS(tSd); T.status[tIdx] = st; if(st === 'Asleep') T.sleepCounter[tIdx] = 0; if(st === 'Frozen') T.frozenCounter[tIdx] = 0; T.toxicCounter[tIdx] = 0;
+  const T = dS(tSd); T.status[tIdx] = st; if(st === 'Asleep'){ T.sleepCounter[tIdx] = 0; if(T.restSleep) delete T.restSleep[tIdx]; } if(st === 'Frozen') T.frozenCounter[tIdx] = 0; T.toxicCounter[tIdx] = 0;
   dLog(LF.statusGain({ name: dP(tIdx).name, newStatus: st, oldStatus: 'Healthy' }));
 }
 function dSec(sd, idx, tSd, tIdx, info, mk){
@@ -9557,11 +9663,24 @@ function dHit(a, tSd, tIdx, o){
 function dStatusAct(a){
   const sd = a.side, S = dS(sd), idx = a.idx, att = dP(idx), m = a.move, mk = normKey(m.Name), nm = dNm(sd, idx), o = dOpp(sd);
   if(gravityBlocks(m.Name)){ dLog(LF.moveFail(att.name, m.Name, 'bloqueado pela Gravity')); return null; }
-  if(!consumePP(sd, idx, m.Name)){ dLog(LF.nop(att.name, m.Name, 'sem PP')); return null; }
+  if(!a.noPP && !consumePP(sd, idx, m.Name)){ dLog(LF.nop(att.name, m.Name, 'sem PP')); return null; }
   markRevealed(sd, idx, m.Name); S.lastMove[idx] = mk;
   choiceLockSet(sd, idx, m.Name);
   const H = `<b>${att.name}</b> usou <b>${m.Name}</b>`;
   const fail = r => { dLog(LF.moveFail(att.name, m.Name, r)); return null; };
+  if(mk === 'rest'){
+    if(a.viaSleepTalk) return fail('não funciona pelo Sleep Talk');
+    const rf = restFail(sd, idx); if(rf) return fail(rf);
+    dLog(LF.moveText(att.name, m.Name, restApply(sd, idx))); return null;
+  }
+  if(mk === 'sleep talk'){
+    if(getStatusOf(sd, idx) !== 'Asleep') return fail(att.name + ' não está dormindo');
+    const pk = sleepTalkPick(att); if(!pk) return fail('nenhum golpe para chamar');
+    dLog(LF.moveText(att.name, 'Sleep Talk', `Chamou <b>${pk.type === 'move' ? pk.move.moveName : pk.move.Name}</b>!`));
+    const foes = dActives(o), ft = foes.length ? foes[Math.floor(battleRandom() * foes.length)] : null;
+    const sub = { side: sd, slot: a.slot, idx, type: pk.type, move: pk.move, priority: 0, speed: 0, tgt: ft ? { sd: o, slot: ft.slot } : null, noPP: true, viaSleepTalk: true };
+    return pk.type === 'move' ? dMoveAct(sub, D.ctx ? D.ctx.order : [sub]) : dStatusAct(sub);
+  }
   if(mk === 'gravity'){
     if(gravityOn()) return fail('a Gravity já está ativa');
     const gl = activateGravity(); dLog(LF.moveText(att.name, m.Name, gl[0])); gl.slice(1).forEach(t => dLog(t)); return null;
@@ -9578,7 +9697,7 @@ function dStatusAct(a){
     v.magnetRise = MAGNET_RISE_TURNS; refreshBattlePrepared();
     dLog(LF.moveText(att.name, m.Name, `${att.name} passou a flutuar com eletromagnetismo! (${MAGNET_RISE_TURNS} turnos)${battleGroundedIdx(sd, idx) ? ' (mas continua no chão)' : ''}`)); return null;
   }
-  if(mk === 'telekinesis' || mk === 'gastro acid' || mk === 'trick' || mk === 'switcheroo' || (mk in CONFUSE_STATUS) || FORCE_SWITCH_STATUS.has(mk)){
+  if(mk === 'telekinesis' || mk === 'gastro acid' || mk === 'trick' || mk === 'switcheroo' || mk === 'yawn' || (mk in CONFUSE_STATUS) || FORCE_SWITCH_STATUS.has(mk)){
     // alvo escolhido (nunca o próprio usuário); sem alvo válido => primeiro oponente em campo
     const foes = dActives(o);
     let t = (a.tgt && !(a.tgt.sd === sd && S.active[a.tgt.slot] === idx)) ? a.tgt : null;
@@ -9597,8 +9716,13 @@ function dStatusAct(a){
       volOf(t.sd, tIdx).tele = TELEKINESIS_TURNS; refreshBattlePrepared();
       dLog(LF.moveText(att.name, m.Name, `${tp.name} foi erguido no ar! (${TELEKINESIS_TURNS} turnos)${battleGroundedIdx(t.sd, tIdx) ? ' (mas continua no chão)' : ''}`)); return null;
     }
-    const acc = teleSureHit(t.sd, tIdx, mk, tsm) ? 101 : battleMoveAccuracy(mk, m);
+    const acc = (mk === 'yawn' || teleSureHit(t.sd, tIdx, mk, tsm)) ? 101 : battleMoveAccuracy(mk, m);   // Yawn sempre acerta (exceto semi-invulnerável)
     if(battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name })); return null; }
+    if(mk === 'yawn'){
+      if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
+      const yf = yawnFail(t.sd, tIdx); if(yf) return fail(yf);
+      volOf(t.sd, tIdx).yawn = 2; dLog(LF.moveText(att.name, m.Name, `${tp.name} ficou sonolento!`)); return null;
+    }
     if(mk === 'trick' || mk === 'switcheroo'){
       if((T.subs[tIdx] || 0) > 0) return fail('o substituto de ' + tp.name + ' bloqueou');
       const tr = trickApply(sd, idx, t.sd, tIdx);
@@ -9766,17 +9890,19 @@ function dEndTurn(){
     }
     if(dmg > 0){ S.hp[idx] = Math.max(0, S.hp[idx] - dmg); dLog(`${dNm(sd, idx)} sofreu ${dmg} de ${label} (${S.hp[idx]}/${max})${S.hp[idx] <= 0 ? ' — nocauteado!' : ''}`); }
     if(heal > 0 && S.hp[idx] < max){ const b = S.hp[idx]; S.hp[idx] = Math.min(max, b + heal); dLog(`${dNm(sd, idx)} recuperou ${S.hp[idx] - b} HP (${label}).`); }
+    orbLines(sd, idx).forEach(o => dLog(o.text));   // Flame / Toxic Orb (depois do dano de status)
     if(S.hp[idx] > 0 && isCursed(S, idx) && !mg){ const cd = curseTick(p); S.hp[idx] = Math.max(0, S.hp[idx] - cd); const _ct = `${dNm(sd, idx)} sofreu ${cd} de maldição (${S.hp[idx]}/${max})${S.hp[idx] <= 0 ? ' — nocauteado!' : ''}`; dLog(_ct, _ct); }
     if(S.hp[idx] <= 0) return;
     const ab = normKey(p.ability || '');
     if(ab === 'speed boost') dWith(sd, idx, () => { if(canChangeStage(sd, 'Spe', 1)) dLog(`${dNm(sd, idx)} Speed Boost: ${fmtStageChange(changeStage(sd, 'Spe', 1))}.`); });
-    if(ab === 'solar power' && sunOn() && !weatherEndsThisTurn()){ const b = S.hp[idx], d = Math.min(b, Math.max(1, Math.floor(max / 8))); S.hp[idx] = b - d; dLog(`${dNm(sd, idx)} Solar Power: −${d} HP.${S.hp[idx] <= 0 ? ' Nocauteado!' : ''}`); }
-    if(ab === 'dry skin'){
+    if(ab === 'solar power' && sunOnFor(sd, idx) && !weatherEndsThisTurn()){ const b = S.hp[idx], d = Math.min(b, Math.max(1, Math.floor(max / 8))); S.hp[idx] = b - d; dLog(`${dNm(sd, idx)} Solar Power: −${d} HP.${S.hp[idx] <= 0 ? ' Nocauteado!' : ''}`); }
+    if(ab === 'dry skin' && !umbrellaOf(sd, idx)){
       const w = battle.weather;
       if((w === 'rain' || w === 'heavyrain') && S.hp[idx] < max){ const b = S.hp[idx], h = Math.min(max - b, Math.max(1, Math.floor(max / 8))); S.hp[idx] = b + h; dLog(`${dNm(sd, idx)} Dry Skin: +${h} HP.`); }
       else if(w === 'sun' || w === 'harshsun'){ const b = S.hp[idx], d = Math.min(b, Math.max(1, Math.floor(max / 8))); S.hp[idx] = b - d; dLog(`${dNm(sd, idx)} Dry Skin: −${d} HP.${S.hp[idx] <= 0 ? ' Nocauteado!' : ''}`); }
     }
   }));
+  yawnTickLines().forEach(y => dLog(y.text));
   dTickEnv();
   postStepEffects();
   if(battle.trickRoom > 0){ battle.trickRoom--; if(battle.trickRoom === 0) dLog('A distorção de Trick Room terminou.'); }
