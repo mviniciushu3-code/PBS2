@@ -715,7 +715,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 48; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 49; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
 const ICON_TRASH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
@@ -3005,6 +3005,24 @@ function dragHitBlock(ap, tSd, tIdx){
   if((ab === 'suction cups' || ab === 'guard dog') && !attackerIgnoresAbility(ap)) return tp.ability;
   return null;
 }
+// ===== Drenagem (Giga Drain, Drain Punch...): Big Root ×5324/4096 na cura. Liquid Ooze no alvo: o usuário PERDE essa quantia
+//  (mesmo com HP cheio ou Heal Block; Magic Guard impede). Se o usuário cair, ele cai ANTES do alvo. =====
+function drainAmount(sd, idx, dealt, pct){ let a = Math.max(1, Math.floor(dealt * pct)); if(heldItem(sd, idx) === 'big root') a = Math.trunc((a * 5324 + 2047) / 4096); return a; }
+function liquidOozeHit(ap, tp, aSd, aIdx, amt){
+  if(!tp || normKey(tp.ability || '') !== 'liquid ooze') return null;
+  if(normKey(ap.ability || '') === 'magic guard') return { text: LF.liquidOozeGuard(ap.name, tp.name) };
+  const A = battle.sides[aSd], b = A.hp[aIdx]; A.hp[aIdx] = Math.max(0, b - amt);
+  return { text: LF.liquidOoze(ap.name, tp.name, b - A.hp[aIdx], A.hp[aIdx], ap.hpMax) };
+}
+// ===== Shell Bell: depois do golpe (já com drenagem, recuo, Rough Skin / Iron Barbs e Thief/Covet), cura 1/8 do dano TOTAL causado
+//  (todos os hits e alvos; dano no substituto conta). Arredonda para baixo, mínimo 1. Sem cura: sem dano, Sheer Force, Heal Block. =====
+function shellBellHeal(sd, idx, total, info){
+  const p = battle.sharedPrepared[idx], S = battle.sides[sd];
+  if(!p || !(total > 0) || heldItem(sd, idx) !== 'shell bell' || sheerForceOn(p, info) || volPeek(sd, idx).healBlock > 0) return '';
+  if(!(S.hp[idx] > 0) || S.hp[idx] >= p.hpMax) return '';
+  const h = Math.min(p.hpMax - S.hp[idx], Math.max(1, Math.floor(total / 8))); S.hp[idx] += h;
+  return LF.heal({ name: p.name, heal: h, label: 'Shell Bell', hpAfter: S.hp[idx], hpMax: p.hpMax });
+}
 // ===== Minimize: quem usou fica "minimizado" até sair de campo. Flying Press contra ele: dano ×2 e sempre acerta (exceto semi-invulnerável). =====
 function minimizeSureHit(mk, tSd, tIdx, semi){ return mk === 'flying press' && !!volPeek(tSd, tIdx).minimize && !(semi && semi.kind !== 'charge'); }
 // ===== Magic Room: 5 turnos; os itens dos Pokémon EM CAMPO não fazem efeito (usar de novo encerra). Mega, Trick e Pluck/Bug Bite não são afetados. =====
@@ -4721,7 +4739,7 @@ function executeAction(action, ordered, actionIdx){
         return _e.fail ? _failS(_e.fail) : _txtS([_e.text].concat(_e.extra).join(' '));
       }
       // Roar / Whirlwind: o alvo sai e entra um Pokémon aleatório do banco (as armadilhas de entrada agem).
-      if(volPeek(defSide, _dIdx).ingrain) return _failS(defender.name + ' está enraizado (Ingrain)');
+      { const _db = dragHitBlock(attacker, defSide, _dIdx); if(_db) return _failS(_db === 'Ingrain' ? defender.name + ' está enraizado (Ingrain)' : defender.name + ' não sai (' + _db + ')'); }   // Ingrain / Suction Cups / Guard Dog
       const _d = singlesDragOut(defSide);
       if(!_d) return _failS('sem Pokémon para entrar');
       return Object.assign(_txtS(_d.text), { weatherChanges: _d.entries, _snap: _d.snap });
@@ -5084,11 +5102,14 @@ function executeAction(action, ordered, actionIdx){
     useItem(defSide, s.activePokeIdx); refreshBattlePrepared(); hitNote += ` O Air Balloon de ${defender.name} estourou!`;
   }
   const _midSnap = snapView();
-  let drainHeal = 0, drainApplicable = false, drainPct = 0, drainHpBefore = 0, drainHpAfter = 0;
-  if(dealt > 0 && attackerSideState.hp[attackerActiveIdx] > 0 && (DRAIN_MOVES_50.has(moveNameKey) || DRAIN_MOVES_75.has(moveNameKey))){
+  let drainHeal = 0, drainApplicable = false, drainPct = 0, drainHpBefore = 0, drainHpAfter = 0, _oozeKO = false;
+  const _isDrain = dealt > 0 && attackerSideState.hp[attackerActiveIdx] > 0 && (DRAIN_MOVES_50.has(moveNameKey) || DRAIN_MOVES_75.has(moveNameKey));
+  const _oz = _isDrain ? liquidOozeHit(attacker, defender, action.side, attackerActiveIdx, drainAmount(action.side, attackerActiveIdx, dealt, DRAIN_MOVES_75.has(moveNameKey) ? 0.75 : 0.5)) : null;
+  if(_oz){ hitNote += ' ' + _oz.text; _oozeKO = attackerSideState.hp[attackerActiveIdx] <= 0; }   // Liquid Ooze: o usuário perde o que drenaria
+  else if(_isDrain && !(volPeek(action.side, attackerActiveIdx).healBlock > 0)){
     drainApplicable = true;
     const pct = DRAIN_MOVES_75.has(moveNameKey) ? 0.75 : 0.5;
-    const healAmt = Math.max(1, Math.floor(dealt * pct));
+    const healAmt = drainAmount(action.side, attackerActiveIdx, dealt, pct);   // Big Root
     const attackerHP = attackerSideState.hp[attackerActiveIdx];
     const newAttackerHP = Math.min(attacker.hpMax, attackerHP + healAmt);
     drainHeal = newAttackerHP - attackerHP;
@@ -5155,6 +5176,7 @@ function executeAction(action, ordered, actionIdx){
   if(GROUNDING_HIT_MOVES.has(moveNameKey) && dealt > 0 && !subbed){ const _gt = applyGroundingHit(defSide, s.activePokeIdx, dSemi); if(_gt && !_semiCut) hitNote += ' ' + _gt; }
   if((moveNameKey === 'pluck' || moveNameKey === 'bug bite') && dealt > 0 && !subbed) pluckLines(action.side, attackerActiveIdx, defSide, s.activePokeIdx).forEach(t => { hitNote += ' ' + t; });
   if(ITEM_STEAL_MOVES.has(moveNameKey) && dealt > 0 && !subbed) thiefLines(action.side, attackerActiveIdx, defSide, s.activePokeIdx, action.move.moveName).forEach(t => { hitNote += ' ' + t; });
+  { const _sb = shellBellHeal(action.side, attackerActiveIdx, dealt, moveInfo); if(_sb) hitNote += ' ' + _sb; }   // Shell Bell (depois de drenagem, recuo, Rough Skin, Thief)
   if(moveNameKey === 'plasma fists' && dealt > 0 && !subbed && battle.plasmaTurn !== battle.turn){ battle.plasmaTurn = battle.turn; refreshBattlePrepared(); hitNote += ' ' + LF.plasma(); }
   // Eelevate: nocauteou com golpe de dano => +1 no maior stat (não ativa se o nocaute encerra a batalha)
   if(!subbed && s.hp[s.activePokeIdx] <= 0 && attackerSideState.hp[attackerActiveIdx] > 0 && normKey(attacker.ability || '') === 'eelevate'
@@ -5231,7 +5253,7 @@ function executeAction(action, ordered, actionIdx){
     rollIdx, causesRecharge, hits, multiStrike: nHits > 1 || !!tripleBP, missAt,
     isCrit, focusSashConsumed, endureHeld, thawedDefender,
     drainHeal, drainApplicable, drainPct, drainHpBefore, drainHpAfter, drainDealt: dealt, attackerMaxHp: attacker.hpMax,
-    hitNote, recoil: recoilDmg, recoilBlockedBy, attackerFainted, contactKO: _contactKO, selfKO, isStruggle: isStruggleMove,
+    hitNote, recoil: recoilDmg, recoilBlockedBy, attackerFainted, contactKO: _contactKO || _oozeKO, selfKO, isStruggle: isStruggleMove,
     _midSnap: (drainHeal > 0 || recoilDmg > 0) ? _midSnap : undefined,
     subHit: subbed, subAbsorbed, subBroken, subRemain: s.sub || 0, pivot, eject: ejectSide,
     doubleKO: attackerFainted && s.hp[s.activePokeIdx] <= 0,
@@ -6580,6 +6602,8 @@ const LF = {
   thief: (n, t, item, mv) => `<b>${n}</b> roubou o item <b>${item}</b> de <b>${t}</b> (${mv})!`,
   stickyHold: t => `<b>${t}</b> segurou o item com Sticky Hold!`,
   dragHitBlocked: (t, why) => `<b>${t}</b> não foi arrastado (${why}).`,
+  liquidOoze: (n, t, dmg, hpA, max) => `<b>${n}</b> sugou o Liquid Ooze de <b>${t}</b> e perdeu <span class="dmg">${dmg} HP</span> (${hpA}/${max})!${hpA <= 0 ? ` <b>${n}</b> foi nocauteado!` : ''}`,
+  liquidOozeGuard: (n, t) => `<b>${n}</b> não sofre o Liquid Ooze de <b>${t}</b> (Magic Guard).`,
   anticipation: n => `<b>${n}</b> estremeceu! (Anticipation)`,
   hydration: (n, st) => `<b>${n}</b> curou-se de <b>${st}</b> com Hydration!`,
   effectSpore: (holder, att, st) => `Effect Spore de <b>${holder}</b>: <b>${att}</b> agora está <b>${st}</b>!`,
@@ -9985,12 +10009,12 @@ function dMoveAct(a, order){
   const _hd = `<b>${att.name}</b> usou <b>${mn}</b>!`;
   const ho = { spread, obp, hhMult, order, mk, info, headTxt: spread ? null : _hd, headDone: !!spread, noteTxt: note + hhNote };
   if(spread) dLog(`${_hd}${note}${hhNote} <span style="color:var(--text-dim)">[área ×0,75]</span>`);
-  let total = 0, anyHit = false;
+  let total = 0, totalAll = 0, anyHit = false;
   const _spStart = (spread && battle._tl) ? battle._tl.lines.length : -1;
   for(const t of tg.list){
     if(battle.finished) break;
     const r = dHit(a, t.sd, t.idx, ho);
-    total += r.dealt || 0; if(r.hit) anyHit = true;
+    total += r.dealt || 0; totalAll += r.dealtAll || 0; if(r.hit) anyHit = true;
   }
   // Golpe em área: o HP de todos os alvos cai AO MESMO TEMPO (a 1ª linha "↳" já anima todas as barras).
   if(_spStart >= 0 && battle._tl){
@@ -10019,6 +10043,7 @@ function dMoveAct(a, order){
     else { const b = S.hp[idx]; S.hp[idx] = Math.max(0, b - recoilBase); dLog(`${nm} sofreu <b>${b - S.hp[idx]}</b> de recuo (${b} → ${S.hp[idx]}/${att.hpMax}).${S.hp[idx] <= 0 ? ' Nocauteado!' : ''}`); }
   }
   if(SELF_KO_MOVES.has(mk) && S.hp[idx] > 0){ S.hp[idx] = 0; dLog(`${nm} se autodestruiu!`); }
+  { const sb = shellBellHeal(sd, idx, totalAll, info); if(sb) dLog(sb); }   // Shell Bell: dano total do golpe (todos os alvos), depois do recuo
   // Mudanças de stage do usuário (Close Combat, Draco Meteor...)
   if(total > 0 && S.hp[idx] > 0 && SELF_STAT_CHANGES[mk]){
     dWith(sd, idx, () => { const ch = SELF_STAT_CHANGES[mk]; const txt = Object.keys(ch).map(k => fmtStageChange(changeStage(sd, k, ch[k]))).join(', '); dLog(`${nm}: ${txt}.`); });
@@ -10192,7 +10217,7 @@ function dHit(a, tSd, tIdx, o){
   }
   const subbed = subAbs > 0 && hpDone === 0;
   const dealt = subbed ? subAbs : Math.max(0, hpBefore - T.hp[tIdx]);
-  res.dealt = hpDone; res.hit = true;
+  res.dealt = hpDone; res.dealtAll = dealt; res.hit = true;
   if(battle._tl && hitRecs.length){
     const rec = { _dblCalc: true, type: 'move', attackerName: att.name, defenderName: def.name, moveName: m.moveName, defenderMax: def.hpMax };
     if(nHits > 1 || tripleBP){ rec.hits = hitRecs; rec.multiStrike = true; rec.missAt = missAt; rec.calc = Object.assign({}, hitRecs[0].calc, { multi: hitRecs.length, damage: totalDmg }); }
@@ -10236,9 +10261,13 @@ function dHit(a, tSd, tIdx, o){
     else if(dAb === 'seed sower'){ if(dWith(tSd, tIdx, () => setBattleTerrain('grassy', tSd, battle.turn))){ refreshBattlePrepared(); dLog(`${dn} criou o Grassy Terrain!`); } }
   }
   if(dealt > 0 && (DRAIN_MOVES_50.has(mk) || DRAIN_MOVES_75.has(mk)) && S.hp[idx] > 0){
-    const pct = DRAIN_MOVES_75.has(mk) ? 0.75 : 0.5, heal = Math.max(1, Math.floor(dealt * pct));
-    const b = S.hp[idx], n = Math.min(att.hpMax, b + heal);
-    if(n > b){ S.hp[idx] = n; dLog(`${nm} drenou ${n - b} HP (${b} → ${n}/${att.hpMax}).`); }
+    const pct = DRAIN_MOVES_75.has(mk) ? 0.75 : 0.5, heal = drainAmount(sd, idx, dealt, pct);   // Big Root
+    const oz = liquidOozeHit(att, def, sd, idx, heal);
+    if(oz){ dLog(oz.text); if(S.hp[idx] <= 0) battle._oozeFirst = { side: sd, turn: battle.turn }; }   // Liquid Ooze: o usuário cai antes do alvo
+    else if(!(volPeek(sd, idx).healBlock > 0)){
+      const b = S.hp[idx], n = Math.min(att.hpMax, b + heal);
+      if(n > b){ S.hp[idx] = n; dLog(`${nm} drenou ${n - b} HP (${b} → ${n}/${att.hpMax}).`); }
+    }
   }
   if(!subbed && getStatusOf(tSd, tIdx) === 'Frozen' && eff > 0 && ((info && info.Type === 'Fire') || THAW_MOVES.has(mk))){ T.status[tIdx] = 'Healthy'; T.frozenCounter[tIdx] = 0; dLog(`${dn} descongelou!`); }
   if(mk === 'fake out' && dealt > 0 && !subbed){ const x = o.order.find(z => z.idx === tIdx && z.side === tSd); if(!x || !x.done) T.flinch[tIdx] = true; }
@@ -10370,7 +10399,7 @@ function dStatusAct(a){
       dLog(LF.moveText(att.name, m.Name, e.text)); e.extra.forEach(x => dLog(x)); return null;
     }
     // Roar / Whirlwind: o alvo sai e entra um Pokémon aleatório do banco (as armadilhas de entrada agem).
-    if(volPeek(t.sd, tIdx).ingrain) return fail(tp.name + ' está enraizado (Ingrain)');
+    { const db = dragHitBlock(att, t.sd, tIdx); if(db) return fail(db === 'Ingrain' ? tp.name + ' está enraizado (Ingrain)' : tp.name + ' não sai (' + db + ')'); }   // Ingrain / Suction Cups / Guard Dog
     const bench = dBench(t.sd);
     if(!bench.length) return fail('sem Pokémon para entrar');
     const to = bench[Math.floor(battleRandom() * bench.length)];
@@ -10588,7 +10617,8 @@ function dFinishIfOut(){
   if(inf && battle.infiniteMode >= 3){ ['A','B'].forEach(sd => { if(dSideDead(sd)) dInfiniteRefill(sd, Number(battle.infiniteMode)); }); }
   const aD = dSideDead('A'), bD = dSideDead('B');
   if(!aD && !bD) return false;
-  battle.finished = true; battle.winner = aD && bD ? 'draw' : (aD ? 'B' : 'A'); battle.need = null; battle.cpuRep = null;
+  const oz = battle._oozeFirst && battle._oozeFirst.turn === battle.turn ? battle._oozeFirst.side : null;   // Liquid Ooze: o usuário caiu antes
+  battle.finished = true; battle.winner = aD && bD ? (oz ? (oz === 'A' ? 'B' : 'A') : 'draw') : (aD ? 'B' : 'A'); battle.need = null; battle.cpuRep = null;
   if(battle.winner === 'draw'){ dLog(LF.lose('A')); dLog(LF.lose('B')); } else { dLog(LF.lose(battle.winner === 'A' ? 'B' : 'A')); dLog(LF.win(battle.winner)); }
   dblPush(); renderBattle(); return true;
 }
