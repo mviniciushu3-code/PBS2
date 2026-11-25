@@ -459,6 +459,8 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   .battle-replacement-btn:hover{ border-color:var(--amber); background:rgba(255,180,84,0.08); }
   .battle-replacement-btn.selected{ border-color:var(--amber); background:rgba(255,180,84,0.2); box-shadow:0 0 0 1px var(--amber) inset; }
 
+  @media (max-width: 780px){ #battleResetBtn{ width:auto !important; min-width:0 !important; padding:4px 12px !important; font-size:11px !important; display:block; margin-left:auto !important; margin-right:auto !important; border-radius:8px; } }
+  body.force-mobile #battleResetBtn{ width:auto !important; min-width:0 !important; padding:4px 12px !important; font-size:11px !important; display:block; margin-left:auto !important; margin-right:auto !important; border-radius:8px; }
   .battle-poke-name-center{ text-align:center; font-family:var(--font-display); font-size:18px; font-weight:700; margin:0; }
   .lead-selector-row{ display:flex; align-items:center; gap:8px; margin-top:10px; padding:8px 10px; background:var(--panel); border:1px solid var(--line); border-radius:8px; }
   .lead-selector-row label{ font-family:var(--font-mono); font-size:10px; color:var(--text-dim); text-transform:uppercase; }
@@ -707,7 +709,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 42; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 43; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
 const ICON_TRASH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
@@ -2481,7 +2483,7 @@ const ROCK_HEAD_NO_BLOCK = new Set(['steelbeam','mindblown']);
 const OHKO_MOVES = new Set(['fissure','sheer cold','guillotine','horn drill']);
 const GROUNDING_HIT_MOVES = new Set(['smack down','thousand arrows']);
 const FORCE_SWITCH_STATUS = new Set(['roar','whirlwind']);
-const VOL_TARGET_STATUS = new Set(['roar','whirlwind','telekinesis','gastro acid','trick','switcheroo','confuse ray','sweet kiss','swagger','flatter','yawn']);   // golpes de status com alvo (no Doubles o alvo é escolhido)
+const VOL_TARGET_STATUS = new Set(['roar','whirlwind','telekinesis','gastro acid','trick','switcheroo','confuse ray','sweet kiss','swagger','flatter','yawn','entrainment']);   // golpes de status com alvo (no Doubles o alvo é escolhido)
 function telekinesisImmune(p){ const n = normKey((p && p.name) || ''); return n === 'gengar-mega' || n === 'mega gengar' || /^(diglett|dugtrio)(-|$)/.test(n) || n === 'sandygast' || n === 'palossand'; }
 function isMegaGengar(p){ const n = normKey((p && p.name) || ''); return n === 'gengar-mega' || n === 'mega gengar'; }
 function volOf(side, idx){ const S = battle.sides[side]; if(!S.vol) S.vol = {}; return S.vol[idx] || (S.vol[idx] = {}); }
@@ -2548,7 +2550,7 @@ function volOnEnter(side, oldIdx, newIdx, batonPass){
     if(old.tele > 0 && !isMegaGengar(battle.sharedPrepared[newIdx])) nv.tele = old.tele;
     if(old.confused > 0) nv.confused = old.confused;
   }
-  const changed = !!(old.ingrain || old.magnetRise > 0 || old.tele > 0 || old.smacked || old.gastro || old.traced) || Object.keys(S.vol[newIdx] || {}).length > 0 || Object.keys(nv).length > 0;
+  const changed = !!(old.ingrain || old.magnetRise > 0 || old.tele > 0 || old.smacked || old.gastro || old.traced || old.abil) || Object.keys(S.vol[newIdx] || {}).length > 0 || Object.keys(nv).length > 0;
   if(oldIdx != null && oldIdx !== newIdx) delete S.vol[oldIdx];
   S.vol[newIdx] = nv;
   if(changed) refreshBattlePrepared();
@@ -2562,6 +2564,7 @@ function abilityOverrideFor(pokeIdx){
   const sd = fieldSideOf(pokeIdx); if(!sd) return null;
   const v = volPeek(sd, pokeIdx);
   if(v.gastro) return '';
+  if(v.abil) return v.abil;   // Entrainment / Mummy / Wandering Spirit / Power of Alchemy
   if(v.traced) return v.traced;
   return null;
 }
@@ -2713,6 +2716,89 @@ function gastroAcidApply(aSd, aIdx, tSd, tIdx, attIgnores){
   v.gastro = true; refreshBattlePrepared();
   return { text: pre + `A habilidade <b>${q.ability}</b> de <b>${q.name}</b> foi suprimida!` };
 }
+// ===== Troca de habilidade em campo (Entrainment, Mummy, Wandering Spirit, Power of Alchemy) — Singles e Doubles =====
+// vol.abil = habilidade nova; vol.abilSrc = o que causou. Some quando o Pokémon sai de campo (volta à habilidade original).
+const ENTRAINMENT_TARGET_FAIL = new Set(['truant','multitype','zen mode','stance change','schooling','comatose','shields down','disguise','rks system','battle bond','power construct','ice face','gulp missile','as one','zero to hero','commander','orichalcum pulse','hadron engine']);
+const ENTRAINMENT_USER_FAIL = new Set(['trace','forecast','flower gift','zen mode','illusion','imposter','power of alchemy','receiver','disguise','power construct','ice face','hunger switch','gulp missile','neutralizing gas','as one','zero to hero','commander']);
+const MUMMY_IMMUNE = new Set(['as one','battle bond','comatose','commander','disguise','gulp missile','ice face','lingering aroma','multitype','power construct','rks system','schooling','shields down','stance change','zen mode','zero to hero','mummy']);
+const WANDERING_SPIRIT_FAIL = new Set(['as one','battle bond','comatose','commander','disguise','flower gift','forecast','hunger switch','ice face','illusion','imposter','multitype','neutralizing gas','power of alchemy','receiver','rks system','schooling','shields down','stance change','wonder guard','zen mode','zero to hero','gulp missile']);
+const ALCHEMY_FAIL = new Set(['power of alchemy','receiver','trace','forecast','flower gift','multitype','ice face','illusion','wonder guard','zen mode','imposter','stance change','power construct','schooling','comatose','shields down','disguise','rks system','battle bond','wandering spirit','hunger switch','as one','zero to hero','commander','protosynthesis','quark drive','poison puppeteer']);
+function setFieldAbility(sd, idx, ab, src){ const v = volOf(sd, idx); delete v.traced; v.abil = ab; v.abilSrc = src; refreshBattlePrepared(); }
+// Efeito de entrada da habilidade recebida (clima, terreno, Intimidate), como no Trace. Devolve linhas de log.
+function abilityGainLines(sd, idx){
+  return abilityStartChanges(sd, idx, false).map(c => c.type === 'weather-change' ? LF.weatherChange(c.name, c.weather) : c.type === 'terrain-change' ? LF.terrainChange(c.name, c.terrain) : c.text).filter(Boolean);
+}
+// Entrainment: o alvo recebe a habilidade do usuário. Devolve { text, extra } ou { fail }.
+function entrainmentApply(aSd, aIdx, tSd, tIdx){
+  const up = battle.sharedPrepared[aIdx], tp = battle.sharedPrepared[tIdx];
+  const ua = normKey(up.ability || ''), ta = normKey(tp.ability || '');
+  if(!ua) return { fail: up.name + ' está sem habilidade' };
+  if(ua === ta) return { fail: 'as duas habilidades são iguais' };
+  if(ENTRAINMENT_TARGET_FAIL.has(ta)) return { fail: tp.name + ' tem ' + tp.ability };
+  if(ENTRAINMENT_USER_FAIL.has(ua)) return { fail: up.name + ' tem ' + up.ability };
+  const ab = up.ability;
+  setFieldAbility(tSd, tIdx, ab, 'Entrainment');
+  return { text: LF.abilityChanged(tp.name, ab, 'Entrainment'), extra: abilityGainLines(tSd, tIdx) };
+}
+// Golpe de contato que atingiu o Pokémon (não o substituto e com efeito — imune não conta): Mummy e Wandering Spirit do alvo. Ativa mesmo se o alvo caiu.
+// Devolve as linhas de log (vazio = nada aconteceu). Quem chama deve pegar de novo o atacante/alvo preparados.
+function contactAbilityLines(aSd, aIdx, tSd, tIdx){
+  const ap = battle.sharedPrepared[aIdx], tp = battle.sharedPrepared[tIdx]; if(!ap || !tp) return [];
+  const aa = normKey(ap.ability || ''), ta = normKey(tp.ability || '');
+  if(ta === 'mummy'){
+    if(MUMMY_IMMUNE.has(aa)) return [];
+    setFieldAbility(aSd, aIdx, 'Mummy', 'Mummy');
+    return [LF.abilityChanged(ap.name, 'Mummy', 'Mummy de ' + tp.name)];
+  }
+  if(ta === 'wandering spirit'){
+    if(!aa || aa === 'wandering spirit' || WANDERING_SPIRIT_FAIL.has(aa)) return [];
+    const aAb = ap.ability, tAb = tp.ability;
+    setFieldAbility(aSd, aIdx, tAb, 'Wandering Spirit'); setFieldAbility(tSd, tIdx, aAb, 'Wandering Spirit');
+    const out = [LF.abilitySwap(tp.name, ap.name, tAb, aAb)];
+    if(battle.sides[tSd].hp[tIdx] > 0) abilityGainLines(tSd, tIdx).forEach(t => out.push(t));
+    if(battle.sides[aSd].hp[aIdx] > 0) abilityGainLines(aSd, aIdx).forEach(t => out.push(t));
+    return out;
+  }
+  return [];
+}
+// Power of Alchemy (Doubles): o aliado em campo copia a habilidade de quem acabou de cair. Devolve linhas de log.
+function powerOfAlchemyLines(sd, faintIdx){
+  const fp = battle.sharedPrepared[faintIdx]; if(!fp) return [];
+  const fa = normKey(fp.ability || ''); if(!fa || ALCHEMY_FAIL.has(fa)) return [];
+  const out = [];
+  fieldMons(sd).forEach(j => {
+    if(j === faintIdx || abOf(sd, j) !== 'power of alchemy') return;
+    const jp = battle.sharedPrepared[j];
+    setFieldAbility(sd, j, fp.ability, 'Power of Alchemy');
+    out.push(LF.abilityChanged(jp.name, fp.ability, 'Power of Alchemy'));
+    abilityGainLines(sd, j).forEach(t => out.push(t));
+  });
+  return out;
+}
+// ===== Harvest: no fim do turno, 50% de recuperar a Berry usada (100% no sol forte). A Berry é lembrada mesmo trocando. =====
+function harvestLine(sd, idx){
+  const S = battle.sides[sd], p = battle.sharedPrepared[idx];
+  if(!p || !(S.hp[idx] > 0) || abOf(sd, idx) !== 'harvest') return '';
+  const it = String(p.item || ''); if(!/ berry$/i.test(it.trim()) || !(S.itemUsed && S.itemUsed[idx])) return '';
+  if(!sunOn() && !(battleRandom() < 0.5)) return '';
+  delete S.itemUsed[idx]; refreshBattlePrepared();
+  return LF.harvest(p.name, it);
+}
+// ===== Moonlight / Synthesis / Morning Sun: cura conforme o clima =====
+//  Sem clima ou Strong Winds: 1/2 · sol forte: ×2732/4096 · outro clima: 1/4 (arredondado para baixo).
+//  Cloud Nine / Air Lock = sem clima. Utility Umbrella: o portador ignora chuva e sol (cura 1/2).
+const WEATHER_HEAL_MOVES = new Set(['moonlight','synthesis','morning sun']);
+function weatherHealApply(sd, idx){
+  const S = battle.sides[sd], p = battle.sharedPrepared[idx];
+  if(volPeek(sd, idx).healBlock > 0) return { fail: 'Heal Block' };
+  if(S.hp[idx] >= p.hpMax) return { fail: 'o HP de ' + p.name + ' já está cheio' };
+  let w = weatherSuppressed() ? 'none' : (battle.weather || 'none');
+  if(umbrellaOf(sd, idx) && ['sun','harshsun','rain','heavyrain'].includes(w)) w = 'none';
+  const amt = (w === 'none' || w === 'strongwinds') ? Math.floor(p.hpMax / 2)
+    : (w === 'sun' || w === 'harshsun') ? pokeRound(p.hpMax * 2732 / 4096) : Math.floor(p.hpMax / 4);
+  const b = S.hp[idx]; S.hp[idx] = Math.min(p.hpMax, b + Math.max(1, amt));
+  return { text: LF.healMove(p.name, S.hp[idx] - b, S.hp[idx], p.hpMax) };
+}
 // Singles: tira o Pokémon do lado `side` de campo e põe um aleatório do banco (Roar, Whirlwind, Red Card).
 function singlesDragOut(side){
   const S = battle.sides[side], from = S.activePokeIdx, fromName = battle.sharedPrepared[from].name;
@@ -2777,6 +2863,7 @@ function condList(side, idx){
   add(sub > 0, '🧸', 'Substituto', 'recebe os golpes no lugar do Pokémon', sub > 0 ? sub + ' HP' : '');
   add(v.gastro, '🚫', 'Gastro Acid', 'habilidade suprimida');
   add(v.traced, '🔁', 'Trace', v.traced ? 'copiou ' + v.traced : 'habilidade copiada de um oponente');
+  add(v.abil, '🎭', 'Habilidade trocada', v.abil ? 'agora tem ' + v.abil + ' (' + v.abilSrc + '); volta ao sair de campo' : 'Entrainment, Mummy, Wandering Spirit ou Power of Alchemy');
   const cl = choiceLockOf(side, idx);
   add(cl, '🔒', 'Preso pelo item Choice', cl ? 'só pode usar ' + ((findMoveInfo(cl) || {}).Name || cl) : 'só pode usar o primeiro golpe escolhido');
   add(battle.megaOv && battle.megaOv[idx], MEGA_ICON, 'Mega Evoluído', p ? p.name : '');
@@ -2795,12 +2882,14 @@ function condBadgesHtml(side, idx){
   const rows = (all ? list : on).map(c => `<div class="cond-row${c.on ? '' : ' off'}">${c.icon} <b>${c.label}</b>${c.sub ? ' (' + c.sub + ')' : ''} — ${c.on ? c.text : 'inativo'}</div>`).join('');
   return { head, panel: open ? `<div class="cond-panel">${rows}</div>` : '' };
 }
-// Ao lado do seletor de Status: turnos dormindo / congelado e turnos de veneno grave (com os próximos danos ao segurar/passar o mouse).
+// À esquerda do nome do Pokémon: status não volátil — queimado, paralisado, turnos dormindo / congelado e turnos de veneno grave (com os próximos danos ao segurar/passar o mouse).
 function statusTurnBadgeHtml(side, idx){
   if(!battle || idx == null) return '';
   const S = battle.sides[side], p = battle.sharedPrepared[idx], st = getStatusOf(side, idx); if(!p) return '';
   const esc = t => String(t).replace(/"/g, '&quot;');
-  const badge = (icon, txt, info) => `<span class="hz-badge status-turns" data-cond-info="${esc(info)}" title="${esc(info)}" style="margin-left:6px;">${icon} ${txt}</span>`;
+  const badge = (icon, txt, info) => `<span class="hz-badge status-turns" data-cond-info="${esc(info)}" title="${esc(info)}" style="margin-right:6px;font-size:13px;vertical-align:middle;">${icon}${txt ? ' ' + txt : ''}</span>`;
+  if(st === 'Burned') return badge('🔥', '', 'Queimado: perde 1/16 do HP no fim do turno; dano físico ×0,5.');
+  if(st === 'Paralyzed') return badge('🟡', '', 'Paralisado: Spe ×0,5 e 25% de chance de não agir.');
   if(st === 'Asleep'){ const n = (S.sleepCounter || {})[idx] || 0, rs = S.restSleep && S.restSleep[idx];
     if(rs) return badge('💤', n + '/' + rs, `Dormindo pelo Rest: ${n} de ${rs} turno(s). Acorda no turno seguinte ao último.`);
     return badge('💤', n + '/3', `Dormindo: ${n} turno(s) tentando agir. 25% de chance de acordar por turno; acorda no máximo no 3º.`); }
@@ -2872,6 +2961,16 @@ const CONFUSE_STATUS = { 'confuse ray': null, 'sweet kiss': null, 'swagger': ['A
 const CHOICE_ITEMS = new Set(['choice band','choice specs','choice scarf']);
 function choiceLockOf(side, idx){ if(!battle || idx == null) return null; const v = volPeek(side, idx); return (v.choice && CHOICE_ITEMS.has(heldItem(side, idx))) ? v.choice : null; }
 function choiceBlocks(side, idx, name){ const c = choiceLockOf(side, idx); return !!c && normKey(baseMoveNameFromKey(name || '')) !== c; }
+// Fake Out: só pode ser escolhido no 1º turno do Pokémon em campo. Fora dele o botão fica desativado e a CPU não escolhe.
+function fakeOutBlocks(side, idx, name){
+  if(!battle || !battle.sides || normKey(baseMoveNameFromKey(name || '')) !== 'fake out') return false;
+  const S = battle.sides[side]; if(!S) return false;
+  const ent = battle.format === 'doubles' ? ((S.entry || {})[idx] || 0) : (S.currentEntryTurn || 0);
+  return battle.turn !== ent + 1;
+}
+// Golpe que não pode ser escolhido agora (item Choice ou Fake Out fora do 1º turno).
+function moveLockBlocks(side, idx, name){ return choiceBlocks(side, idx, name) || fakeOutBlocks(side, idx, name); }
+function moveBlockTitle(side, idx, name){ return gravityBlocks(name) ? 'Bloqueado pela Gravity' : (fakeOutBlocks(side, idx, name) ? 'Fake Out só pode ser usado no primeiro turno em campo' : 'Preso no golpe do item Choice'); }
 function choiceLockSet(side, idx, name){ if(CHOICE_ITEMS.has(heldItem(side, idx)) && !volPeek(side, idx).choice) volOf(side, idx).choice = normKey(baseMoveNameFromKey(name || '')); }
 // ===== Rest / Sleep Talk / Yawn =====
 // Rest: HP cheio e dorme exatamente 2 turnos (Early Bird: 1). Cura outros status não voláteis. side.restSleep[idx] = turnos.
@@ -3228,10 +3327,10 @@ function megaBarHtml(side){
     if(unl || !other) mode = 'mega';
   }
   if(!mode) return '';
-  const on = P[idx] === mode, lbl = mode === 'mega' ? `${MEGA_ICON} Mega Evoluir` : '↩️ Reverter Mega';
+  const on = P[idx] === mode, lbl = mode === 'mega' ? `${MEGA_ICON} Mega Evoluir` : `${MEGA_ICON} Reverter Mega`;
   const tStyle = on ? 'border-color:var(--amber);color:var(--amber);' : '';
   const turnBtn = human ? `<button type="button" class="battle-toolbar-btn mega-btn" data-mega-side="${side}" data-mega-mode="${mode}" data-mega-when="turn" style="${tStyle}" title="${mode === 'mega' ? 'Mega Evolui no início do turno (depois das trocas, antes dos golpes)' : 'Volta à forma normal no início do turno'}">${lbl}${on ? ' ✓' : ''}</button>` : '';
-  const nowBtn = arc ? `<button type="button" class="battle-toolbar-btn mega-btn" data-mega-side="${side}" data-mega-mode="${mode}" data-mega-when="now" title="Modo Arceus: ${mode === 'mega' ? 'Mega Evolui' : 'reverte'} AGORA, sem esperar o turno">⏱️ ${mode === 'mega' ? 'Mega Agora' : 'Reverter Agora'}</button>` : '';
+  const nowBtn = arc ? `<button type="button" class="battle-toolbar-btn mega-btn" data-mega-side="${side}" data-mega-mode="${mode}" data-mega-when="now" title="Modo Arceus: ${mode === 'mega' ? 'Mega Evolui' : 'reverte'} AGORA, sem esperar o turno">${MEGA_ICON} ${mode === 'mega' ? 'Mega Agora' : 'Reverter Agora'}</button>` : '';
   return `<div class="mega-bar" style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:6px 0;">${turnBtn}${nowBtn}</div>`;
 }
 // ⏱️ Agora (modo Arceus): Mega / reversão na hora, fora do turno.
@@ -3582,7 +3681,7 @@ function sideHasNoPP(side){
   const pool = s.pp[s.activePokeIdx] || {};
   const keys = Object.keys(pool);
   if(keys.length === 0) return false;
-  return keys.every(k => (battlePPEnabled && pool[k] <= 0) || gravityBlocks(k) || choiceBlocks(side, s.activePokeIdx, k));
+  return keys.every(k => (battlePPEnabled && pool[k] <= 0) || gravityBlocks(k) || moveLockBlocks(side, s.activePokeIdx, k));
 }
 function getBattleMoveByKey(prepared, key){
   if(!prepared) return null;
@@ -3596,7 +3695,7 @@ function defaultActionFor(side){
   if(!act) return null;
   const s = battle.sides[side];
   const pool = s.pp[s.activePokeIdx] || {};
-  const hasPP = k => (!battlePPEnabled || pool[k] === undefined || pool[k] > 0) && !gravityBlocks(k) && !choiceBlocks(side, s.activePokeIdx, k);
+  const hasPP = k => (!battlePPEnabled || pool[k] === undefined || pool[k] > 0) && !gravityBlocks(k) && !moveLockBlocks(side, s.activePokeIdx, k);
   const dm = act.moveResults.find(m => hasPP(baseMoveNameFromKey(m.moveKey)));
   if(dm) return buildAction(side, 'move', dm.moveKey);
   if(sideHasNoPP(side) && act.struggle) return buildAction(side, 'move', act.struggle.moveKey);
@@ -3830,7 +3929,7 @@ function cpuChooseAction(side){
     if(normKey(baseMoveNameFromKey(m.moveKey)) === 'gigaton hammer' && battle.sides[side].lastMoveKey === 'gigaton hammer') return false;
     if(EXPLOSIVE_MOVES.has(normKey(baseMoveNameFromKey(m.moveKey))) && (normKey(active.ability || '') === 'damp' || normKey(opp.ability || '') === 'damp')) return false;
     if(gravityBlocks(m.moveKey)) return false;   // Gravity: não pode ser escolhido
-    if(choiceBlocks(side, battle.sides[side].activePokeIdx, m.moveKey)) return false;   // preso pelo item Choice
+    if(moveLockBlocks(side, battle.sides[side].activePokeIdx, m.moveKey)) return false;   // preso pelo item Choice
     if(!battlePPEnabled) return true;
     const ppKey = baseMoveNameFromKey(m.moveKey);
     const cur = ppPool[ppKey];
@@ -4164,9 +4263,9 @@ function executeAction(action, ordered, actionIdx){
     return { side: action.side, type: 'switch', fromName, toName, weatherChanges, _snap };
   }
   
-  const attacker = getSidePrepared(action.side);
+  let attacker = getSidePrepared(action.side);   // let: Mummy / Wandering Spirit trocam a habilidade no meio do golpe
   const defSide = action.side === 'A' ? 'B' : 'A';
-  const defender = getSidePrepared(defSide);
+  let defender = getSidePrepared(defSide);
   const attackerSideState = battle.sides[action.side];
   const defenderSideState = battle.sides[defSide];
   const attackerActiveIdx = attackerSideState.activePokeIdx;
@@ -4203,6 +4302,10 @@ function executeAction(action, ordered, actionIdx){
       _r._sleepTalkLine = LF.moveText(attacker.name, 'Sleep Talk', `Chamou <b>${_pk.type === 'move' ? _pk.move.moveName : _pk.move.Name}</b>!`);
       return _r;
     }
+    if(WEATHER_HEAL_MOVES.has(moveNameKey)){   // Moonlight / Synthesis / Morning Sun
+      const _h = weatherHealApply(action.side, attackerActiveIdx);
+      return _h.fail ? _failS(_h.fail) : _txtS(_h.text);
+    }
     if(moveNameKey === 'gravity'){
       if(gravityOn()) return _failS('a Gravity já está ativa');
       return _txtS(activateGravity().join(' '));
@@ -4221,7 +4324,7 @@ function executeAction(action, ordered, actionIdx){
       _v.magnetRise = MAGNET_RISE_TURNS; refreshBattlePrepared();
       return _txtS(`${attacker.name} passou a flutuar com eletromagnetismo! (${MAGNET_RISE_TURNS} turnos)${battleGroundedIdx(action.side, attackerActiveIdx) ? ' (mas continua no chão)' : ''}`);
     }
-    if(moveNameKey === 'telekinesis' || moveNameKey === 'gastro acid' || moveNameKey === 'trick' || moveNameKey === 'switcheroo' || moveNameKey === 'yawn' || (moveNameKey in CONFUSE_STATUS) || FORCE_SWITCH_STATUS.has(moveNameKey)){
+    if(moveNameKey === 'telekinesis' || moveNameKey === 'gastro acid' || moveNameKey === 'entrainment' || moveNameKey === 'trick' || moveNameKey === 'switcheroo' || moveNameKey === 'yawn' || (moveNameKey in CONFUSE_STATUS) || FORCE_SWITCH_STATUS.has(moveNameKey)){
       const _dIdx = defenderSideState.activePokeIdx;
       { const _spv = protectionVerdict(moveNameKey, { status: true, foeStatus: true, priority: getMovePriority(action.move.Name), spread: false, contact: false }, Object.assign({ prot: defenderSideState.protected || null }, defenderSideState.sideProt || {}));
         if(_spv.blocked) return { side: action.side, type: 'blocked', attackerName: attacker.name, moveName: action.move.Name, defenderName: defender.name, by: _spv.by }; }
@@ -4258,6 +4361,11 @@ function executeAction(action, ordered, actionIdx){
         if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
         const _g = gastroAcidApply(action.side, attackerActiveIdx, defSide, _dIdx, attackerIgnoresAbility(attacker));
         return _g.fail ? _failS(_g.fail) : _txtS(_g.text);
+      }
+      if(moveNameKey === 'entrainment'){
+        if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
+        const _e = entrainmentApply(action.side, attackerActiveIdx, defSide, _dIdx);
+        return _e.fail ? _failS(_e.fail) : _txtS([_e.text].concat(_e.extra).join(' '));
       }
       // Roar / Whirlwind: o alvo sai e entra um Pokémon aleatório do banco (as armadilhas de entrada agem).
       if(volPeek(defSide, _dIdx).ingrain) return _failS(defender.name + ' está enraizado (Ingrain)');
@@ -4451,11 +4559,6 @@ function executeAction(action, ordered, actionIdx){
     if(battle.turn !== entTurn + 1){
       return { side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: 'Fake Out', reason: 'não é o primeiro turno em campo' };
     }
-    // Fake Out funciona normalmente no 1º turno; só não aplica o flinch se agir depois do oponente atacar.
-    const oppPos = ordered ? ordered.findIndex(a => a.side === defSide) : -1;
-    const oppAct = oppPos >= 0 ? ordered[oppPos] : null;
-    const oppAttackedFirst = !!oppAct && (oppAct.type === 'move' || oppAct.type === 'status-move') && oppPos < actionIdx;
-    if(!oppAttackedFirst) battle.sides[defSide].flinched = true;
   }
 
   if(SUCKER_PUNCH_MOVES.has(moveNameKey)){
@@ -4535,14 +4638,15 @@ function executeAction(action, ordered, actionIdx){
   let subAbsorbed = 0, subBroken = false, focusSashConsumed = false, endureHeld = false, totalDamage = 0, hpDamageDone = 0, lastRes = null, missAt = 0, debrisLayers = 0;
   const _debris = normKey(defender.ability || '') === 'toxic debris' && !attackerIgnoresAbility(attacker) && !!(action.move.detail && action.move.detail.isPhysical);
   const _cRA = (moveInfo && moveInfo.Contact) ? contactRecoilAbility(defender) : null;
-  let contactHurt = 0, focusBandHits = 0;
+  let contactHurt = 0, focusBandHits = 0, hitMove = action.move;
+  const abilNotes = [];
   for(let h = 0; h < nHits; h++){
     // Triple Axel/Kick e Population Bomb: checagem de precisão antes de cada hit. Skill Link: só a checagem inicial.
     if(h > 0 && perHitAcc && !skillLink && battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ missAt = h + 1; break; }
     const hitCrit = battleCritEnabled && Math.floor(battleRandom() * 24) < 1;
     const hitRollIdx = Math.floor(battleRandom() * 16);
     const hitBP = tripleBP ? calcBpFinal(tripleBP[h], action.move.detail.bpMods || []) : overrideBP;
-    const r = computeBattleDamage(attacker, defender, action.move, ROLL_MULTS[hitRollIdx], hitCrit, attackerSideState.stages, defenderSideState.stages, hitBP, attackerStatus, nHits > 1 || !!tripleBP);
+    const r = computeBattleDamage(attacker, defender, hitMove, ROLL_MULTS[hitRollIdx], hitCrit, attackerSideState.stages, defenderSideState.stages, hitBP, attackerStatus, nHits > 1 || !!tripleBP);
     lastRes = r;
     const hpPre = s.hp[s.activePokeIdx];
     let toSub = 0, toHp = 0;
@@ -4565,6 +4669,11 @@ function executeAction(action, ordered, actionIdx){
       attackerSideState.hp[attackerActiveIdx] = Math.max(0, _cb - _cd); contactHurt += _cb - attackerSideState.hp[attackerActiveIdx];
     }
     hits.push({ damage: r.damage, toHp, toSub, roll: ROLL_MULTS[hitRollIdx], rollIdx: hitRollIdx, isCrit: hitCrit, calc: r.calc, hpBefore: hpPre, hpAfter: s.hp[s.activePokeIdx], snap: snapView() });
+    // Mummy / Wandering Spirit: golpe de contato que atingiu o Pokémon (não o substituto). Os próximos hits já usam as habilidades novas.
+    if(moveInfo && moveInfo.Contact && toSub === 0 && r.typeEff > 0){
+      const _cal = contactAbilityLines(action.side, attackerActiveIdx, defSide, s.activePokeIdx);
+      if(_cal.length){ _cal.forEach(t => abilNotes.push(t)); attacker = getSidePrepared(action.side); defender = getSidePrepared(defSide); hitMove = getBattleMoveByKey(attacker, action.move.moveKey) || hitMove; }
+    }
     if(attackerSideState.hp[attackerActiveIdx] <= 0) break;   // o atacante caiu (Rough Skin): ele cai primeiro
     if(s.hp[s.activePokeIdx] <= 0) break;
   }
@@ -4592,6 +4701,7 @@ function executeAction(action, ordered, actionIdx){
   const _contactKO = contactHurt > 0 && attackerSideState.hp[attackerActiveIdx] <= 0;
   if(focusBandHits) hitNote += ` ${defender.name} aguentou com 1 HP (Focus Band)!`;
   if(contactHurt > 0) hitNote += ' ' + LF.contactHurt(attacker.name, _cRA, contactHurt, attackerSideState.hp[attackerActiveIdx], attacker.hpMax);
+  if(abilNotes.length) hitNote += ' ' + abilNotes.join(' ');
   if((hpDamageDone > 0 || subAbsorbed > 0) && heldItem(defSide, s.activePokeIdx) === 'air balloon'){   // o Pokémon ou o substituto levou dano
     useItem(defSide, s.activePokeIdx); refreshBattlePrepared(); hitNote += ` O Air Balloon de ${defender.name} estourou!`;
   }
@@ -4652,6 +4762,13 @@ function executeAction(action, ordered, actionIdx){
     }
   }
 
+  // Fake Out: o flinch é efeito secundário — só se o golpe causou dano ao Pokémon (Ghost imune, substituto: não). Não vale se o alvo já agiu.
+  if(moveNameKey === 'fake out' && dealt > 0 && !subbed && s.hp[s.activePokeIdx] > 0){
+    const oppPos = ordered ? ordered.findIndex(a => a.side === defSide) : -1;
+    const oppAct = oppPos >= 0 ? ordered[oppPos] : null;
+    const oppAttackedFirst = !!oppAct && (oppAct.type === 'move' || oppAct.type === 'status-move') && oppPos < actionIdx;
+    if(!oppAttackedFirst) battle.sides[defSide].flinched = true;
+  }
   const secEffects = (dealt > 0 && !subbed ? applySecondaryEffects(action, attacker, defender, moveInfo) : []).concat(dealt > 0 ? applySelfStatChanges(action, attacker, moveNameKey) : []);
   if(dealt > 0 && !subbed && normKey(defender.ability || '') === 'stamina' && s.hp[s.activePokeIdx] > 0 && canChangeStage(defSide, 'Def', 1)){
     secEffects.push(`${defender.name} ${fmtStageChange(changeStage(defSide, 'Def', 1))} (Stamina)`);
@@ -5115,6 +5232,7 @@ function applyEndOfTurnAbilities(turnLog){
     if(s.hp[idx] <= 0) continue;
     const pr = battle.sharedPrepared[idx];
     if(!pr) continue;
+    { const _hv = harvestLine(side, idx); if(_hv) turnLog.actions.push({ side, type: 'note', text: _hv }); }   // Harvest
     if(normKey(pr.ability || '') === 'speed boost' && canChangeStage(side, 'Spe', 1)){
       const _sr = changeStage(side, 'Spe', 1);
       turnLog.actions.push({ side, type: 'ability-boost', name: pr.name, text: 'Speed Boost: ' + fmtStageChange(_sr) });
@@ -5600,7 +5718,7 @@ function keepOrDefaultAction(side){
       const noPP = battlePPEnabled && pool[ppKey] !== undefined && pool[ppKey] <= 0;
       const gh = prev.type === 'move' && normKey(baseMoveNameFromKey(key)) === 'gigaton hammer' && st.lastMoveKey === 'gigaton hammer';
       const struggleOk = !prev.move.isStruggle || sideHasNoPP(side);
-      if(!noPP && !gh && struggleOk && !gravityBlocks(ppKey) && !choiceBlocks(side, st.activePokeIdx, ppKey)) return rebuilt;
+      if(!noPP && !gh && struggleOk && !gravityBlocks(ppKey) && !moveLockBlocks(side, st.activePokeIdx, ppKey)) return rebuilt;
     }
   }
   return defaultActionFor(side);
@@ -6027,6 +6145,10 @@ const LF = {
   volEnd: (n, what) => `O efeito de <b>${what}</b> em <b>${n}</b> acabou.`,
   dragged: (from, to) => `<b>${from}</b> foi forçado a sair e <b>${to}</b> foi arrastado para o campo!`,
   eelevate: (n, txt) => `Eelevate de <b>${n}</b>: ${txt}.`,
+  abilityChanged: (n, ab, src) => `A habilidade de <b>${n}</b> virou <b>${ab}</b> (${src})!`,
+  abilitySwap: (holder, att, abH, abA) => `<b>${holder}</b> trocou de habilidade com <b>${att}</b> (Wandering Spirit)! ${holder}: <b>${abA}</b> · ${att}: <b>${abH}</b>.`,
+  harvest: (n, berry) => `<b>${n}</b> colheu outra <b>${berry}</b> (Harvest)!`,
+  healMove: (n, h, hpA, max) => `<b>${n}</b> recuperou <span style="color:var(--mint);">${h} HP</span>! (${hpA}/${max})`,
   confuseGain: n => `<b>${n}</b> ficou confuso!`,
   mega: (from, to, ab) => `${MEGA_ICON} <b>${from}</b> Mega Evoluiu para <b>${to}</b>!${ab ? ' (habilidade: ' + ab + ')' : ''}`,
   megaRevert: (from, to) => `↩️ <b>${from}</b> voltou à forma normal (<b>${to}</b>).`,
@@ -6269,14 +6391,14 @@ function topCardMovesHtml(side, c){
     const ppCur = battlePPEnabled ? (ppPool[ppKey] !== undefined ? ppPool[ppKey] : ppMax) : ppMax;
     const noPP = !m.isStruggle && battlePPEnabled && ppCur <= 0;
     const ghBlock = normKey(ppKey) === 'gigaton hammer' && s.lastMoveKey === 'gigaton hammer';
-    const grBlock = !m.isStruggle && (gravityBlocks(ppKey) || choiceBlocks(side, s.activePokeIdx, ppKey));
+    const grBlock = !m.isStruggle && (gravityBlocks(ppKey) || moveLockBlocks(side, s.activePokeIdx, ppKey));
     const acc = _ng ? 101 : battleMoveAccuracy(ppKey, info);
     const rcTag = RECHARGE_MOVES.has(normKey(ppKey)) ? ' 🔋' : '';
     const sel = canAct ? !!(action && action.type === 'move' && action.move.moveKey === m.moveKey) : cpuPreviewMove[side] === m.moveKey;
     const dis = canAct && (noPP || ghBlock || grBlock);
     const t = moveTypeOf(m);
     const attrs = canAct ? `data-side="${side}" data-action-type="move" data-action-value="${m.moveKey}"` : `data-cpu-move="${m.moveKey}" data-cpu-side="${side}"`;
-    return `<button type="button" class="battle-action-btn cpu-move${typeClsOf(t)}${sel ? ' selected' : ''}" ${attrs} style="${typeVarOf(t)}${dis || grBlock ? 'opacity:.4;cursor:not-allowed;' : ''}"${dis ? ' disabled' : ''}${ghBlock ? ' title="Não pode ser usado em turnos seguidos"' : (grBlock ? ` title="${gravityBlocks(ppKey) ? 'Bloqueado pela Gravity' : 'Preso no golpe do item Choice'}"` : '')}>
+    return `<button type="button" class="battle-action-btn cpu-move${typeClsOf(t)}${sel ? ' selected' : ''}" ${attrs} style="${typeVarOf(t)}${dis || grBlock ? 'opacity:.4;cursor:not-allowed;' : ''}"${dis || fakeOutBlocks(side, s.activePokeIdx, ppKey) ? ' disabled' : ''}${ghBlock ? ' title="Não pode ser usado em turnos seguidos"' : (grBlock ? ` title="${moveBlockTitle(side, s.activePokeIdx, ppKey)}"` : '')}>
       ${m.isStruggle ? '' : moveDelX(side, 'damage', m.moveKey)}<div class="battle-action-title">${m.moveName}${rcTag}</div>
       <div class="battle-action-sub">${battlePDText(side, m, overrideBP)}</div>
       <div class="btn-foot"><span>${acc < 101 ? 'Acc ' + acc : ''}</span><span style="${noPP ? 'color:var(--coral)' : ''}">${m.isStruggle ? 'sem PP' : (battlePPEnabled ? ppCur + '/' + ppMax : '')}</span></div>
@@ -6288,12 +6410,12 @@ function topCardMovesHtml(side, c){
     const ppCur = battlePPEnabled ? (ppPool[sm.Name] !== undefined ? ppPool[sm.Name] : ppMax) : ppMax;
     const noPP = battlePPEnabled && ppCur <= 0;
     const acc = battleMoveAccuracy(sm.Name, sm);
-    const grBlock = gravityBlocks(sm.Name) || choiceBlocks(side, s.activePokeIdx, sm.Name);
+    const grBlock = gravityBlocks(sm.Name) || moveLockBlocks(side, s.activePokeIdx, sm.Name);
     const sel = canAct && !!(action && action.type === 'status-move' && normKey(action.move.Name) === normKey(sm.Name));
     const dis = canAct && (noPP || grBlock);
     const t = sm.Type || '';
     const attrs = canAct ? `data-side="${side}" data-action-type="status-move" data-action-value="${sm.Name}"` : `data-cpu-status="${sm.Name}"`;
-    return `<button type="button" class="battle-action-btn cpu-move${typeClsOf(t)}${sel ? ' selected' : ''}" ${attrs} style="${typeVarOf(t)}${dis || grBlock ? 'opacity:.4;cursor:not-allowed;' : (canAct ? '' : 'cursor:default;')}"${dis ? ' disabled' : ''}${grBlock ? ` title="${gravityBlocks(sm.Name) ? 'Bloqueado pela Gravity' : 'Preso no golpe do item Choice'}"` : ''}>
+    return `<button type="button" class="battle-action-btn cpu-move${typeClsOf(t)}${sel ? ' selected' : ''}" ${attrs} style="${typeVarOf(t)}${dis || grBlock ? 'opacity:.4;cursor:not-allowed;' : (canAct ? '' : 'cursor:default;')}"${dis ? ' disabled' : ''}${grBlock ? ` title="${moveBlockTitle(side, s.activePokeIdx, sm.Name)}"` : ''}>
       ${moveDelX(side, 'status', sm.Name)}<div class="battle-action-title">${sm.Name}</div>
       <div class="battle-action-sub">Status</div>
       <div class="btn-foot"><span>${acc < 101 ? 'Acc ' + acc : ''}</span><span style="${noPP ? 'color:var(--coral)' : ''}">${battlePPEnabled ? ppCur + '/' + ppMax : ''}</span></div>
@@ -6448,9 +6570,9 @@ function battleSideCardInner(side){
       }
       const sub = subParts.join(' · ');
       const ghBlock = normKey(ppKey) === 'gigaton hammer' && s.lastMoveKey === 'gigaton hammer';
-      const grBlock = gravityBlocks(ppKey) || choiceBlocks(side, s.activePokeIdx, ppKey);
+      const grBlock = gravityBlocks(ppKey) || moveLockBlocks(side, s.activePokeIdx, ppKey);
       const _t = moveTypeOf(m);
-      const btnStyle = (noPP || ghBlock || grBlock) ? `style="${typeVarOf(_t)}opacity:.4;cursor:not-allowed;" disabled${ghBlock ? ' title="Não pode ser usado em turnos seguidos"' : (grBlock ? ` title="${gravityBlocks(ppKey) ? 'Bloqueado pela Gravity' : 'Preso no golpe do item Choice'}"` : '')}` : `style="${typeVarOf(_t)}"`;
+      const btnStyle = (noPP || ghBlock || grBlock) ? `style="${typeVarOf(_t)}opacity:.4;cursor:not-allowed;" disabled${ghBlock ? ' title="Não pode ser usado em turnos seguidos"' : (grBlock ? ` title="${moveBlockTitle(side, s.activePokeIdx, ppKey)}"` : '')}` : `style="${typeVarOf(_t)}"`;
       const ppColor = noPP ? 'color:var(--coral)' : '';
       allMoveBtns.push(`<button type="button" class="battle-action-btn${typeClsOf(_t)}${sel?' selected':''}" data-side="${side}" data-action-type="move" data-action-value="${m.moveKey}" ${btnStyle}>
         ${moveDelX(side, 'damage', m.moveKey)}<div class="battle-action-title">${m.moveName}${rcTag}</div>
@@ -6467,8 +6589,8 @@ function battleSideCardInner(side){
       const subParts = [];
       const sub = subParts.join(' · ');
       const _st = sm.Type || '';
-      const grBlock = gravityBlocks(sm.Name) || choiceBlocks(side, s.activePokeIdx, sm.Name);
-      const btnStyle = (noPP || grBlock) ? `style="${typeVarOf(_st)}opacity:.4;cursor:not-allowed;" disabled${grBlock ? ` title="${gravityBlocks(sm.Name) ? 'Bloqueado pela Gravity' : 'Preso no golpe do item Choice'}"` : ''}` : `style="${typeVarOf(_st)}"`;
+      const grBlock = gravityBlocks(sm.Name) || moveLockBlocks(side, s.activePokeIdx, sm.Name);
+      const btnStyle = (noPP || grBlock) ? `style="${typeVarOf(_st)}opacity:.4;cursor:not-allowed;" disabled${grBlock ? ` title="${moveBlockTitle(side, s.activePokeIdx, sm.Name)}"` : ''}` : `style="${typeVarOf(_st)}"`;
       const ppColor = noPP ? 'color:var(--coral)' : '';
       const _sAcc = battleMoveAccuracy(sm.Name, sm);
       allMoveBtns.push(`<button type="button" class="battle-action-btn${typeClsOf(_st)}${sel?' selected':''}" data-side="${side}" data-action-type="status-move" data-action-value="${sm.Name}" ${btnStyle}>
@@ -6606,7 +6728,7 @@ function battleSideCardInner(side){
   const statusColors = {Healthy:'#6FE3B4', Poisoned:'#A855F7', 'Badly Poisoned':'#7C3AED', Burned:'#FF6B5C', Paralyzed:'#FFB454', Asleep:'#9198AA', Frozen:'#60A5FA'};
   const statusVal = currentStatus;
   const statusOptionsHtml = availableStatuses.map(st => `<option value="${st}" ${st===statusVal?'selected':''}>${st}</option>`).join('');
-  const statusHtml = `<div class="battle-status-row"><label>Status</label><select data-status-side="${side}" data-status-idx="${s.activePokeIdx}" ${battleManual.status ? '' : 'disabled title="Ative ⚙️ → Arceus → Status manual para editar"'} style="border-color:${statusColors[statusVal]||'#6FE3B4'}55;">${statusOptionsHtml}</select>${statusTurnBadgeHtml(side, s.activePokeIdx)}</div>`;
+  const statusHtml = `<div class="battle-status-row"><label>Status</label><select data-status-side="${side}" data-status-idx="${s.activePokeIdx}" ${battleManual.status ? '' : 'disabled title="Ative ⚙️ → Arceus → Status manual para editar"'} style="border-color:${statusColors[statusVal]||'#6FE3B4'}55;">${statusOptionsHtml}</select></div>`;
 
   const _hk = side + ':' + s.activePokeIdx;
   const _hf = hpAnimPrev[_hk] !== undefined ? hpAnimPrev[_hk] : hp;
@@ -6618,7 +6740,7 @@ function battleSideCardInner(side){
     <span class="hp-pct-big" style="color:${_corOf(_pctOf(_hf))};">(${_pctOf(_hf)}%)</span>
   </div>`;
   const _cond = condBadgesHtml(side, s.activePokeIdx);
-  const nameHpHtml = `<div class="battle-poke-name-center">${active.name}</div>
+  const nameHpHtml = `<div class="battle-poke-name-center">${statusTurnBadgeHtml(side, s.activePokeIdx)}${active.name}</div>
   <div data-hp-anim="${_hf},${hp},${active.hpMax}" data-hp-side="${skey(side)}">${hpText}${battleHpBarHtml(_hf, active.hpMax)}</div>${(s.sub || 0) > 0 ? `<div style="text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--amber);margin-top:4px;">🧸 Substituto: ${s.sub} HP</div>` : ''}${isCursed(s, s.activePokeIdx) ? `<div style="text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--violet,#A855F7);margin-top:4px;">👻 Amaldiçoado (−¼ HP por turno)</div>` : ''}`;
 
   let contentHtml;
@@ -6876,7 +6998,7 @@ function manualChangeField(idx, field, value){
   const p = currentPokemons[idx]; if(!p || !battle) return;
   if(field === 'item') p.item = value; else { p.ability = value; p.abilityUsed = value; p._manualAb = value; }
   // habilidade trocada à mão substitui Trace / Gastro Acid deste Pokémon em campo
-  { const _fs = fieldSideOf(idx); if(field === 'ability' && _fs){ const v = volOf(_fs, idx); delete v.traced; delete v.gastro; } }
+  { const _fs = fieldSideOf(idx); if(field === 'ability' && _fs){ const v = volOf(_fs, idx); delete v.traced; delete v.gastro; delete v.abil; delete v.abilSrc; } }
   refreshBattlePrepared();
   const actions = [];
   const prep = battle.sharedPrepared[idx];
@@ -9324,7 +9446,8 @@ function dContinue(start){
 function dTrackFaints(){
   ['A','B'].forEach(sd => { const S = dS(sd); S.roster.forEach(i => {
     const alive = S.hp[i] > 0, was = S.prevAlive[i];
-    if(was === true && !alive){ S.faintCount = (S.faintCount || 0) + 1; S.semis[i] = null; S.subs[i] = 0; S.rech[i] = false; }
+    if(was === true && !alive){ S.faintCount = (S.faintCount || 0) + 1; S.semis[i] = null; S.subs[i] = 0; S.rech[i] = false;
+      if((S.active || []).includes(i)) powerOfAlchemyLines(sd, i).forEach(t => dLog(t)); }   // Power of Alchemy do aliado
     S.prevAlive[i] = alive;
   }); });
 }
@@ -9437,8 +9560,8 @@ function dMoveAct(a, order){
   else if(rk === 'steelbeam') recoilBase = Math.max(1, Math.ceil(att.hpMax / 2));
   else if(total > 0 && RECOIL_MOVES_N[rk]){ const rf = RECOIL_MOVES_N[rk]; recoilBase = Math.max(1, Math.round(total * rf[0] / rf[1])); }
   if(recoilBase > 0 && S.hp[idx] > 0){
-    const ab = normKey(att.ability || '');
-    if(ab === 'magic guard' || (!m.isStruggle && !ROCK_HEAD_NO_BLOCK.has(rk) && ab === 'rock head')) dLog(`${nm} não sofre recuo (${att.ability}).`);
+    const ab = normKey(dP(idx).ability || '');   // habilidade atual (ex.: Rock Head que virou Mummy sofre recuo)
+    if(ab === 'magic guard' || (!m.isStruggle && !ROCK_HEAD_NO_BLOCK.has(rk) && ab === 'rock head')) dLog(`${nm} não sofre recuo (${dP(idx).ability}).`);
     else { const b = S.hp[idx]; S.hp[idx] = Math.max(0, b - recoilBase); dLog(`${nm} sofreu <b>${b - S.hp[idx]}</b> de recuo (${b} → ${S.hp[idx]}/${att.hpMax}).${S.hp[idx] <= 0 ? ' Nocauteado!' : ''}`); }
   }
   if(SELF_KO_MOVES.has(mk) && S.hp[idx] > 0){ S.hp[idx] = 0; dLog(`${nm} se autodestruiu!`); }
@@ -9507,8 +9630,9 @@ function dSec(sd, idx, tSd, tIdx, info, mk){
 }
 function dHit(a, tSd, tIdx, o){
   const sd = a.side, idx = a.idx, S = dS(sd), T = dS(tSd);
-  const att = dP(idx), def = dP(tIdx), m = a.move, mk = o.mk, info = o.info;
-  const mv = (o.spread && att.sprMap && att.sprMap[m.moveKey]) ? att.sprMap[m.moveKey] : m;
+  let att = dP(idx), def = dP(tIdx);   // let: Mummy / Wandering Spirit trocam a habilidade no meio do golpe
+  const m = a.move, mk = o.mk, info = o.info;
+  let mv = (o.spread && att.sprMap && att.sprMap[m.moveKey]) ? att.sprMap[m.moveKey] : m;
   const nm = dNm(sd, idx), dn = dNm(tSd, tIdx), res = { dealt: 0, hit: false };
   const sp = !!o.spread, flushHead = () => { if(o.headTxt && !o.headDone) dLog(o.headTxt); o.headDone = true; };
   { const _pv = protectionVerdict(mk, { status: false, spread: dMoveKind(m, false) === 'spread', priority: getMovePriority(m.moveKey), contact: !!(info && info.Contact) }, { prot: T.prot[tIdx] || null, wide: T.wide, quick: T.quick, crafty: false, mat: T.mat });
@@ -9569,7 +9693,7 @@ function dHit(a, tSd, tIdx, o){
   const hpBefore = T.hp[tIdx], atkStatus = getStatusOf(sd, idx);
   let subAbs = 0, hpDone = 0, totalDmg = 0, lastRes = null, sash = false, endured = false, crit = false, lastRoll = 1, hitsDone = 0, missAt = 0, debrisLayers = 0;
   const debris = dAb === 'toxic debris' && !attackerIgnoresAbility(att) && !!(m.detail && m.detail.isPhysical) && tSd !== sd;
-  const cRA = (info && info.Contact) ? contactRecoilAbility(def) : null; let cHurt = 0, fband = 0;
+  const cRA = (info && info.Contact) ? contactRecoilAbility(def) : null; let cHurt = 0, fband = 0; const abilN = [];
   const hitRecs = [];
   for(let h = 0; h < nHits; h++){
     // Triple Axel/Kick e Population Bomb: precisão antes de cada hit (Skill Link: só a inicial).
@@ -9594,6 +9718,11 @@ function dHit(a, tSd, tIdx, o){
     // Rough Skin / Iron Barbs: cada hit de contato que acerta o Pokémon (não o substituto), mesmo com 0 de dano
     if(cRA && !hitSub && S.hp[idx] > 0 && normKey(att.ability || '') !== 'magic guard'){ const b = S.hp[idx]; S.hp[idx] = Math.max(0, b - Math.max(1, Math.floor(att.hpMax / 8))); cHurt += b - S.hp[idx]; }
     hitRecs.push({ damage: r.damage, rollIdx: ri, isCrit: hc, calc: r.calc, hpBefore: _hb, hpAfter: T.hp[tIdx] });
+    // Mummy / Wandering Spirit: golpe de contato que atingiu o Pokémon (não o substituto). Os próximos hits já usam as habilidades novas.
+    if(info && info.Contact && !hitSub && tIdx !== idx && r.typeEff > 0){
+      const cal = contactAbilityLines(sd, idx, tSd, tIdx);
+      if(cal.length){ cal.forEach(t => abilN.push(t)); att = dP(idx); def = dP(tIdx); mv = (o.spread && att.sprMap && att.sprMap[m.moveKey]) || getBattleMoveByKey(att, m.moveKey) || mv; }
+    }
     if(S.hp[idx] <= 0) break;   // o atacante caiu (Rough Skin): ele cai primeiro
     if(T.hp[tIdx] <= 0) break;
   }
@@ -9615,6 +9744,7 @@ function dHit(a, tSd, tIdx, o){
   { const _fo = { nohead: sp || !!o.headDone }; dLog(fmtDamageHtml(_rec, _fo), fmtDamageHtml(Object.assign({}, _rec, { _headOnly: true, _hitsShown: 0 }), _fo)); } o.headDone = true;   // MESMO formatador do Singles
   if(fband) dLog(`${dn} aguentou com 1 HP (Focus Band)!`);
   if(cHurt > 0) dLog(LF.contactHurt(att.name, cRA, cHurt, S.hp[idx], att.hpMax));
+  abilN.forEach(t => dLog(t));
   if(debrisLayers) dLog(`Toxic Debris de <b>${def.name}</b> espalhou Toxic Spikes no campo de <b>${sideTitle(sd)}</b> (camada ${hazardsOf(sd).tspikes}/2).`);
   if(HAZARD_ON_HIT[mk] && S.hp[idx] > 0 && setHazard(tSd, HAZARD_ON_HIT[mk])) dLog(hazardSetText(tSd, HAZARD_ON_HIT[mk]));
   if(HAZARD_CLEAR_USER.has(mk) && dealt > 0 && clearHazards(sd)) dLog(`As armadilhas do campo de <b>${sideTitle(sd)}</b> foram removidas!`);
@@ -9639,7 +9769,7 @@ function dHit(a, tSd, tIdx, o){
     if(n > b){ S.hp[idx] = n; dLog(`${nm} drenou ${n - b} HP (${b} → ${n}/${att.hpMax}).`); }
   }
   if(!subbed && getStatusOf(tSd, tIdx) === 'Frozen' && eff > 0 && ((info && info.Type === 'Fire') || THAW_MOVES.has(mk))){ T.status[tIdx] = 'Healthy'; T.frozenCounter[tIdx] = 0; dLog(`${dn} descongelou!`); }
-  if(mk === 'fake out' && dealt > 0){ const x = o.order.find(z => z.idx === tIdx && z.side === tSd); if(!x || !x.done) T.flinch[tIdx] = true; }
+  if(mk === 'fake out' && dealt > 0 && !subbed){ const x = o.order.find(z => z.idx === tIdx && z.side === tSd); if(!x || !x.done) T.flinch[tIdx] = true; }
   if(dealt > 0 && !subbed && T.hp[tIdx] > 0){
     dSec(sd, idx, tSd, tIdx, info, mk);
     if(dAb === 'stamina') dWith(tSd, tIdx, () => { if(canChangeStage(tSd, 'Def', 1)) dLog(`${dn} ${fmtStageChange(changeStage(tSd, 'Def', 1))} (Stamina).`); });
@@ -9681,6 +9811,10 @@ function dStatusAct(a){
     const sub = { side: sd, slot: a.slot, idx, type: pk.type, move: pk.move, priority: 0, speed: 0, tgt: ft ? { sd: o, slot: ft.slot } : null, noPP: true, viaSleepTalk: true };
     return pk.type === 'move' ? dMoveAct(sub, D.ctx ? D.ctx.order : [sub]) : dStatusAct(sub);
   }
+  if(WEATHER_HEAL_MOVES.has(mk)){   // Moonlight / Synthesis / Morning Sun
+    const h = weatherHealApply(sd, idx); if(h.fail) return fail(h.fail);
+    dLog(LF.moveText(att.name, m.Name, h.text)); return null;
+  }
   if(mk === 'gravity'){
     if(gravityOn()) return fail('a Gravity já está ativa');
     const gl = activateGravity(); dLog(LF.moveText(att.name, m.Name, gl[0])); gl.slice(1).forEach(t => dLog(t)); return null;
@@ -9697,7 +9831,7 @@ function dStatusAct(a){
     v.magnetRise = MAGNET_RISE_TURNS; refreshBattlePrepared();
     dLog(LF.moveText(att.name, m.Name, `${att.name} passou a flutuar com eletromagnetismo! (${MAGNET_RISE_TURNS} turnos)${battleGroundedIdx(sd, idx) ? ' (mas continua no chão)' : ''}`)); return null;
   }
-  if(mk === 'telekinesis' || mk === 'gastro acid' || mk === 'trick' || mk === 'switcheroo' || mk === 'yawn' || (mk in CONFUSE_STATUS) || FORCE_SWITCH_STATUS.has(mk)){
+  if(mk === 'telekinesis' || mk === 'gastro acid' || mk === 'entrainment' || mk === 'trick' || mk === 'switcheroo' || mk === 'yawn' || (mk in CONFUSE_STATUS) || FORCE_SWITCH_STATUS.has(mk)){
     // alvo escolhido (nunca o próprio usuário); sem alvo válido => primeiro oponente em campo
     const foes = dActives(o);
     let t = (a.tgt && !(a.tgt.sd === sd && S.active[a.tgt.slot] === idx)) ? a.tgt : null;
@@ -9743,6 +9877,12 @@ function dStatusAct(a){
       const g = gastroAcidApply(sd, idx, t.sd, tIdx, attackerIgnoresAbility(att));
       if(g.fail) return fail(g.fail);
       dLog(LF.moveText(att.name, m.Name, g.text)); return null;
+    }
+    if(mk === 'entrainment'){
+      if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
+      const e = entrainmentApply(sd, idx, t.sd, tIdx);
+      if(e.fail) return fail(e.fail);
+      dLog(LF.moveText(att.name, m.Name, e.text)); e.extra.forEach(x => dLog(x)); return null;
     }
     // Roar / Whirlwind: o alvo sai e entra um Pokémon aleatório do banco (as armadilhas de entrada agem).
     if(volPeek(t.sd, tIdx).ingrain) return fail(tp.name + ' está enraizado (Ingrain)');
@@ -9894,6 +10034,7 @@ function dEndTurn(){
     if(S.hp[idx] > 0 && isCursed(S, idx) && !mg){ const cd = curseTick(p); S.hp[idx] = Math.max(0, S.hp[idx] - cd); const _ct = `${dNm(sd, idx)} sofreu ${cd} de maldição (${S.hp[idx]}/${max})${S.hp[idx] <= 0 ? ' — nocauteado!' : ''}`; dLog(_ct, _ct); }
     if(S.hp[idx] <= 0) return;
     const ab = normKey(p.ability || '');
+    { const hv = harvestLine(sd, idx); if(hv) dLog(hv); }   // Harvest
     if(ab === 'speed boost') dWith(sd, idx, () => { if(canChangeStage(sd, 'Spe', 1)) dLog(`${dNm(sd, idx)} Speed Boost: ${fmtStageChange(changeStage(sd, 'Spe', 1))}.`); });
     if(ab === 'solar power' && sunOnFor(sd, idx) && !weatherEndsThisTurn()){ const b = S.hp[idx], d = Math.min(b, Math.max(1, Math.floor(max / 8))); S.hp[idx] = b - d; dLog(`${dNm(sd, idx)} Solar Power: −${d} HP.${S.hp[idx] <= 0 ? ' Nocauteado!' : ''}`); }
     if(ab === 'dry skin' && !umbrellaOf(sd, idx)){
@@ -10039,7 +10180,7 @@ function dCpuReplacePick(sd){
 function dCpuChoose(sd, slot){
   const S = dS(sd), idx = S.active[slot], p = dP(idx), o = dOpp(sd), st = getStatusOf(sd, idx);
   const foes = dActives(o), ally = dActives(sd).filter(x => x.idx !== idx);
-  const pool = S.pp[idx] || {}, hasPP = k => (!battlePPEnabled || pool[k] === undefined || pool[k] > 0) && !gravityBlocks(k) && !choiceBlocks(sd, idx, k);
+  const pool = S.pp[idx] || {}, hasPP = k => (!battlePPEnabled || pool[k] === undefined || pool[k] > 0) && !gravityBlocks(k) && !moveLockBlocks(sd, idx, k);
   let best = null, bestScore = -1;
   const cand = (score, ch) => { score += Math.random() * 0.02; if(score > bestScore){ bestScore = score; best = ch; } };
   const frac = (tSd, tIdx, mv, base) => {
