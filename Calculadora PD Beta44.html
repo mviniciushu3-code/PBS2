@@ -709,7 +709,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 43; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 44; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
 const ICON_TRASH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
@@ -2728,8 +2728,19 @@ function setFieldAbility(sd, idx, ab, src){ const v = volOf(sd, idx); delete v.t
 function abilityGainLines(sd, idx){
   return abilityStartChanges(sd, idx, false).map(c => c.type === 'weather-change' ? LF.weatherChange(c.name, c.weather) : c.type === 'terrain-change' ? LF.terrainChange(c.name, c.terrain) : c.text).filter(Boolean);
 }
-// Entrainment: o alvo recebe a habilidade do usuário. Devolve { text, extra } ou { fail }.
-function entrainmentApply(aSd, aIdx, tSd, tIdx){
+// Entrainment: o alvo recebe a habilidade do usuário. Magic Bounce reflete (a menos que o usuário ignore habilidades,
+// ex. Mold Breaker): aí quem usou recebe a habilidade de quem refletiu. Devolve { text, extra } ou { fail }.
+function entrainmentApply(aSd, aIdx, tSd, tIdx, attIgnores){
+  let pre = '';
+  if(normKey(battle.sharedPrepared[tIdx].ability || '') === 'magic bounce' && !attIgnores){
+    pre = `<b>${battle.sharedPrepared[tIdx].name}</b> refletiu o Entrainment com Magic Bounce! `;
+    [aSd, aIdx, tSd, tIdx] = [tSd, tIdx, aSd, aIdx];
+  }
+  const r = entrainmentCore(aSd, aIdx, tSd, tIdx);
+  if(r.fail) return { fail: (pre ? 'refletido por Magic Bounce; ' : '') + r.fail };
+  return { text: pre + r.text, extra: r.extra };
+}
+function entrainmentCore(aSd, aIdx, tSd, tIdx){
   const up = battle.sharedPrepared[aIdx], tp = battle.sharedPrepared[tIdx];
   const ua = normKey(up.ability || ''), ta = normKey(tp.ability || '');
   if(!ua) return { fail: up.name + ' está sem habilidade' };
@@ -2882,7 +2893,7 @@ function condBadgesHtml(side, idx){
   const rows = (all ? list : on).map(c => `<div class="cond-row${c.on ? '' : ' off'}">${c.icon} <b>${c.label}</b>${c.sub ? ' (' + c.sub + ')' : ''} — ${c.on ? c.text : 'inativo'}</div>`).join('');
   return { head, panel: open ? `<div class="cond-panel">${rows}</div>` : '' };
 }
-// À esquerda do nome do Pokémon: status não volátil — queimado, paralisado, turnos dormindo / congelado e turnos de veneno grave (com os próximos danos ao segurar/passar o mouse).
+// À esquerda do nome do Pokémon: status não volátil — queimado, paralisado, envenenado, turnos dormindo / congelado e turnos de veneno grave (com os próximos danos ao segurar/passar o mouse).
 function statusTurnBadgeHtml(side, idx){
   if(!battle || idx == null) return '';
   const S = battle.sides[side], p = battle.sharedPrepared[idx], st = getStatusOf(side, idx); if(!p) return '';
@@ -2890,6 +2901,7 @@ function statusTurnBadgeHtml(side, idx){
   const badge = (icon, txt, info) => `<span class="hz-badge status-turns" data-cond-info="${esc(info)}" title="${esc(info)}" style="margin-right:6px;font-size:13px;vertical-align:middle;">${icon}${txt ? ' ' + txt : ''}</span>`;
   if(st === 'Burned') return badge('🔥', '', 'Queimado: perde 1/16 do HP no fim do turno; dano físico ×0,5.');
   if(st === 'Paralyzed') return badge('🟡', '', 'Paralisado: Spe ×0,5 e 25% de chance de não agir.');
+  if(st === 'Poisoned') return badge('🟣', '', 'Envenenado: perde 1/8 do HP no fim do turno.');
   if(st === 'Asleep'){ const n = (S.sleepCounter || {})[idx] || 0, rs = S.restSleep && S.restSleep[idx];
     if(rs) return badge('💤', n + '/' + rs, `Dormindo pelo Rest: ${n} de ${rs} turno(s). Acorda no turno seguinte ao último.`);
     return badge('💤', n + '/3', `Dormindo: ${n} turno(s) tentando agir. 25% de chance de acordar por turno; acorda no máximo no 3º.`); }
@@ -4364,7 +4376,7 @@ function executeAction(action, ordered, actionIdx){
       }
       if(moveNameKey === 'entrainment'){
         if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
-        const _e = entrainmentApply(action.side, attackerActiveIdx, defSide, _dIdx);
+        const _e = entrainmentApply(action.side, attackerActiveIdx, defSide, _dIdx, attackerIgnoresAbility(attacker));
         return _e.fail ? _failS(_e.fail) : _txtS([_e.text].concat(_e.extra).join(' '));
       }
       // Roar / Whirlwind: o alvo sai e entra um Pokémon aleatório do banco (as armadilhas de entrada agem).
@@ -9880,7 +9892,7 @@ function dStatusAct(a){
     }
     if(mk === 'entrainment'){
       if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
-      const e = entrainmentApply(sd, idx, t.sd, tIdx);
+      const e = entrainmentApply(sd, idx, t.sd, tIdx, attackerIgnoresAbility(att));
       if(e.fail) return fail(e.fail);
       dLog(LF.moveText(att.name, m.Name, e.text)); e.extra.forEach(x => dLog(x)); return null;
     }
