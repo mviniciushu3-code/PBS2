@@ -715,7 +715,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 45; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 46; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
 const ICON_TRASH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
@@ -2621,6 +2621,7 @@ const ENTRY_WEATHER_AB = {'Drizzle':'rain','Drought':'sun','Orichalcum Pulse':'s
 const ENTRY_TERRAIN_AB = {'Electric Surge':'electric','Hadron Engine':'electric','Grassy Surge':'grassy','Misty Surge':'misty','Psychic Surge':'psychic'};
 function abilityStartChanges(sd, idx, afterFaint){
   const out = [], p = battle.sharedPrepared[idx]; if(!p || !(battle.sides[sd].hp[idx] > 0)) return out;
+  syncWeatherSuppression();   // Cloud Nine / Air Lock entrou ou saiu
   const v = volOf(sd, idx); if(v.started === p.ability) return out;   // essa habilidade já fez o efeito de entrada nesta estadia em campo
   v.started = p.ability;
   const ab = p.ability, startTurn = battle.turn + (afterFaint ? 1 : 0);
@@ -2633,6 +2634,9 @@ function abilityStartChanges(sd, idx, afterFaint){
   });
   if(env) refreshBattlePrepared();
   if(normKey(ab || '') === 'intimidate') intimidateLines(sd, idx).forEach(t => out.push({ type: 'note', text: t }));
+  if(normKey(ab || '') === 'screen cleaner'){ const g = clearScreens('A').concat(clearScreens('B')); if(g.length) out.push({ type: 'note', text: LF.screenCleaner(p.name, [...new Set(g)]) }); }
+  if(normKey(ab || '') === 'anticipation' && anticipationShudders(sd, idx)) out.push({ type: 'note', text: LF.anticipation(p.name) });
+  iceFaceRestoreLines(sd, idx).forEach(t => out.push({ type: 'note', text: t }));   // Ice Face: entrou na neve em Noice Face
   return out;
 }
 // Um Pokémon entrou no lado sd: Trace dos OPONENTES que ainda não copiaram tenta de novo.
@@ -2805,6 +2809,11 @@ function harvestLine(sd, idx){
 // ===== CLIMA NA BATALHA (Singles e Doubles) — regra 16: em dúvida, conferir no código do Showdown =====
 // Clima do campo (Cloud Nine / Air Lock anulam) e clima "efetivo" do Pokémon (Utility Umbrella ignora sol e chuva).
 function fieldWeather(){ return (battle && battle.weather && !weatherSuppressed()) ? battle.weather : 'none'; }
+// Cloud Nine / Air Lock entrou, saiu, caiu ou foi suprimido: recalcula o dano da batalha (com ou sem clima).
+function syncWeatherSuppression(){
+  if(!battle || !battle.sides || !battle.sharedPrepared) return;
+  for(let k = 0; k < 2; k++){ const now = weatherSuppressed(); if(now === !!battle._wxSupp) return; battle._wxSupp = now; refreshBattlePrepared(); }
+}
 function effWeatherFor(sd, idx){ const w = fieldWeather(); return (umbrellaOf(sd, idx) && ['sun','harshsun','rain','heavyrain'].includes(w)) ? 'none' : w; }
 function rainOnFor(sd, idx){ return ['rain','heavyrain'].includes(effWeatherFor(sd, idx)); }
 function sandOn(){ return fieldWeather() === 'sand'; }
@@ -2817,6 +2826,111 @@ function sdHeal(v){ return (v && v <= 1) ? 1 : Math.trunc(v); }
 function sandDamageImmune(p, sd, idx){
   if(!p) return true; const T = [p.type1, p.type2], ab = normKey(p.ability || '');
   return T.includes('Rock') || T.includes('Ground') || T.includes('Steel') || ['sand force','sand rush','sand veil','overcoat','magic guard'].includes(ab) || heldItem(sd, idx) === 'safety goggles';
+}
+// Tempestade de areia: no fim do turno tira 1/16 do HP máx. (trunc, mín. 1) de quem não é imune. Devolve o dano.
+function sandDamage(sd, idx){
+  const S = battle.sides[sd], p = battle.sharedPrepared[idx];
+  if(!sandOn() || !p || !(S.hp[idx] > 0) || sandDamageImmune(p, sd, idx)) return 0;
+  const d = Math.min(S.hp[idx], Math.max(1, Math.trunc(p.hpMax / 16))); S.hp[idx] -= d; return d;
+}
+// ===== NEVE =====
+function snowOn(){ return fieldWeather() === 'snow'; }
+// Ice Body: na neve recupera 1/16 do HP máx. no fim do turno. Devolve a cura.
+function iceBodyHeal(sd, idx){
+  const S = battle.sides[sd], p = battle.sharedPrepared[idx];
+  if(!p || !(S.hp[idx] > 0) || abOf(sd, idx) !== 'ice body' || !snowOn() || S.hp[idx] >= p.hpMax || volPeek(sd, idx).healBlock > 0) return 0;
+  const h = Math.min(p.hpMax - S.hp[idx], sdHeal(p.hpMax / 16)); S.hp[idx] += h; return h;
+}
+// Snow Cloak: na neve, a precisão contra o portador ×3277/4096 (Mold Breaker ignora).
+function snowCloakAcc(acc, att, tSd, tIdx){
+  const tp = battle.sharedPrepared[tIdx];
+  if(!(acc < 101) || !tp || normKey(tp.ability || '') !== 'snow cloak' || !snowOn() || attackerIgnoresAbility(att)) return acc;
+  return Math.trunc((acc * 3277 + 2047) / 4096);
+}
+// ===== TELAS: Reflect (físico), Light Screen (especial), Aurora Veil (os dois; só na neve) — por lado, 5 turnos (Light Clay: 8) =====
+//  Singles ×0,5 · Doubles ×2732/4096. Não somam entre si, não valem em crítico, Infiltrator ignora. Entram no Dmod "Other".
+//  Saem com Brick Break / Psychic Fangs / Raging Bull (se o alvo não for imune ao tipo), Defog (lado do alvo) e Screen Cleaner (os dois lados).
+const SCREEN_INFO = { reflect: ['Reflect', '🪞'], lightscreen: ['Light Screen', '💡'], auroraveil: ['Aurora Veil', '🌌'] };
+const SCREEN_MOVES = { 'reflect': 'reflect', 'light screen': 'lightscreen', 'aurora veil': 'auroraveil' };
+const SCREEN_BREAK_MOVES = new Set(['brick break','psychic fangs','raging bull']);
+function screensOf(sd){ const S = battle.sides[sd]; return S.screens || (S.screens = {}); }
+function screenMoveApply(sd, idx, mk){
+  const key = SCREEN_MOVES[mk], sc = screensOf(sd), p = battle.sharedPrepared[idx];
+  if(key === 'auroraveil' && !snowOn()) return { fail: 'só funciona na neve' + (battle.weather === 'snow' ? ' (Cloud Nine / Air Lock anulam)' : '') };
+  if(sc[key] > 0) return { fail: SCREEN_INFO[key][0] + ' já está ativo' };
+  const n = heldItem(sd, idx) === 'light clay' ? 8 : 5; sc[key] = n;
+  return { text: LF.screenUp(SCREEN_INFO[key][0], sideTitle(sd), n, p && heldItem(sd, idx) === 'light clay') };
+}
+function clearScreens(sd){ const sc = screensOf(sd), had = Object.keys(sc).filter(k => sc[k] > 0); had.forEach(k => { delete sc[k]; }); return had.map(k => SCREEN_INFO[k][0]); }
+// Componente "Other" da tela contra este golpe (ou null).
+function screenComp(attacker, defender, isPhysical, isCrit){
+  if(!battle || !battle.sides || isCrit || normKey((attacker && attacker.ability) || '') === 'infiltrator') return null;
+  const L = defLocOf(defender); if(!L) return null;
+  const sc = screensOf(L.side), name = isPhysical ? (sc.reflect > 0 ? 'Reflect' : null) : (sc.lightscreen > 0 ? 'Light Screen' : null);
+  const nome = name || (sc.auroraveil > 0 ? 'Aurora Veil' : null); if(!nome) return null;
+  return { nome, mult: battle.format === 'doubles' ? 2732/4096 : 0.5 };
+}
+// Brick Break / Psychic Fangs / Raging Bull: quebram as telas do lado do alvo (se o alvo não é imune ao tipo). Devolve o texto ou ''.
+function screenBreakText(mk, moveType, tSd, tIdx){
+  if(!SCREEN_BREAK_MOVES.has(mk)) return '';
+  const tp = battle.sharedPrepared[tIdx], ch = TYPE_CHART[moveType] || {};
+  if(tp && ((tp.type1 && ch[tp.type1] === 0) || (tp.type2 && ch[tp.type2] === 0))) return '';
+  const gone = clearScreens(tSd); return gone.length ? LF.screenBreak(sideTitle(tSd), gone) : '';
+}
+// Fim do turno: contagem das telas. Devolve linhas de log.
+function tickScreens(){
+  const out = [];
+  ['A','B'].forEach(sd => { const sc = screensOf(sd); Object.keys(sc).forEach(k => { if(sc[k] > 0){ sc[k]--; if(sc[k] <= 0){ delete sc[k]; out.push(LF.screenEnd(SCREEN_INFO[k][0], sideTitle(sd))); } } }); });
+  return out;
+}
+// ===== Strong winds: golpe super efetivo contra o tipo Flying passa a neutro contra ele (Cloud Nine / Air Lock anulam) =====
+function strongWindsAdjust(defender, t1, t2){
+  if(!battle || !battle.sides || fieldWeather() !== 'strongwinds') return [t1, t2, false];
+  let ch = false;
+  if(defender.type1 === 'Flying' && t1 > 1){ t1 = 1; ch = true; }
+  if(defender.type2 === 'Flying' && t2 > 1){ t2 = 1; ch = true; }
+  return [t1, t2, ch];
+}
+// ===== Ice Face (Eiscue): golpe físico no Ice Face não causa dano e vira Noice Face. Volta ao Ice Face quando a neve começa
+//  ou se entrar em campo na neve. A forma continua ao trocar; acaba com a batalha. Mold Breaker ignora. battle.iceFace[idx] = 'noice'. =====
+function isEiscue(p){ return !!p && /^eiscue/.test(normKey(p.name || '')); }
+function iceFaceBlocks(attacker, tSd, tIdx, moveKey){
+  const p = battle.sharedPrepared[tIdx];
+  if(!p || !isEiscue(p) || normKey(p.ability || '') !== 'ice face' || attackerIgnoresAbility(attacker)) return false;
+  if(battle.iceFace && battle.iceFace[tIdx] === 'noice') return false;
+  const info = findMoveInfo(baseMoveNameFromKey(moveKey || '')); const cat = String((info && info.Category) || '').toLowerCase();
+  return cat.includes('físic') || cat.includes('physical');
+}
+function iceFaceBreak(tIdx){ if(!battle.iceFace) battle.iceFace = {}; battle.iceFace[tIdx] = 'noice'; return LF.iceFaceBreak(battle.sharedPrepared[tIdx].name); }
+function iceFaceRestoreLines(onlySd, onlyIdx){
+  const out = []; if(!snowOn() || !battle.iceFace) return out;
+  ['A','B'].forEach(sd => fieldMons(sd).forEach(i => {
+    if(onlySd !== undefined && (sd !== onlySd || i !== onlyIdx)) return;
+    const p = battle.sharedPrepared[i];
+    if(battle.iceFace[i] === 'noice' && isEiscue(p) && abOf(sd, i) === 'ice face'){ delete battle.iceFace[i]; out.push(LF.iceFaceRestore(p.name)); }
+  }));
+  return out;
+}
+// ===== Wonder Guard: só golpe de dano super efetivo acerta (Struggle sempre). Imunidade de tipo vem antes. Mold Breaker ignora. =====
+function wonderGuardBlocks(attacker, defender, moveResult, eff){
+  if(normKey(defender.ability || '') !== 'wonder guard' || attackerIgnoresAbility(attacker) || (moveResult && moveResult.isStruggle)) return false;
+  return eff > 0 && eff <= 1;
+}
+// ===== Anticipation: ao entrar (ou ganhar a habilidade), "estremece" se um oponente em campo tem golpe de dano super efetivo
+//  contra ele ou golpe OHKO. Regras da Geração VI em diante: tipo da planilha (sem -ate, Scrappy, Normalize, Gravity, ventos);
+//  Weather Ball, Judgment, Techno Blast, Revelation Dance, Multi-Attack e Natural Gift contam como Normal. =====
+const ANTICIPATION_NORMAL = new Set(['weather ball','judgment','techno blast','revelation dance','multi-attack','natural gift']);
+function anticipationShudders(sd, idx){
+  const p = battle.sharedPrepared[idx]; if(!p) return false;
+  const o = sd === 'A' ? 'B' : 'A';
+  return fieldMons(o).some(j => (battle.sharedPrepared[j].moveResults || []).some(m => {
+    if(m.isStruggle) return false;
+    const k = normKey(baseMoveNameFromKey(m.moveKey || '')); if(OHKO_MOVES.has(k)) return true;
+    const info = findMoveInfo(baseMoveNameFromKey(m.moveKey || '')); if(!info) return false;
+    const t = ANTICIPATION_NORMAL.has(k) ? 'Normal' : info.Type, ch = TYPE_CHART[t] || {};
+    const e = (p.type1 ? (ch[p.type1] ?? 1) : 1) * (p.type2 ? (ch[p.type2] ?? 1) : 1);
+    return e > 1;
+  }));
 }
 // Sol extremo: golpe de dano Water falha · Chuva pesada: golpe de dano Fire falha (o PP é gasto). Cloud Nine / Air Lock anulam.
 function primalMoveFail(move){
@@ -2836,6 +2950,7 @@ function growthPlan(plan, mk, sd, idx){
 }
 // Sand Veil: na tempestade de areia, a precisão contra o portador ×3277/4096 (Mold Breaker ignora).
 function sandVeilAcc(acc, att, tSd, tIdx){
+  acc = snowCloakAcc(acc, att, tSd, tIdx);   // Snow Cloak (neve) usa o mesmo ponto
   const tp = battle.sharedPrepared[tIdx];
   if(!(acc < 101) || !tp || normKey(tp.ability || '') !== 'sand veil' || !sandOn() || attackerIgnoresAbility(att)) return acc;
   return Math.trunc((acc * 3277 + 2047) / 4096);
@@ -2958,6 +3073,8 @@ function condList(side, idx){
   add(v.abil, '🎭', 'Habilidade trocada', v.abil ? 'agora tem ' + v.abil + ' (' + v.abilSrc + '); volta ao sair de campo' : 'Entrainment, Mummy, Wandering Spirit ou Power of Alchemy');
   const cl = choiceLockOf(side, idx);
   add(cl, '🔒', 'Preso pelo item Choice', cl ? 'só pode usar ' + ((findMoveInfo(cl) || {}).Name || cl) : 'só pode usar o primeiro golpe escolhido');
+  { const sc = screensOf(side); Object.keys(SCREEN_INFO).forEach(k => add(sc[k] > 0, SCREEN_INFO[k][1], SCREEN_INFO[k][0], k === 'reflect' ? 'reduz o dano físico recebido' : k === 'lightscreen' ? 'reduz o dano especial recebido' : 'reduz o dano físico e especial recebido', sc[k] > 0 ? sc[k] + 't' : '')); }
+  add(battle.iceFace && battle.iceFace[idx] === 'noice', '🧊', 'Noice Face (Ice Face quebrado)', 'volta ao Ice Face quando a neve começa ou ao entrar na neve');
   add(battle.megaOv && battle.megaOv[idx], MEGA_ICON, 'Mega Evoluído', p ? p.name : '');
   return out;
 }
@@ -3207,6 +3324,7 @@ function abilitySpeedMult(sd, idx){
   if(abOf(sd, idx) === 'chlorophyll' && sunOnFor(sd, idx)) m *= 2;
   if(abOf(sd, idx) === 'swift swim' && rainOnFor(sd, idx)) m *= 2;   // chuva efetiva (Umbrella ignora)
   if(abOf(sd, idx) === 'sand rush' && sandOn()) m *= 2;
+  if(abOf(sd, idx) === 'slush rush' && snowOn()) m *= 2;
   const pr = volPeek(sd, idx).proto; if(pr && pr.stat === 'Spe') m *= 1.5;
   return m;
 }
@@ -3266,6 +3384,7 @@ function formChangeLines(){
 // Tudo o que reage ao clima (formas e Protosynthesis). Devolve linhas de log.
 function weatherReactionLines(){
   const out = formChangeLines();
+  if(battle._snowStarted){ battle._snowStarted = false; iceFaceRestoreLines().forEach(t => out.push(t)); }   // Ice Face: a neve começou
   ['A','B'].forEach(sd => fieldMons(sd).forEach(i => { const t = protoCheck(sd, i); if(t) out.push(t); }));
   return out;
 }
@@ -3283,6 +3402,7 @@ function sitrusLines(){
 }
 // Depois de qualquer passo da batalha: Sitrus Berry, formas e Protosynthesis. Singles => turnLog.actions · Doubles => dLog.
 function postStepEffects(turnLog){
+  syncWeatherSuppression();   // Cloud Nine / Air Lock
   const heals = sitrusLines(), lines = weatherReactionLines();
   if(battle.format === 'doubles'){ heals.forEach(h => dLog(LF.heal(h))); lines.forEach(t => dLog(t)); return; }
   if(!turnLog) return;
@@ -3338,7 +3458,7 @@ function megaApply(side, idx, revert){
 function preparedAsForm(idx, megaName){
   if(!battle.megaOv) battle.megaOv = {};
   const had = battle.megaOv[idx]; battle.megaOv[idx] = megaName;
-  try { return prepareBattleSide(idx, { weather: battle.weather, terrain: battle.terrain }); }
+  try { return prepareBattleSide(idx, { weather: fieldWeather(), terrain: battle.terrain }); }
   finally { if(had) battle.megaOv[idx] = had; else delete battle.megaOv[idx]; }
 }
 // CPU decide quem Mega Evolui neste turno (cands = Pokémon em campo que vão usar golpe).
@@ -3560,7 +3680,7 @@ function battleMoveAccuracy(moveNameKey, moveInfo, tSd, tIdx){
     if((k === 'thunder' || k === 'hurricane') && ['sun','harshsun'].includes(tw)) acc = 50;
     if(['thunder','hurricane','bleakwind storm','wildbolt storm','sandsear storm'].includes(k) && ['rain','heavyrain'].includes(tw)) acc = 101;
   }
-  if(k === 'blizzard' && battle && battle.weather === 'snow') acc = 101;
+  if(k === 'blizzard' && battle && battle.sides && fieldWeather() === 'snow') acc = 101;   // neve (Cloud Nine / Air Lock anulam)
   if(gravityOn() && acc < 101 && !OHKO_MOVES.has(k)) acc = Math.min(100, pokeRound(acc * GRAVITY_ACC_MULT));   // Gravity: ×6840/4096 (exceto OHKO)
   return acc;
 }
@@ -3677,6 +3797,9 @@ function computeBattleDamage(attacker, defender, moveResult, roll, isCrit, atkSt
   }
   const _immAb = abilityTypeImmunity(attacker, defender, d.moveType, moveResult.moveKey);
   if(_immAb) t1 = 0; // Levitate / Flash Fire / Water Absorb / Dry Skin: imunidade
+  let _windsNote = false; [t1, t2, _windsNote] = strongWindsAdjust(defender, t1, t2);   // Strong winds: super efetivo contra Flying vira neutro
+  const _wg = !!battle && !!battle.sides && wonderGuardBlocks(attacker, defender, moveResult, t1 * t2);
+  if(_wg) t1 = 0;   // Wonder Guard: só super efetivo
   const _bpLabels = (d.bpModifierLabels || []).slice();
   let bpVal = overrideBP !== undefined ? overrideBP : moveResult.bpFinal;
   { const _au = (battle && d) ? auraEffect(d.moveType) : null;   // Aura ao vivo (campo atual)
@@ -3706,6 +3829,8 @@ function computeBattleDamage(attacker, defender, moveResult, roll, isCrit, atkSt
   if(isCrit) ap('Critical', 1.5); else sk('Critical');
   ap('Roll', roll);
   if(d.stabMult !== 1) ap(d.stabMult === 2 ? 'Adaptability' : 'STAB', d.stabMult); else sk('STAB');
+  if(_wg) sk('Wonder Guard (só super efetivo acerta)');
+  if(_windsNote) sk('Strong winds (super efetivo contra Flying vira neutro)');
   if(t1 !== 1) ap('Type 1', t1); else sk('Type 1');
   if(t2 !== 1) ap('Type 2', t2); else sk('Type 2');
   if (isPhysical && atkStatus === 'Burned' && !(attacker.type1 === 'Fire' || attacker.type2 === 'Fire') && !BURN_IMMUNE_ABILITIES.has(attacker.ability)) { ap('Burn', 0.5); burned = true; }
@@ -3728,6 +3853,8 @@ function computeBattleDamage(attacker, defender, moveResult, roll, isCrit, atkSt
       }
     } }
   if(normKey(defender.ability || '') === 'dry skin' && d.moveType === 'Fire' && !attackerIgnoresAbility(attacker) && !otherAll.some(c => /dry skin/i.test(c.nome))) otherAll.push({ nome: 'Dry Skin (Fogo)', mult: 1.25 });
+  { const _sc = screenComp(attacker, defender, isPhysical, isCrit);   // Reflect / Light Screen / Aurora Veil (não somam entre si)
+    if(_sc && !otherAll.some(c => /aurora veil|reflect|light screen/i.test(c.nome))) otherAll.push(_sc); }
   const otherTotal = otherAll.reduce((acc, c) => acc * c.mult, 1);
   let otherDetail = null;
   {
@@ -3735,7 +3862,7 @@ function computeBattleDamage(attacker, defender, moveResult, roll, isCrit, atkSt
     if(otherTotal !== 1) ap('Other', otherTotal, true); else sk('Other');
     let run = before;
     const OTHER_CANDIDATES = [
-      ['Aurora Veil', n => /aurora veil/i.test(n)], ['Collision Course / Electro Drift', n => /collision course|electro drift/i.test(n)],
+      ['Aurora Veil', n => /aurora veil/i.test(n)], ['Reflect', n => /^reflect$/i.test(n)], ['Light Screen', n => /^light screen$/i.test(n)], ['Collision Course / Electro Drift', n => /collision course|electro drift/i.test(n)],
       ['Multiscale / Shadow Shield', n => /multiscale|shadow shield/i.test(n)], ['Fluffy / Aura Guard (contato)', n => /(fluffy|aura guard)(?! \(fogo\))/i.test(n) && !/fogo/i.test(n)],
       ['Fluffy (Fogo)', n => /fluffy \(fogo\)/i.test(n)], ['Dry Skin (Fogo)', n => /dry skin/i.test(n)], ['Friend Guard', n => /friend guard/i.test(n)], ['Filter', n => /^filter$/i.test(n)],
       ['Neuroforce', n => /neuroforce/i.test(n)], ['Sniper', n => /sniper/i.test(n)], ['Tinted Lens', n => /tinted lens/i.test(n)],
@@ -3770,8 +3897,9 @@ function estimateDamageRange(attacker, defender, moveResult, atkStages, defStage
 }
 function refreshBattlePrepared(){
   if(!battle) return;
+  const _w = fieldWeather();   // Cloud Nine / Air Lock: o cálculo da batalha não vê o clima
   for(const key of Object.keys(battle.sharedPrepared)){
-    const p = prepareBattleSide(Number(key), { weather: battle.weather, terrain: battle.terrain });
+    const p = prepareBattleSide(Number(key), { weather: _w, terrain: battle.terrain });
     if(p) battle.sharedPrepared[key] = p;
   }
 }
@@ -3813,6 +3941,7 @@ function setBattleWeather(w, side, startTurn){
   else if(p && WEATHER_ROCKS[w] && normKey(p.item || '') === WEATHER_ROCKS[w]) dur = ENV_EXTENDED_TURNS;
   battle.weather = w;
   battle.weatherInfo = { start: startTurn, dur, setter: { side, idx: battle.sides[side].activePokeIdx } };
+  if(w === 'snow') battle._snowStarted = true;   // Ice Face volta (weatherReactionLines)
   return true;
 }
 function setBattleTerrain(t, side, startTurn){
@@ -3850,6 +3979,7 @@ function tickEnvironment(turnLog){
     battle.terrain = 'none'; battle.terrainInfo = null; changed = true;
   }
   { const g = tickGroundEffects(); g.lines.forEach(t => turnLog.actions.push({ type: 'note', text: t })); if(g.changed) changed = true; }
+  tickScreens().forEach(t => turnLog.actions.push({ type: 'note', text: t }));   // Reflect / Light Screen / Aurora Veil
   if(changed) refreshBattlePrepared();
 }
 
@@ -3949,7 +4079,7 @@ function cpuKnownMoves(oppSide, opp){
 }
 const SOLAR_MOVES = new Set(['solar beam', 'solar blade']);
 // Solar Beam/Blade: não precisam de turno de carga sob Sun/Sol Extremo (harsh sunlight) nem com Mega Sol.
-function solarNoCharge(p){ return !!battle && (['sun','harshsun'].includes(battle.weather) || normKey((p && p.ability) || '') === 'mega sol'); }
+function solarNoCharge(p){ return !!battle && (['sun','harshsun'].includes(fieldWeather()) || normKey((p && p.ability) || '') === 'mega sol'); }
 // Impedido de atacar (flinch/sono/gelo/paralisia) com Solar sem carga: o PP é gasto mesmo assim (golpe de 2 turnos).
 function solarPrevented(side, idx, mv){
   if(!mv) return;
@@ -3969,7 +4099,7 @@ const SEMI_CHARGE_TEXT = { 'solar beam': 'absorveu a luz do sol', 'solar blade':
 function chargeSkipActive(mk, p){
   { const _fs = p && fieldSideOf(p.pokeIdx); if(_fs && umbrellaOf(_fs, p.pokeIdx) && (SOLAR_MOVES.has(mk) || mk === 'electro shot')) return normKey((p && p.ability) || '') === 'mega sol' && SOLAR_MOVES.has(mk); }
   if(SOLAR_MOVES.has(mk)) return solarNoCharge(p);
-  return mk === 'electro shot' && !!battle && (battle.weather === 'rain' || battle.weather === 'heavyrain');
+  return mk === 'electro shot' && !!battle && ['rain','heavyrain'].includes(fieldWeather());
 }
 const SEMI_HITTERS = {
   sky: new Set(['gust','thunder','twister','sky uppercut','smack down','hurricane','thousand arrows']),
@@ -4564,7 +4694,8 @@ function executeAction(action, ordered, actionIdx){
           targetOpts: { ignoreAbility: attackerIgnoresAbility(attacker), byFoe: true }
         });
         const _dfg = moveNameKey === 'defog' && (clearHazards('A') | clearHazards('B'));   // Defog remove as armadilhas dos DOIS lados
-        return { side: action.side, type: 'status-boost', attackerName: attacker.name, moveName: action.move.Name, boostText: _txt + (_dfg ? '; armadilhas removidas' : '') };
+        const _dfs = moveNameKey === 'defog' ? clearScreens(defSide) : [];   // ... e as telas do lado do alvo
+        return { side: action.side, type: 'status-boost', attackerName: attacker.name, moveName: action.move.Name, boostText: _txt + (_dfg ? '; armadilhas removidas' : '') + (_dfs.length ? '; telas removidas (' + _dfs.join(', ') + ')' : '') };
       }
     }
     if(moveNameKey === 'swords dance'){ return { side: action.side, type: 'status-boost', attackerName: attacker.name, moveName: 'Swords Dance', boostText: applyStageList(action.side, [['Atk',2]]) }; }
@@ -4575,6 +4706,10 @@ function executeAction(action, ordered, actionIdx){
     }
     if(moveNameKey === 'bulk up'){ return { side: action.side, type: 'status-boost', attackerName: attacker.name, moveName: 'Bulk Up', boostText: applyStageList(action.side, [['Atk',1],['Def',1]]) }; }
     if(moveNameKey === 'calm mind'){ return { side: action.side, type: 'status-boost', attackerName: attacker.name, moveName: 'Calm Mind', boostText: applyStageList(action.side, [['SpA',1],['SpD',1]]) }; }
+    if(SCREEN_MOVES[moveNameKey]){   // Reflect / Light Screen / Aurora Veil
+      const _sc = screenMoveApply(action.side, attackerActiveIdx, moveNameKey);
+      return _sc.fail ? _failS(_sc.fail) : _txtS(_sc.text);
+    }
     if(WEATHER_MOVE_MAP[moveNameKey]){
       const w = WEATHER_MOVE_MAP[moveNameKey];
       if(setBattleWeather(w, action.side, battle.turn)){ refreshBattlePrepared(); return { side: action.side, type: 'weather-change', name: attacker.name, weather: w }; }
@@ -4684,6 +4819,7 @@ function executeAction(action, ordered, actionIdx){
     }
   }
 
+  { const _sbt = screenBreakText(moveNameKey, (action.move.detail && action.move.detail.moveType) || '', defSide, defenderSideState.activePokeIdx); if(_sbt) preNote += ' ' + _sbt; }   // quebra as telas antes de acertar
   const accRoll = battleRandom() * 100;
   const moveInfo = findMoveInfo(baseMoveNameFromKey(action.move.moveKey));
   const noGuardOn = normKey(attacker.ability||'') === 'no guard' || normKey(defender.ability||'') === 'no guard';
@@ -4756,7 +4892,10 @@ function executeAction(action, ordered, actionIdx){
     const hpPre = s.hp[s.activePokeIdx];
     let toSub = 0, toHp = 0;
     const curSub = s.sub || 0;
-    if(curSub > 0 && !subBypass){
+    let _ifb = false;
+    if(!(curSub > 0 && !subBypass) && iceFaceBlocks(attacker, defSide, s.activePokeIdx, action.move.moveKey)){ _ifb = true; abilNotes.push(iceFaceBreak(s.activePokeIdx)); }   // Ice Face: sem dano
+    if(_ifb){ /* nenhum dano neste hit */ }
+    else if(curSub > 0 && !subBypass){
       toSub = Math.min(curSub, r.damage); s.sub = curSub - toSub; subAbsorbed += toSub; if(s.sub <= 0) subBroken = true;
     } else {
       let nh = hpPre - r.damage;
@@ -4767,13 +4906,13 @@ function executeAction(action, ordered, actionIdx){
       toHp = hpPre - nh; s.hp[s.activePokeIdx] = nh; hpDamageDone += toHp;
       if(_debris && toHp > 0 && setHazard(action.side, 'tspikes')) debrisLayers++;   // Toxic Debris: cada hit físico (que não acerta o substituto) espalha Toxic Spikes no lado do atacante
     }
-    totalDamage += r.damage;
+    totalDamage += _ifb ? 0 : r.damage;
     // Rough Skin / Iron Barbs: cada hit de contato que acerta o Pokémon (não o substituto), mesmo com 0 de dano
     if(_cRA && toSub === 0 && attackerSideState.hp[attackerActiveIdx] > 0 && normKey(attacker.ability || '') !== 'magic guard'){
       const _cb = attackerSideState.hp[attackerActiveIdx], _cd = Math.max(1, Math.floor(attacker.hpMax / 8));
       attackerSideState.hp[attackerActiveIdx] = Math.max(0, _cb - _cd); contactHurt += _cb - attackerSideState.hp[attackerActiveIdx];
     }
-    hits.push({ damage: r.damage, toHp, toSub, roll: ROLL_MULTS[hitRollIdx], rollIdx: hitRollIdx, isCrit: hitCrit, calc: r.calc, hpBefore: hpPre, hpAfter: s.hp[s.activePokeIdx], snap: snapView() });
+    hits.push({ damage: _ifb ? 0 : r.damage, toHp, toSub, roll: ROLL_MULTS[hitRollIdx], rollIdx: hitRollIdx, isCrit: hitCrit, calc: r.calc, hpBefore: hpPre, hpAfter: s.hp[s.activePokeIdx], snap: snapView() });
     // Effect Spore: cada hit de contato que atinge o Pokémon sorteia; se o atacante dormir, o golpe acaba na hora.
     let _esSleep = false;
     if(moveInfo && moveInfo.Contact && toSub === 0 && r.typeEff > 0 && normKey(defender.ability || '') === 'effect spore'){
@@ -5007,6 +5146,7 @@ function serializeSideStatus(s){
     prevAlive: JSON.parse(JSON.stringify(s.prevAlive || {})),
     vol: JSON.parse(JSON.stringify(s.vol || {})),
     restSleep: JSON.parse(JSON.stringify(s.restSleep || {})),
+    screens: JSON.parse(JSON.stringify(s.screens || {})),
   };
 }
 function restoreSideStatus(s, data){
@@ -5026,6 +5166,7 @@ function restoreSideStatus(s, data){
   s.prevAlive = JSON.parse(JSON.stringify(data.prevAlive || {}));
   s.vol = JSON.parse(JSON.stringify(data.vol || {}));
   s.restSleep = JSON.parse(JSON.stringify(data.restSleep || {}));
+  s.screens = JSON.parse(JSON.stringify(data.screens || {}));
 }
 function snapshotBattle(){
   return {
@@ -5040,6 +5181,7 @@ function snapshotBattle(){
     weatherInfo: battle.weatherInfo ? JSON.parse(JSON.stringify(battle.weatherInfo)) : null,
     terrainInfo: battle.terrainInfo ? JSON.parse(JSON.stringify(battle.terrainInfo)) : null,
     gravity: battle.gravity || 0,
+    iceFace: JSON.parse(JSON.stringify(battle.iceFace || {})),
     itemOv: JSON.parse(JSON.stringify(battle.itemOv || {})),
     megaOv: JSON.parse(JSON.stringify(battle.megaOv || {})), megaUsed: Object.assign({ A: false, B: false }, battle.megaUsed || {}), megaPend: JSON.parse(JSON.stringify(battle.megaPend || { A: {}, B: {} })),
     sides: {
@@ -5065,6 +5207,7 @@ function restoreSnapshot(snap){
   battle.weatherInfo = snap.weatherInfo ? JSON.parse(JSON.stringify(snap.weatherInfo)) : null;
   battle.terrainInfo = snap.terrainInfo ? JSON.parse(JSON.stringify(snap.terrainInfo)) : null;
   battle.gravity = snap.gravity || 0;
+  battle.iceFace = JSON.parse(JSON.stringify(snap.iceFace || {}));
   battle.itemOv = JSON.parse(JSON.stringify(snap.itemOv || {}));
   battle.megaOv = JSON.parse(JSON.stringify(snap.megaOv || {})); battle.megaUsed = Object.assign({ A: false, B: false }, snap.megaUsed || {}); battle.megaPend = JSON.parse(JSON.stringify(snap.megaPend || { A: {}, B: {} }));
   battle.pausedTurn = null;
@@ -5318,6 +5461,14 @@ function applyEndOfTurnStatusDamage(turnLog){
     }
   }
 }
+// Tempestade de areia: primeiro efeito do fim do turno.
+function applyEndOfTurnSand(turnLog){
+  for(const side of ['A', 'B']){
+    const s = battle.sides[side], idx = s.activePokeIdx, pr = battle.sharedPrepared[idx];
+    const d = sandDamage(side, idx); if(!d) continue;
+    turnLog.actions.push({ side, type: 'status-damage', name: pr.name, damage: d, label: 'tempestade de areia', hpAfter: s.hp[idx], hpMax: pr.hpMax, fainted: s.hp[idx] <= 0 });
+  }
+}
 // Hydration: na chuva cura o status ANTES do dano de queimadura/veneno.
 function applyEndOfTurnHydration(turnLog){
   for(const side of ['A', 'B']){
@@ -5354,6 +5505,7 @@ function applyEndOfTurnAbilities(turnLog){
     const pr = battle.sharedPrepared[idx];
     if(!pr) continue;
     { const _hv = harvestLine(side, idx); if(_hv) turnLog.actions.push({ side, type: 'note', text: _hv }); }   // Harvest
+    { const _ib = iceBodyHeal(side, idx); if(_ib) turnLog.actions.push({ side, type: 'status-heal', name: pr.name, heal: _ib, label: 'Ice Body', hpAfter: s.hp[idx], hpMax: pr.hpMax }); }
     { const _rd = rainDishHeal(side, idx); if(_rd) turnLog.actions.push({ side, type: 'status-heal', name: pr.name, heal: _rd, label: 'Rain Dish', hpAfter: s.hp[idx], hpMax: pr.hpMax }); }
     if(normKey(pr.ability || '') === 'speed boost' && canChangeStage(side, 'Spe', 1)){
       const _sr = changeStage(side, 'Spe', 1);
@@ -5365,7 +5517,7 @@ function applyEndOfTurnAbilities(turnLog){
       turnLog.actions.push({ side, type: 'ability-boost', name: pr.name, text: `Solar Power: −${dmg} HP (${before} → ${s.hp[idx]}/${pr.hpMax})${s.hp[idx] <= 0 ? ' — nocauteado!' : ''}` });
     }
     if(normKey(pr.ability || '') === 'dry skin' && !umbrellaOf(side, idx)){
-      const w = battle.weather;
+      const w = fieldWeather();
       if((w === 'rain' || w === 'heavyrain') && s.hp[idx] < pr.hpMax){
         const before = s.hp[idx], heal = Math.min(pr.hpMax - before, Math.max(1, Math.floor(pr.hpMax / 8)));
         s.hp[idx] = before + heal;
@@ -5630,6 +5782,7 @@ function runTurn(ctx, startIdx){
   battle.sides.A.sideProt = null; battle.sides.B.sideProt = null;
   battle.sides.A.endure = false; battle.sides.B.endure = false;
 
+  applyEndOfTurnSand(turnLog);
   applyEndOfTurnHydration(turnLog);
   applyEndOfTurnIngrain(turnLog);
   applyEndOfTurnStatusDamage(turnLog);
@@ -6270,6 +6423,14 @@ const LF = {
   eelevate: (n, txt) => `Eelevate de <b>${n}</b>: ${txt}.`,
   abilityChanged: (n, ab, src) => `A habilidade de <b>${n}</b> virou <b>${ab}</b> (${src})!`,
   abilitySwap: (holder, att, abH, abA) => `<b>${holder}</b> trocou de habilidade com <b>${att}</b> (Wandering Spirit)! ${holder}: <b>${abA}</b> · ${att}: <b>${abH}</b>.`,
+  weatherDamage: (n, dmg, hpA, max) => `<b>${n}</b> perdeu <span class="dmg">${dmg} HP</span> por tempestade de areia! (${hpA}/${max})${hpA <= 0 ? ` <b>${n}</b> foi nocauteado!` : ''}`,
+  screenUp: (scr, side, n, clay) => `<b>${scr}</b> protege o lado de ${side} por ${n} turnos${clay ? ' (Light Clay)' : ''}!`,
+  screenEnd: (scr, side) => `O <b>${scr}</b> do lado de ${side} acabou.`,
+  screenBreak: (side, list) => `As telas do lado de ${side} foram quebradas (${list.join(', ')})!`,
+  screenCleaner: (n, list) => `Screen Cleaner de <b>${n}</b> removeu as telas do campo (${list.join(', ')})!`,
+  iceFaceBreak: n => `O Ice Face de <b>${n}</b> absorveu o golpe e quebrou (Noice Face)!`,
+  iceFaceRestore: n => `<b>${n}</b> voltou à forma Ice Face com a neve!`,
+  anticipation: n => `<b>${n}</b> estremeceu! (Anticipation)`,
   hydration: (n, st) => `<b>${n}</b> curou-se de <b>${st}</b> com Hydration!`,
   effectSpore: (holder, att, st) => `Effect Spore de <b>${holder}</b>: <b>${att}</b> agora está <b>${st}</b>!`,
   powderImmune: (n, why) => `${n} não é afetado por pó/esporos (${why})`,
@@ -6387,7 +6548,7 @@ function battleLogHtml(){
       if(a.type === 'thaw-by-move') return `<div class="action-line">${LF.thawByMove(a.name)}</div>`;
       if(a.type === 'still-frozen') return `<div class="action-line">${LF.stillFrozen(a.name)}</div>`;
       if(a.type === 'paralyzed-skip') return `<div class="action-line">${LF.paraSkip(a.name)}</div>`;
-      if(a.type === 'status-damage') return `<div class="action-line"><b>${a.name}</b> perdeu <span class="dmg">${a.damage} HP</span> por ${a.label}! (${a.hpAfter}/${a.hpMax})</div>`;
+      if(a.type === 'status-damage') return `<div class="action-line">${a.label === 'tempestade de areia' ? LF.weatherDamage(a.name, a.damage, a.hpAfter, a.hpMax) : `<b>${a.name}</b> perdeu <span class="dmg">${a.damage} HP</span> por ${a.label}! (${a.hpAfter}/${a.hpMax})`}</div>`;
       if(a.type === 'status-gain') return `<div class="action-line">${LF.statusGain(a)}</div>`;
       if(a.type === 'status-change') return `<div class="action-line">${a.side === 'A' ? 'Você' : 'Oponente'} mudou status de <b>${a.name}</b> (${a.oldStatus} → ${a.newStatus})</div>`;
       if(a.type === 'heal') return `<div class="action-line">${a.side === 'A' ? 'Você' : 'Oponente'} usou <b>${a.healType}</b> em <b>${a.name}</b> (${a.hpAfter}/${a.hpMax})</div>`;
@@ -7220,7 +7381,7 @@ function addInfiniteMon(side){
   for(let t = 0; t < 30; t++){
     const poke = generateRandomPokemonForInfinite(); if(!poke) return null;
     const idx = currentPokemons.length; currentPokemons.push(poke);
-    const prepared = ensureRandomMonMoves(idx, { weather: battle.weather, terrain: battle.terrain });
+    const prepared = ensureRandomMonMoves(idx, { weather: fieldWeather(), terrain: battle.terrain });
     if(!prepared || !randomMonHas4Moves(prepared)){ currentPokemons.pop(); continue; }
     const S = battle.sides[side];
     battle.sharedPrepared[idx] = prepared;
@@ -7945,7 +8106,7 @@ function spawnInfiniteCpuPokemon(){
   if(!newPoke) return null;
   const newIdx = currentPokemons.length;
   currentPokemons.push(newPoke);
-  const prepared = ensureRandomMonMoves(newIdx, { weather: battle.weather, terrain: battle.terrain });
+  const prepared = ensureRandomMonMoves(newIdx, { weather: fieldWeather(), terrain: battle.terrain });
   if(!prepared || !randomMonHas4Moves(prepared)){ currentPokemons.pop(); return null; }
   battle.sharedPrepared[newIdx] = prepared;
   const faintedIdx = battle.sides.B.activePokeIdx;
@@ -9798,6 +9959,7 @@ function dHit(a, tSd, tIdx, o){
   const dAb = normKey(def.ability || '');
   const stormNoMiss = !dsemi && !attackerIgnoresAbility(att) && ((mtype === 'Water' && dAb === 'storm drain') || (mtype === 'Electric' && dAb === 'lightning rod'));
   const acc = (noGuard || stormNoMiss || teleSureHit(tSd, tIdx, mk, dsemi)) ? 101 : sandVeilAcc(battleMoveAccuracy(mk, info, tSd, tIdx), att, tSd, tIdx);   // Telekinesis no alvo: sempre acerta
+  { const sbt = screenBreakText(mk, mtype, tSd, tIdx); if(sbt){ flushHead(); dLog(sbt); } }   // Brick Break / Psychic Fangs / Raging Bull: quebram as telas antes de acertar
   const accRoll = battleRandom() * 100;
   if(battleAccuracyEnabled && acc < 101 && accRoll >= acc){ dLog(sp ? `↳ errou <b>${def.name}</b>!` : LF.miss({ attackerName: att.name, moveName: m.moveName })); o.headDone = true; return res; }
   let semiCut = false;
@@ -9838,8 +10000,10 @@ function dHit(a, tSd, tIdx, o){
     const r = dCalc(sd, idx, tSd, tIdx, mv, ROLL_MULTS[ri], hc, hbp, nHits > 1 || !!tripleBP);
     lastRes = r; lastRoll = ROLL_MULTS[ri]; hitsDone++; if(hc) crit = true;
     const _hb = T.hp[tIdx];
-    const curSub = T.subs[tIdx] || 0; let hitSub = false;
-    if(curSub > 0 && !subBypass){ const toSub = Math.min(curSub, r.damage); T.subs[tIdx] = curSub - toSub; subAbs += toSub; hitSub = true; }
+    const curSub = T.subs[tIdx] || 0; let hitSub = false, ifb = false;
+    if(!(curSub > 0 && !subBypass) && iceFaceBlocks(att, tSd, tIdx, m.moveKey)){ ifb = true; abilN.push(iceFaceBreak(tIdx)); }   // Ice Face: sem dano
+    if(ifb){ /* nenhum dano neste hit */ }
+    else if(curSub > 0 && !subBypass){ const toSub = Math.min(curSub, r.damage); T.subs[tIdx] = curSub - toSub; subAbs += toSub; hitSub = true; }
     else {
       const pre = T.hp[tIdx]; let nh = pre - r.damage;
       if(nh <= 0 && hasSash && !sash && pre === def.hpMax && pre === hpBefore){ nh = 1; sash = true; }
@@ -9848,10 +10012,10 @@ function dHit(a, tSd, tIdx, o){
       nh = Math.max(0, nh); hpDone += pre - nh; T.hp[tIdx] = nh;
       if(debris && pre - nh > 0 && setHazard(sd, 'tspikes')) debrisLayers++;   // Toxic Debris: cada hit físico (que não acerta o substituto) espalha Toxic Spikes no lado do atacante
     }
-    totalDmg += r.damage;
+    totalDmg += ifb ? 0 : r.damage;
     // Rough Skin / Iron Barbs: cada hit de contato que acerta o Pokémon (não o substituto), mesmo com 0 de dano
     if(cRA && !hitSub && S.hp[idx] > 0 && normKey(att.ability || '') !== 'magic guard'){ const b = S.hp[idx]; S.hp[idx] = Math.max(0, b - Math.max(1, Math.floor(att.hpMax / 8))); cHurt += b - S.hp[idx]; }
-    hitRecs.push({ damage: r.damage, rollIdx: ri, isCrit: hc, calc: r.calc, hpBefore: _hb, hpAfter: T.hp[tIdx] });
+    hitRecs.push({ damage: ifb ? 0 : r.damage, rollIdx: ri, isCrit: hc, calc: r.calc, hpBefore: _hb, hpAfter: T.hp[tIdx] });
     // Effect Spore: cada hit de contato que atinge o Pokémon sorteia; se o atacante dormir, o golpe acaba na hora.
     let esSleep = false;
     if(info && info.Contact && !hitSub && tIdx !== idx && r.typeEff > 0 && normKey(def.ability || '') === 'effect spore'){
@@ -10113,10 +10277,12 @@ function dStatusAct(a){
         targetOpts: { ignoreAbility: attackerIgnoresAbility(att), byFoe: !!tg && tg.sd !== sd }
       });
       const dfg = mk === 'defog' && (clearHazards('A') | clearHazards('B'));   // Defog remove as armadilhas dos DOIS lados
-      dLog(LF.boost(att.name, m.Name, txt + (dfg ? '; armadilhas removidas' : ''))); return null;
+      const dfs = (mk === 'defog' && tg) ? clearScreens(tg.sd) : [];   // ... e as telas do lado do alvo
+      dLog(LF.boost(att.name, m.Name, txt + (dfg ? '; armadilhas removidas' : '') + (dfs.length ? '; telas removidas (' + dfs.join(', ') + ')' : ''))); return null;
     }
   }
   if(DBL_BOOSTS[mk]){ dWith(sd, idx, () => dLog(LF.boost(att.name, m.Name, applyStageList(sd, DBL_BOOSTS[mk])))); return null; }
+  if(SCREEN_MOVES[mk]){ const sc = screenMoveApply(sd, idx, mk); if(sc.fail) return fail(sc.fail); dLog(LF.moveText(att.name, m.Name, sc.text)); return null; }   // Reflect / Light Screen / Aurora Veil
   if(WEATHER_MOVE_MAP[mk]){ const w = WEATHER_MOVE_MAP[mk]; if(dWith(sd, idx, () => setBattleWeather(w, sd, battle.turn))){ refreshBattlePrepared(); dLog(LF.weatherChange(att.name, w)); return null; } return fail(weatherMoveFailReason()); }
   if(TERRAIN_MOVE_MAP[mk]){ const t = TERRAIN_MOVE_MAP[mk]; if(dWith(sd, idx, () => setBattleTerrain(t, sd, battle.turn))){ refreshBattlePrepared(); dLog(LF.terrainChange(att.name, t)); return null; } return fail('o terreno já está ativo'); }
   if(mk === 'helping hand'){
@@ -10165,6 +10331,7 @@ function dEndTurn(){
   battle.redir = { A: null, B: null }; battle.redirPowder = { A: false, B: false };
   // dano de status e habilidades
   ['A','B'].forEach(sd => dActives(sd).forEach(({ idx }) => {
+    { const sdm = sandDamage(sd, idx); if(sdm){ const q = dP(idx), Q = dS(sd); dLog(LF.weatherDamage(q.name, sdm, Q.hp[idx], q.hpMax)); } }   // tempestade de areia
     { const ho = hydrationCure(sd, idx); if(ho) dLog(LF.hydration(dP(idx).name, ho)); }   // Hydration: antes do dano de status
     const S = dS(sd), p = dP(idx), st = getStatusOf(sd, idx); if(S.hp[idx] <= 0) return;
     { const ih = ingrainHealAmount(sd, idx); if(ih > 0){ S.hp[idx] += ih; dLog(LF.heal({ name: p.name, heal: ih, label: 'Ingrain', hpAfter: S.hp[idx], hpMax: p.hpMax })); } }
@@ -10182,11 +10349,12 @@ function dEndTurn(){
     if(S.hp[idx] <= 0) return;
     const ab = normKey(p.ability || '');
     { const hv = harvestLine(sd, idx); if(hv) dLog(hv); }   // Harvest
+    { const ib = iceBodyHeal(sd, idx); if(ib) dLog(LF.heal({ name: p.name, heal: ib, label: 'Ice Body', hpAfter: S.hp[idx], hpMax: max })); }
     { const rd = rainDishHeal(sd, idx); if(rd) dLog(LF.heal({ name: p.name, heal: rd, label: 'Rain Dish', hpAfter: S.hp[idx], hpMax: max })); }
     if(ab === 'speed boost') dWith(sd, idx, () => { if(canChangeStage(sd, 'Spe', 1)) dLog(`${dNm(sd, idx)} Speed Boost: ${fmtStageChange(changeStage(sd, 'Spe', 1))}.`); });
     if(ab === 'solar power' && sunOnFor(sd, idx) && !weatherEndsThisTurn()){ const b = S.hp[idx], d = Math.min(b, Math.max(1, Math.floor(max / 8))); S.hp[idx] = b - d; dLog(`${dNm(sd, idx)} Solar Power: −${d} HP.${S.hp[idx] <= 0 ? ' Nocauteado!' : ''}`); }
     if(ab === 'dry skin' && !umbrellaOf(sd, idx)){
-      const w = battle.weather;
+      const w = fieldWeather();
       if((w === 'rain' || w === 'heavyrain') && S.hp[idx] < max){ const b = S.hp[idx], h = Math.min(max - b, Math.max(1, Math.floor(max / 8))); S.hp[idx] = b + h; dLog(`${dNm(sd, idx)} Dry Skin: +${h} HP.`); }
       else if(w === 'sun' || w === 'harshsun'){ const b = S.hp[idx], d = Math.min(b, Math.max(1, Math.floor(max / 8))); S.hp[idx] = b - d; dLog(`${dNm(sd, idx)} Dry Skin: −${d} HP.${S.hp[idx] <= 0 ? ' Nocauteado!' : ''}`); }
     }
