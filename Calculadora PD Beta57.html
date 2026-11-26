@@ -707,7 +707,7 @@ Adamant Nature
   <option value="Choice Band"><option value="Choice Specs"><option value="Choice Scarf">
   <option value="Life Orb"><option value="Assault Vest"><option value="Leftovers">
   <option value="Focus Sash"><option value="Safety Goggles"><option value="Heavy-Duty Boots"><option value="Power Herb"><option value="Light Clay"><option value="Shell Bell"><option value="Big Root"><option value="Rocky Helmet"><option value="Lum Berry">
-  <option value="Throat Spray"><option value="Air Balloon"><option value="Eject Button"><option value="Red Card"><option value="White Herb"><option value="Sitrus Berry">
+  <option value="Throat Spray"><option value="Scope Lens"><option value="Razor Claw"><option value="Leek"><option value="Lansat Berry"><option value="Ring Target"><option value="Air Balloon"><option value="Eject Button"><option value="Red Card"><option value="White Herb"><option value="Sitrus Berry">
   <option value="Grassy Seed"><option value="Electric Seed"><option value="Psychic Seed"><option value="Misty Seed">
   <option value="Eviolite"><option value="Weakness Policy"><option value="Expert Belt">
   <option value="Wise Glasses"><option value="Muscle Band"><option value="Normal Gem">
@@ -715,7 +715,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 56; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 57; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
 const ICON_TRASH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
@@ -812,7 +812,7 @@ const MEGA_LAUNCHER_MOVES = new Set(["Water Pulse","Dark Pulse","Dragon Pulse","
 const IRON_FIST_MOVES = new Set(["Bullet Punch","Comet Punch","Dizzy Punch","Double Iron Bash","Drain Punch","Dynamic Punch","Fire Punch","Focus Punch","Hammer Arm","Headlong Rush","Ice Hammer","Ice Punch","Jet Punch","Mach Punch","Mega Punch","Meteor Mash","Plasma Fists","Power-Up Punch","Rage Fist","Shadow Punch","Sky Uppercut","Surging Strikes","Thunder Punch","Wicked Blow","Double Shock"].map(normKey));
 const STRONG_JAW_MOVES = new Set(["Bite","Crunch","Fire Fang","Fishious Rend","Hyper Fang","Ice Fang","Jaw Lock","Poison Fang","Psychic Fangs","Thunder Fang","Super Fang","Bolt Beak"].map(normKey));
 const SHARPNESS_MOVES = new Set(["Aerial Ace","Air Cutter","Air Slash","Aqua Cutter","Behemoth Blade","Bitter Blade","Ceaseless Edge","Cross Poison","Cut","Fury Cutter","Kowtow Cleave","Leaf Blade","Night Slash","Psyblade","Razor Leaf","Razor Shell","Sacred Sword","Secret Sword","Slash","Solar Blade","Stone Axe","X-Scissor"].map(normKey));
-const RECKLESS_MOVES = new Set(["Brave Bird","Double-Edge","Flare Blitz","Head Charge","Head Smash","Light of Ruin","Submission","Take Down","Volt Tackle","Wave Crash","Wood Hammer","Wild Charge","Jump Kick","High Jump Kick"].map(normKey));
+const RECKLESS_MOVES = new Set(["Brave Bird","Double-Edge","Flare Blitz","Head Charge","Head Smash","Light of Ruin","Submission","Take Down","Volt Tackle","Wave Crash","Wood Hammer","Wild Charge","Jump Kick","High Jump Kick","Axe Kick","Supercell Slam"].map(normKey));
 const SKILL_LINK_MOVES = new Set(["Arm Thrust","Barrage","Bone Rush","Bullet Seed","Comet Punch","Double Slap","Fury Attack","Fury Swipes","Icicle Spear","Pin Missile","Rock Blast","Scale Shot","Spike Cannon","Tail Slap","Water Shuriken"].map(normKey));
 const MULTIHIT_FIXO_3 = new Set(["Surging Strikes","Triple Dive"].map(normKey));
 const MULTIHIT_FIXO_2 = new Set(["Bonemerang","Double Hit","Double Iron Bash","Double Kick","Dragon Darts","Dual Chop","Dual Wingbeat","Gear Grind","Tachyon Cutter","Twin Beam","Twineedle"].map(normKey));
@@ -2655,6 +2655,7 @@ function volOnEnter(side, oldIdx, newIdx, batonPass){
     if(old.magnetRise > 0) nv.magnetRise = old.magnetRise;
     if(old.tele > 0 && !isMegaGengar(battle.sharedPrepared[newIdx])) nv.tele = old.tele;
     if(old.confused > 0) nv.confused = old.confused;
+    if(old.pumped){ nv.pumped = old.pumped; nv.pumpedSrc = old.pumpedSrc; }   // Focus Energy / Dragon Cheer passam
   }
   const changed = !!(old.ingrain || old.magnetRise > 0 || old.tele > 0 || old.smacked || old.gastro || old.traced || old.abil || old.types || old.addType) || Object.keys(S.vol[newIdx] || {}).length > 0 || Object.keys(nv).length > 0;
   if(oldIdx != null && oldIdx !== newIdx) delete S.vol[oldIdx];
@@ -3391,7 +3392,8 @@ function sandVeilAcc(acc, att, tSd, tIdx){
 //  a habilidade do alvo (Sap Sipper, Water Absorb, Storm Drain, Dry Skin, Flash Fire, Well-Baked Body, Earth Eater, Volt Absorb...) absorve antes.
 const SAP_FOE_STATUS = new Set(['cotton spore','forest\'s curse','grass whistle','leech seed','sleep powder','spicy extract','spore','strength sap','stun spore','worry seed',
   'soak','will-o-wisp','sand attack','thunder wave','eerie impulse','electrify',
-  'growl','roar','sing','supersonic','screech','metal sound','noble roar','confide','parting shot']);   // sonoros: Soundproof
+  'growl','roar','sing','supersonic','screech','metal sound','noble roar','confide','parting shot',   // sonoros: Soundproof
+  'toxic','glare','hypnosis','simple beam']);
 const POWDER_MOVES = new Set(['cotton spore','magic powder','poison powder','powder','rage powder','sleep powder','spore','stun spore']);
 function powderImmune(p, sd, idx){
   if(!p) return null;
@@ -3848,7 +3850,7 @@ function sitrusLines(){
 // Depois de qualquer passo da batalha: Sitrus Berry, formas e Protosynthesis. Singles => turnLog.actions · Doubles => dLog.
 function postStepEffects(turnLog){
   syncWeatherSuppression();   // Cloud Nine / Air Lock
-  const heals = sitrusLines(), lines = illusionSyncLines().concat(weatherReactionLines()), lums = lumLines();
+  const heals = sitrusLines(), lines = illusionSyncLines().concat(weatherReactionLines()), lums = lumLines().concat(lansatLines());   // + Lansat Berry
   if(battle.format === 'doubles'){ heals.forEach(h => dLog(LF.heal(h))); lums.forEach(t => dLog(t)); lines.forEach(t => dLog(t)); return; }
   if(!turnLog) return;
   heals.forEach(h => turnLog.actions.push(h)); lums.forEach(t => turnLog.actions.push({ type: 'note', text: t })); lines.forEach(t => turnLog.actions.push({ type: 'note', text: t }));
@@ -4256,6 +4258,12 @@ function computeBattleDamage(attacker, defender, moveResult, roll, isCrit, atkSt
       else t1 = 0;
     }
   }
+  // Ring Target: anula as imunidades de TIPO do portador (Ground acerta Flying; não anula Levitate / Magnet Rise / Telekinesis)
+  { const _L = (battle && battle.sides) ? defLocOf(defender) : null;
+    if(_L && heldItem(_L.side, _L.idx) === 'ring target'){
+      if(defender.type1 && chart[defender.type1] === 0) t1 = 1; if(defender.type2 && chart[defender.type2] === 0) t2 = 1; if(defender.type3 && chart[defender.type3] === 0) t3 = 1;
+      if(d.moveType === 'Ground' && t1 === 0){ const _v = volPeek(_L.side, _L.idx); if(!['levitate','eelevate'].includes(normKey(defender.ability || '')) && !(_v.magnetRise > 0) && !(_v.tele > 0)) t1 = defender.type1 && chart[defender.type1] !== 0 ? (chart[defender.type1] ?? 1) : 1; }
+    } }
   const _immAb = abilityTypeImmunity(attacker, defender, d.moveType, moveResult.moveKey);
   if(_immAb) t1 = 0; // Levitate / Flash Fire / Water Absorb / Dry Skin: imunidade
   let _windsNote = false; [t1, t2, _windsNote] = strongWindsAdjust(defender, t1, t2);   // Strong winds: super efetivo contra Flying vira neutro
@@ -4629,6 +4637,127 @@ function uproarThroatTickLines(){
   }));
   return out;
 }
+// ===== CRÍTICO (Gen 7+ / Champions): estágio 0 = 1/24 · +1 = 1/8 · +2 = 1/2 · +3 ou mais = sempre.
+//  +1: golpe de crítico alto, Scope Lens / Razor Claw, Super Luck · +2: Leek (Farfetch'd / Sirfetch'd) · "animado" (não acumula):
+//  Focus Energy / Lansat Berry +2, Dragon Cheer +1 (+2 se o alvo é Dragon). Golpes de crítico garantido: sempre.
+//  Battle Armor / Shell Armor do alvo impedem (Mold Breaker ignora). Golpes de dano direto e confusão nunca são críticos.
+const HIGH_CRIT_MOVES = new Set(['aeroblast','air cutter','aqua cutter','attack order','blaze kick','crabhammer','cross chop','cross poison','dire claw','drill run','esper wing','ivy cudgel','karate chop','leaf blade','night slash','poison tail','psycho cut','razor leaf','razor wind','shadow blade','shadow claw','sky attack','slash','snipe shot','spacial rend','stone edge','triple arrows']);
+const DIRECT_DAMAGE_MOVES = new Set(['bide','comeuppance','counter','dragon rage','endeavor','final gambit','guardian of alola','metal burst','mirror coat',"nature's madness",'night shade','psywave','ruination','seismic toss','shadow half','sonic boom','super fang']);
+function critStageOf(sd, idx){
+  const p = battle && battle.sharedPrepared[idx]; if(!p) return 0;
+  const it = heldItem(sd, idx), ab = normKey(p.ability || ''), sp = normKey(spName(p));
+  let st = 0;
+  if(it === 'scope lens' || it === 'razor claw') st += 1;
+  if(it === 'leek' && /^(farfetch|sirfetch)/.test(sp)) st += 2;
+  if(ab === 'super luck') st += 1;
+  st += volPeek(sd, idx).pumped || 0;
+  return st;
+}
+function rollCrit(aSd, aIdx, moveKey, tSd, tIdx){
+  if(!battleCritEnabled) return false;
+  const mk = normKey(baseMoveNameFromKey(moveKey || '')), ap = battle.sharedPrepared[aIdx], tp = battle.sharedPrepared[tIdx];
+  if(DIRECT_DAMAGE_MOVES.has(mk)) return false;
+  if(tp && ['battle armor','shell armor'].includes(normKey(tp.ability || '')) && !attackerIgnoresAbility(ap)) return false;
+  if(CRITICO_PADRAO_MOVES.has(mk)) return true;
+  const st = critStageOf(aSd, aIdx) + (HIGH_CRIT_MOVES.has(mk) ? 1 : 0);
+  if(st >= 3) return true;
+  return Math.floor(battleRandom() * [24, 8, 2][st]) < 1;
+}
+// "Animado" (getting pumped): uma só fonte por vez. Devolve texto ou { fail }.
+function pumpApply(sd, idx, n, src){
+  const v = volOf(sd, idx), p = battle.sharedPrepared[idx];
+  if(v.pumped) return { fail: p.name + ' já está animado' };
+  v.pumped = n; v.pumpedSrc = src;
+  return { text: LF.pumped(p.name, n, src) };
+}
+// Lansat Berry: com HP ≤ 1/4 (Gluttony: 1/2) come e fica animado (+2), se ainda não estiver.
+function lansatLines(){
+  const out = [];
+  ['A','B'].forEach(sd => fieldMons(sd).forEach(i => {
+    const p = battle.sharedPrepared[i], S = battle.sides[sd];
+    if(!p || heldItem(sd, i) !== 'lansat berry' || !(S.hp[i] > 0) || volPeek(sd, i).pumped) return;
+    if(S.hp[i] > Math.floor(p.hpMax / (abOf(sd, i) === 'gluttony' ? 2 : 4))) return;
+    useItem(sd, i); const r = pumpApply(sd, i, 2, 'Lansat Berry'); if(r.text) out.push(r.text);
+  }));
+  return out;
+}
+// Psych Up: copia os stages do alvo (Atk, Def, SpA, SpD, Spe, Acc, Eva) e o "animado" (se o alvo não está, o usuário perde o dele).
+function psychUpApply(aSd, aIdx, tSd, tIdx){
+  const copy = withMon(tSd, tIdx, () => Object.assign({}, battle.sides[tSd].stages));
+  withMon(aSd, aIdx, () => { const S = battle.sides[aSd]; STAGE_KEYS.forEach(k => { S.stages[k] = copy[k] || 0; }); });
+  const tv = volPeek(tSd, tIdx), v = volOf(aSd, aIdx);
+  if(tv.pumped){ v.pumped = tv.pumped; v.pumpedSrc = tv.pumpedSrc; } else { delete v.pumped; delete v.pumpedSrc; }
+  return LF.psychUp(battle.sharedPrepared[aIdx].name, battle.sharedPrepared[tIdx].name);
+}
+// Simple Beam: a habilidade do alvo vira Simple (até sair de campo). Magic Bounce reflete; substituto bloqueia (quem chama).
+const SIMPLE_BEAM_FAIL = new Set(['simple','truant','multitype','zen mode','stance change','schooling','comatose','shields down','disguise','rks system','battle bond','power construct','ice face','gulp missile','as one']);
+function simpleBeamApply(aSd, aIdx, tSd, tIdx){
+  const ap = battle.sharedPrepared[aIdx], tp0 = battle.sharedPrepared[tIdx];
+  let sd = tSd, i = tIdx, pre = '';
+  if(tp0 && normKey(tp0.ability || '') === 'magic bounce' && !attackerIgnoresAbility(ap)){ sd = aSd; i = aIdx; pre = LF.bounced(tp0.name, 'Simple Beam') + ' '; }
+  const p = battle.sharedPrepared[i];
+  if(SIMPLE_BEAM_FAIL.has(normKey(p.ability || ''))) return { fail: pre + p.name + ' tem ' + p.ability };
+  setFieldAbility(sd, i, 'Simple', 'Simple Beam');
+  return { text: pre + LF.abilityChanged(p.name, 'Simple', 'Simple Beam') };
+}
+// ===== Golpes de STATUS que causam status (Toxic, Will-O-Wisp, Thunder Wave, Glare, Stun Spore, Hypnosis, Sing, Sleep Powder) =====
+const STATUS_INFLICT_MOVES = { 'toxic': 'Badly Poisoned', 'will-o-wisp': 'Burned', 'thunder wave': 'Paralyzed', 'glare': 'Paralyzed', 'stun spore': 'Paralyzed', 'hypnosis': 'Asleep', 'sing': 'Asleep', 'sleep powder': 'Asleep' };
+// Motivo de não receber o status (att = atacante preparado, ou null: sem Mold Breaker / Corrosion).
+function statusBlockReason(sd, idx, st, att){
+  if(st === 'Asleep') return sleepBlockReason(sd, idx, att);
+  const p = battle.sharedPrepared[idx]; if(!p) return 'sem alvo';
+  if(getStatusOf(sd, idx) !== 'Healthy') return p.name + ' já tem um status';
+  const ig = !!att && attackerIgnoresAbility(att), ab = abOf(sd, idx), T = typesOfP(p);
+  if(!ig && ['comatose','purifying salt'].includes(ab)) return p.name + ' tem ' + p.ability;
+  if(battle.terrain === 'misty' && battleGroundedIdx(sd, idx)) return 'o Misty Terrain impede';
+  if(!ig && leafGuardBlocks(sd, idx)) return 'Leaf Guard no sol';
+  if(st === 'Burned'){
+    if(T.includes('Fire')) return p.name + ' é do tipo Fire';
+    if(!ig && ['water veil','water bubble','thermal exchange'].includes(ab)) return p.name + ' tem ' + p.ability;
+  } else if(st === 'Paralyzed'){
+    if(T.includes('Electric')) return p.name + ' é do tipo Electric';
+    if(!ig && ab === 'limber') return p.name + ' tem Limber';
+  } else if(st === 'Poisoned' || st === 'Badly Poisoned'){
+    const corr = !!att && normKey(att.ability || '') === 'corrosion';
+    if(!corr && (T.includes('Poison') || T.includes('Steel'))) return p.name + ' é do tipo ' + (T.includes('Poison') ? 'Poison' : 'Steel');
+    if(!ig && ab === 'immunity') return p.name + ' tem Immunity';
+    if(!ig && fieldMons(sd).some(i => abOf(sd, i) === 'pastel veil')) return 'Pastel Veil';
+  }
+  return null;
+}
+function setStatusNow(sd, idx, st){
+  if(st === 'Asleep'){ putToSleep(sd, idx); return; }
+  const S = battle.sides[sd]; S.status[idx] = st; if(S.toxicCounter) S.toxicCounter[idx] = 0;
+  if(battle.format !== 'doubles' && window._stSnap && window._stSnap[sd]) window._stSnap[sd][idx] = st;   // o log já diz o status
+}
+// Aplica o golpe (proteção, semi-invulnerável, habilidades que absorvem, pó e substituto: verificados por quem chama). Magic Bounce reflete.
+//  Thunder Wave respeita tipos (Ground imune; Ring Target anula). Glare acerta Ghost.
+function statusMoveApply(aSd, aIdx, tSd, tIdx, m){
+  const mk = normKey((m && m.Name) || ''), st = STATUS_INFLICT_MOVES[mk], ap = battle.sharedPrepared[aIdx], tp0 = battle.sharedPrepared[tIdx];
+  let sd = tSd, i = tIdx, pre = '';
+  if(tp0 && normKey(tp0.ability || '') === 'magic bounce' && !attackerIgnoresAbility(ap)){ sd = aSd; i = aIdx; pre = LF.bounced(tp0.name, m.Name) + ' '; }
+  const p = battle.sharedPrepared[i];
+  if(mk === 'thunder wave'){
+    const ty = statusMoveTypeFor(m, aIdx), ch = TYPE_CHART[ty] || {};
+    if(heldItem(sd, i) !== 'ring target' && typesOfP(p).some(t => ch[t] === 0)) return { fail: pre + 'não afeta ' + p.name };
+  }
+  const r = statusBlockReason(sd, i, st, sd === aSd && i === aIdx ? null : ap); if(r) return { fail: pre + r };
+  setStatusNow(sd, i, st);
+  return { text: pre + LF.statusGain({ name: p.name, newStatus: st, oldStatus: 'Healthy' }) };
+}
+function sleepMoveApply(aSd, aIdx, tSd, tIdx, mvName){ return statusMoveApply(aSd, aIdx, tSd, tIdx, { Name: mvName }); }
+// Toxic usado por Pokémon Poison: nunca erra (nem contra semi-invulnerável)
+function toxicSure(att, mk){ return mk === 'toxic' && hasTypeP(att, 'Poison'); }
+// ===== Dano de queda (Axe Kick, High Jump Kick, Jump Kick, Supercell Slam): errou, foi bloqueado por proteção ou não teve efeito
+//  => o usuário perde ⌊HP máx. / 2⌋. Magic Guard impede. Sem alvo restante: sem dano. =====
+const CRASH_MOVES = new Set(['axe kick','high jump kick','jump kick','supercell slam']);
+function crashLines(sd, idx){
+  const p = battle.sharedPrepared[idx], S = battle.sides[sd];
+  if(!p || !(S.hp[idx] > 0) || normKey(p.ability || '') === 'magic guard') return [];
+  const b = S.hp[idx]; S.hp[idx] = Math.max(0, b - Math.floor(p.hpMax / 2));
+  const out = [LF.crash(p.name, b - S.hp[idx], S.hp[idx], p.hpMax)]; if(S.hp[idx] <= 0) out.push(LF.faint(p.name));
+  return out;
+}
 // ===== Sono (Sing / Sleep Powder / Yawn / Effect Spore / efeitos secundários): motivo de não poder dormir, ou null.
 //  Insomnia, Vital Spirit, Comatose, Purifying Salt; Sweet Veil (o próprio e os aliados em campo); Electric/Misty Terrain no chão;
 //  Leaf Guard no sol; Uproar. Mold Breaker (att) ignora as habilidades.
@@ -4647,15 +4776,6 @@ function sweetVeilOn(sd){ return fieldMons(sd).some(i => abOf(sd, i) === 'sweet 
 function putToSleep(sd, idx){
   const S = battle.sides[sd]; S.status[idx] = 'Asleep'; S.sleepCounter[idx] = 0; if(S.restSleep) delete S.restSleep[idx]; if(S.toxicCounter) S.toxicCounter[idx] = 0;
   if(battle.format !== 'doubles' && window._stSnap && window._stSnap[sd]) window._stSnap[sd][idx] = 'Asleep';   // o log já diz que dormiu
-}
-// Sing / Sleep Powder (proteção, semi-invulnerável, Sap Sipper / Soundproof e pó já verificados por quem chama). Magic Bounce reflete.
-function sleepMoveApply(aSd, aIdx, tSd, tIdx, mvName){
-  const ap = battle.sharedPrepared[aIdx], tp0 = battle.sharedPrepared[tIdx];
-  let sd = tSd, i = tIdx, pre = '';
-  if(tp0 && normKey(tp0.ability || '') === 'magic bounce' && !attackerIgnoresAbility(ap)){ sd = aSd; i = aIdx; pre = LF.bounced(tp0.name, mvName) + ' '; }
-  const r = sleepBlockReason(sd, i, sd === aSd ? null : ap); if(r) return { fail: pre + r };
-  putToSleep(sd, i);
-  return { text: pre + LF.statusGain({ name: battle.sharedPrepared[i].name, newStatus: 'Asleep', oldStatus: 'Healthy' }) };
 }
 // Golpes sonoros sem efeito programado: quem tem Soundproof aparece como imune (Perish Song: todos em campo; Heal Bell: o time do usuário).
 function soundImmuneNotes(sd, idx, mk){
@@ -4889,7 +5009,10 @@ function canChangeStage(side, stat, delta, opts){
 }
 function changeStage(side, stat, delta, opts){
   const S = battle.sides[side];
-  const contrary = hasContrary(side, opts), eff = contrary ? -delta : delta;
+  const contrary = hasContrary(side, opts);
+  // Simple (Gen 5+): dobra a mudança de stage (Mold Breaker do atacante => opts.ignoreAbility, não dobra)
+  const _simple = !(opts && opts.ignoreAbility) && normKey(((battle.sharedPrepared && getSidePrepared(side)) || {}).ability || '') === 'simple';
+  const eff = (contrary ? -delta : delta) * (_simple ? 2 : 1);
   const before = S.stages[stat] || 0;
   const after = Math.max(-6, Math.min(6, before + eff));
   S.stages[stat] = after;
@@ -5077,7 +5200,7 @@ function executeAction(action, ordered, actionIdx){
     markRevealed(action.side, attackerActiveIdx, action.move.Name); attackerSideState.lastMoveKey = moveNameKey;
     choiceLockSet(action.side, attackerActiveIdx, action.move.Name);
     // Precisão: battleMoveAccuracy (Gravity ×6840/4096). Alvo sob Telekinesis e a própria Telekinesis sempre acertam.
-    const _tSureS = moveNameKey === 'telekinesis' || teleSureHit(defSide, defenderSideState.activePokeIdx, moveNameKey, getSemi(defSide));
+    const _tSureS = moveNameKey === 'telekinesis' || toxicSure(attacker, moveNameKey) || teleSureHit(defSide, defenderSideState.activePokeIdx, moveNameKey, getSemi(defSide));
     const acc = _tSureS ? 101 : sandVeilAcc(battleMoveAccuracy(moveNameKey, action.move, defSide, defenderSideState.activePokeIdx), attacker, defSide, defenderSideState.activePokeIdx);
     const accRoll = battleRandom() * 100;
     if(battleAccuracyEnabled && acc < 101 && accRoll >= acc){
@@ -5089,7 +5212,7 @@ function executeAction(action, ordered, actionIdx){
       const _spv = protectionVerdict(moveNameKey, { status: true, foeStatus: true, priority: effMovePriority(attacker, action.move.Name), spread: false, contact: false }, Object.assign({ prot: defenderSideState.protected || null }, defenderSideState.sideProt || {}));
       if(_spv.blocked) return { side: action.side, type: 'blocked', attackerName: attacker.name, moveName: action.move.Name, defenderName: defender.name, by: _spv.by };
       const _ds = getSemi(defSide);
-      if(_ds && _ds.kind !== 'charge' && normKey(attacker.ability||'') !== 'no guard' && normKey(defender.ability||'') !== 'no guard')
+      if(_ds && _ds.kind !== 'charge' && !toxicSure(attacker, moveNameKey) && normKey(attacker.ability||'') !== 'no guard' && normKey(defender.ability||'') !== 'no guard')
         return { side: action.side, type: 'move-miss', attackerName: attacker.name, moveName: action.move.Name, semiDodge: defender.name };
       const _ea = electricStatusAbsorb(action.side, attackerActiveIdx, defSide, defenderSideState.activePokeIdx, action.move); if(_ea) return _txtS(_ea);
     }
@@ -5097,6 +5220,8 @@ function executeAction(action, ordered, actionIdx){
       const _pi = powderImmune(defender, defSide, defenderSideState.activePokeIdx); if(_pi) return _failS(LF.powderImmune(defender.name, _pi));
     }
     if(moveNameKey === 'destiny bond'){ const _db = destinyBondUse(action.side, attackerActiveIdx); return _db.fail ? _failS(_db.fail) : _txtS(_db.text); }
+    if(moveNameKey === 'focus energy'){ const _fe = pumpApply(action.side, attackerActiveIdx, 2, 'Focus Energy'); return _fe.fail ? _failS(_fe.fail) : _txtS(_fe.text); }
+    if(moveNameKey === 'dragon cheer') return _failS('não há aliado em campo');   // Singles: só afeta o aliado
     if(moveNameKey === 'rest'){
       if(action.viaSleepTalk) return _failS('não funciona pelo Sleep Talk');
       const _rf = restFail(action.side, attackerActiveIdx); if(_rf) return _failS(_rf);
@@ -5132,7 +5257,7 @@ function executeAction(action, ordered, actionIdx){
       _v.magnetRise = MAGNET_RISE_TURNS; refreshBattlePrepared();
       return _txtS(`${attacker.name} passou a flutuar com eletromagnetismo! (${MAGNET_RISE_TURNS} turnos)${battleGroundedIdx(action.side, attackerActiveIdx) ? ' (mas continua no chão)' : ''}`);
     }
-    if(moveNameKey === 'telekinesis' || moveNameKey === 'pain split' || moveNameKey === "forest's curse" || moveNameKey === 'trick-or-treat' || moveNameKey === 'reflect type' || moveNameKey === 'gastro acid' || moveNameKey === 'entrainment' || moveNameKey === 'electrify' || moveNameKey === 'memento' || moveNameKey === 'after you' || moveNameKey === 'strength sap' || moveNameKey === 'trick' || moveNameKey === 'switcheroo' || moveNameKey === 'yawn' || (moveNameKey in CONFUSE_STATUS) || FORCE_SWITCH_STATUS.has(moveNameKey)){
+    if(moveNameKey === 'telekinesis' || moveNameKey === 'pain split' || moveNameKey === 'psych up' || moveNameKey === 'simple beam' || moveNameKey === "forest's curse" || moveNameKey === 'trick-or-treat' || moveNameKey === 'reflect type' || moveNameKey === 'gastro acid' || moveNameKey === 'entrainment' || moveNameKey === 'electrify' || moveNameKey === 'memento' || moveNameKey === 'after you' || moveNameKey === 'strength sap' || moveNameKey === 'trick' || moveNameKey === 'switcheroo' || moveNameKey === 'yawn' || (moveNameKey in CONFUSE_STATUS) || FORCE_SWITCH_STATUS.has(moveNameKey)){
       const _dIdx = defenderSideState.activePokeIdx;
       { const _spv = protectionVerdict(moveNameKey, { status: true, foeStatus: true, priority: effMovePriority(attacker, action.move.Name), spread: false, contact: false }, Object.assign({ prot: defenderSideState.protected || null }, defenderSideState.sideProt || {}));
         if(_spv.blocked) return { side: action.side, type: 'blocked', attackerName: attacker.name, moveName: action.move.Name, defenderName: defender.name, by: _spv.by }; }
@@ -5199,6 +5324,11 @@ function executeAction(action, ordered, actionIdx){
         if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
         const _ta = typeAddApply(action.side, attackerActiveIdx, defSide, _dIdx, moveNameKey === 'trick-or-treat' ? 'Ghost' : 'Grass', action.move.Name, attackerIgnoresAbility(attacker));
         return _ta.fail ? _failS(_ta.fail) : _txtS(_ta.text);
+      }
+      if(moveNameKey === 'psych up') return _txtS(psychUpApply(action.side, attackerActiveIdx, defSide, _dIdx));   // ignora o substituto
+      if(moveNameKey === 'simple beam'){
+        if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
+        const _sb = simpleBeamApply(action.side, attackerActiveIdx, defSide, _dIdx); return _sb.fail ? _failS(_sb.fail) : _txtS(_sb.text);
       }
       if(moveNameKey === 'pain split'){   // substituto bloqueia
         if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
@@ -5342,10 +5472,10 @@ function executeAction(action, ordered, actionIdx){
       const _ea = electricStatusAbsorb(action.side, attackerActiveIdx, defSide, defenderSideState.activePokeIdx, action.move); if(_ea) return _txtS(_ea);
       if(pranksterDarkBlocks(action, defender, true)) return _failS(LF.pranksterDark(defender.name));
     }
-    if(moveNameKey === 'sing' || moveNameKey === 'sleep powder'){   // fazem dormir (Sing atravessa o substituto)
-      if(moveNameKey === 'sleep powder' && (defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
+    if(STATUS_INFLICT_MOVES[moveNameKey]){   // Toxic / Will-O-Wisp / Thunder Wave / Glare / Stun Spore / Hypnosis / Sing / Sleep Powder
+      if(!isSoundMove(moveNameKey) && (defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
       if(pranksterDarkBlocks(action, defender, true)) return _failS(LF.pranksterDark(defender.name));
-      const _sl = sleepMoveApply(action.side, attackerActiveIdx, defSide, defenderSideState.activePokeIdx, action.move.Name);
+      const _sl = statusMoveApply(action.side, attackerActiveIdx, defSide, defenderSideState.activePokeIdx, action.move);
       return _sl.fail ? _failS(_sl.fail) : _txtS(_sl.text);
     }
     { const _si = soundImmuneNotes(action.side, attackerActiveIdx, moveNameKey); if(_si.length) return _txtS('(sem efeito) ' + _si.join(' ')); }   // Perish Song / Heal Bell: Soundproof
@@ -5517,7 +5647,7 @@ function executeAction(action, ordered, actionIdx){
   for(let h = 0; h < nHits; h++){
     // Triple Axel/Kick e Population Bomb: checagem de precisão antes de cada hit. Skill Link: só a checagem inicial.
     if(h > 0 && perHitAcc && !skillLink && battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ missAt = h + 1; break; }
-    const hitCrit = battleCritEnabled && Math.floor(battleRandom() * 24) < 1;
+    const hitCrit = rollCrit(action.side, attackerActiveIdx, action.move.moveKey, defSide, s.activePokeIdx);   // estágio de crítico
     const hitRollIdx = Math.floor(battleRandom() * 16);
     const hitBP = tripleBP ? calcBpFinal(tripleBP[h], action.move.detail.bpMods || []) : overrideBP;
     const r = computeBattleDamage(attacker, defender, hitMove, ROLL_MULTS[hitRollIdx], hitCrit, attackerSideState.stages, defenderSideState.stages, hitBP, attackerStatus, nHits > 1 || !!tripleBP);
@@ -5699,6 +5829,8 @@ function executeAction(action, ordered, actionIdx){
   { const _lo = lifeOrbRecoil(action.side, attackerActiveIdx, dealt, moveInfo); if(_lo){ _aft(_lo); if(attackerSideState.hp[attackerActiveIdx] <= 0){ attackerFainted = true; _loKO = true; _aft(LF.faint(attacker.name)); faintFirst(_defKO() ? defSide : action.side); } } }   // Life Orb: depois do dano (e do nocaute) do alvo
   { const _sb = shellBellHeal(action.side, attackerActiveIdx, dealt, moveInfo); if(_sb) _aft(_sb); }   // Shell Bell: depois do dano (e de drenagem, recuo, Rough Skin, Thief, Magician, Life Orb)
   if(moveNameKey === 'plasma fists' && dealt > 0 && !subbed && battle.plasmaTurn !== battle.turn){ battle.plasmaTurn = battle.turn; refreshBattlePrepared(); hitNote += ' ' + LF.plasma(); }
+  // Fell Stinger: nocauteou o alvo => Atk +3
+  if(moveNameKey === 'fell stinger' && !subbed && s.hp[s.activePokeIdx] <= 0 && attackerSideState.hp[attackerActiveIdx] > 0) secEffects.push(`${attacker.name} ${fmtStageChange(changeStage(action.side, 'Atk', 3))} (Fell Stinger)`);
   // Eelevate: nocauteou com golpe de dano => +1 no maior stat (não ativa se o nocaute encerra a batalha)
   if(!subbed && s.hp[s.activePokeIdx] <= 0 && attackerSideState.hp[attackerActiveIdx] > 0 && normKey(attacker.ability || '') === 'eelevate'
      && (singlesSideAlive(defSide) || (battle.mode === 'pvc' && Number(battle.infiniteMode) > 0))){
@@ -6467,6 +6599,8 @@ function runTurn(ctx, startIdx){
       const _mn = action.type === 'move' ? action.move.moveKey : action.move.Name, _ai = battle.sides[action.side].activePokeIdx;
       const _ok = action.type === 'move' ? (res.type === 'move' && res.typeEff > 0)
         : (!['move-fail','move-miss','blocked','move-nop','note','skip'].includes(res.type) && !(res.text && MOVE_FAIL_RX.test(res.text)));
+      if(action.type === 'move' && CRASH_MOVES.has(normKey(baseMoveNameFromKey(_mn))) && (['move-miss','blocked','move-absorb'].includes(res.type) || (res.type === 'move' && !(res.typeEff > 0))))
+        crashLines(action.side, _ai).forEach(t => turnLog.actions.push({ side: action.side, type: 'note', text: t }));   // dano de queda
       if(normKey(baseMoveNameFromKey(_mn)) === 'uproar') uproarAfter(action.side, _ai, _ok, _mn).forEach(t => turnLog.actions.push({ side: action.side, type: 'note', text: t }));
       if(_ok){ const _ts = throatSprayLine(action.side, _ai, _mn); if(_ts) turnLog.actions.push({ side: action.side, type: 'note', text: _ts }); }
     }
@@ -7157,6 +7291,9 @@ const LF = {
   burnUpType: (n, types) => `<b>${n}</b> perdeu o tipo Fire (Burn Up): agora é <b>${types}</b>!`,
   typeAdd: (n, type, src) => `<b>${n}</b> ganhou o tipo <b>${type}</b> (${src})!`,
   reflectType: (n, t, types) => `<b>${n}</b> copiou o tipo de <b>${t}</b>: agora é <b>${types}</b>!`,
+  pumped: (n, k, src) => `<b>${n}</b> está animado (${src}): estágio de crítico +${k}!`,
+  psychUp: (n, t) => `<b>${n}</b> copiou as mudanças de stats de <b>${t}</b>!`,
+  crash: (n, d, hpA, max) => `<b>${n}</b> continuou e se chocou! <span class="dmg">${LF.dmgAmt(d, max)}</span>. ${hpA}/${max} HP.`,
   destinyBondStart: n => `<b>${n}</b> está tentando levar o oponente junto com ele (Destiny Bond)!`,
   destinyBond: (n, a) => `<b>${n}</b> levou <b>${a}</b> junto com ele (Destiny Bond)!`,
   painSplit: (u, uh, um, t, th, tm) => `<b>${u}</b> e <b>${t}</b> dividiram o HP! ${u}: ${uh}/${um} · ${t}: ${th}/${tm}.`,
@@ -7736,7 +7873,7 @@ function battleSideCardInner(side){
     return `<b style="color:${col};">${v}</b> <span style="color:var(--text-dim);font-size:10px;">(${r})${tag}</span>`; };
   const _stg = k => `${(s.stages[k] || 0) >= 0 ? '+' : ''}${s.stages[k] || 0}`;
   const statsBody = `HP: <b style="color:var(--text);">${active.hpMax}</b> · Atk: ${_sv(active.atkFinalClean,'Atk')} · Def: ${_sv(active.defFinal,'Def', active.defNoWx)} · SpA: ${_sv(active.spaFinalClean,'SpA')} · SpD: ${_sv(active.spdFinal,'SpD', active.spdNoWx)} · Spe: ${_sv(active.speFinal,'Spe')}<br>
-       Stages: Atk ${_stg('Atk')} · Def ${_stg('Def')} · SpA ${_stg('SpA')} · SpD ${_stg('SpD')} · Spe ${_stg('Spe')}`;
+       Stages: Atk ${_stg('Atk')} · Def ${_stg('Def')} · SpA ${_stg('SpA')} · SpD ${_stg('SpD')} · Spe ${_stg('Spe')} · Crit +${critStageOf(side, s.activePokeIdx)}`;
   const manualStagesHtml = battleManual.build ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-family:var(--font-mono);font-size:11px;">${['Atk','Def','SpA','SpD','Spe'].map(k => `<label>${k} <select data-manual-stage="${side}" data-stat="${k}" style="font-family:var(--font-mono);font-size:11px;">${[6,5,4,3,2,1,0,-1,-2,-3,-4,-5,-6].map(v => `<option value="${v}"${(s.stages[k]||0) === v ? ' selected' : ''}>${v > 0 ? '+' : ''}${v}</option>`).join('')}</select></label>`).join('')}</div>` : '';
   const spNatureHtml = `Nature: <b style="color:var(--text);">${active.nature || '—'}</b><br>SP: ${EV_ORDER.map(k => battleManual.build
     ? `${k} <input type="number" min="0" max="32" step="1" value="${(active.evs||{})[k]||0}" data-manual-sp="${k}" data-idx="${s.activePokeIdx}" style="width:42px;font-family:var(--font-mono);font-size:11px;">`
@@ -8114,7 +8251,7 @@ function envSelectHtml(kind){
   return `<select data-manual-env="${kind}" style="font-family:var(--font-mono);font-size:11px;">${opts.map(([v, l]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${l}</option>`).join('')}</select><span style="font-family:var(--font-mono);font-size:11px;color:var(--text-dim);">${(kind === 'weather' ? battle.weather : battle.terrain) !== 'none' ? envTurnsText(kind === 'weather' ? battle.weatherInfo : battle.terrainInfo).replace(' · ', '') : ''}</span>`;
 }
 function getAllItemsList(cur){
-  const set = new Set([...RANDOM_ITEMS_POOL, ...MEGA_STONE_NAMES, 'Eject Button', 'Red Card', 'Throat Spray', 'Light Clay', 'Shell Bell', 'Big Root', 'Rocky Helmet', 'Lum Berry', 'Focus Sash','Life Orb','Leftovers','Sitrus Berry','Choice Band','Choice Specs','Choice Scarf','Assault Vest','White Herb','Safety Goggles', ...currentPokemons.map(p => p && p.item).filter(Boolean), cur].filter(Boolean));
+  const set = new Set([...RANDOM_ITEMS_POOL, ...MEGA_STONE_NAMES, 'Eject Button', 'Red Card', 'Throat Spray', 'Scope Lens', 'Razor Claw', 'Leek', 'Lansat Berry', 'Ring Target', 'Light Clay', 'Shell Bell', 'Big Root', 'Rocky Helmet', 'Lum Berry', 'Focus Sash','Life Orb','Leftovers','Sitrus Berry','Choice Band','Choice Specs','Choice Scarf','Assault Vest','White Herb','Safety Goggles', ...currentPokemons.map(p => p && p.item).filter(Boolean), cur].filter(Boolean));
   return [...set].sort();
 }
 function getAllAbilitiesList(cur){
@@ -8269,7 +8406,7 @@ function showMoveDetail(side, moveKey){
   const _secTxt = _secList.length ? _secList.map(e => { const k = normKey(e.effect || ''); const mm = String(e.effect || '').match(/^(atk|def|spa|spd|spe|acc|eva)\s*([+-])\s*(\d+)$/i);
       const lbl = mm ? (mm[2] === '+' ? `${mm[1]} +${mm[3]} (usuário)` : `${mm[1]} −${mm[3]} (alvo)`) : (_secPT[k] || e.effect);
       return `${Math.round(Number(e.chance) || 0)}% ${lbl}`; }).join(' · ') : 'nenhum';
-  const _hits = d.tripleHitsBP ? ` · ${d.tripleHitsBP.length} hits (${d.tripleHitsBP.map(x => calcBpFinal(x, d.bpMods || [])).join(' / ')} BP)` : (d.multiHits > 1 ? ` · ${d.multiHits} hits` : '');
+  const _hits = d.tripleHitsBP ? ` · ${d.tripleHitsBP.length} hits (${d.tripleHitsBP.map(x => calcBpFinal(x, d.bpMods || [])).join(' / ')} BP)` : (d.multiHits > 1 ? ` · ${SKILL_LINK_MOVES.has(normKey(mbk)) ? (normKey(act.ability || '') === 'skill link' ? '5 hits (Skill Link)' : '2–5 hits') : d.multiHits + ' hits'}` : '');
   const ov = document.createElement('div');
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px;';
   ov.innerHTML = `<div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;max-width:380px;width:100%;font-family:var(--font-mono);font-size:12px;color:var(--text-dim);line-height:1.75;max-height:85vh;overflow:auto;">
@@ -10578,7 +10715,7 @@ function dExec(a, order){
     else if(cc && cc.confused) dLog(LF.confused(dP(idx).name));
     else if(cc && cc.hit){ battle._curAtt = { sd, slot: a.slot }; battle._tl.actions.push(Object.assign({ _dblCalc: true }, cc.hit)); dLog(LF.confusionHit(cc.hit)); battle._curAtt = null; S.semis[idx] = null; _sp(); return null; } }
   battle._curAtt = { sd, slot: a.slot };
-  const _L0 = battle._tl ? battle._tl.lines.length : 0; battle._upDone = false; battle._mvOk = false;
+  const _L0 = battle._tl ? battle._tl.lines.length : 0; battle._upDone = false; battle._mvOk = false; battle._hadTarget = false;
   let _r;
   try { _r = a.type === 'status-move' ? dStatusAct(a) : dMoveAct(a, order); }
   finally { battle._curAtt = null; }
@@ -10586,6 +10723,7 @@ function dExec(a, order){
     const mn = a.type === 'move' ? a.move.moveKey : a.move.Name, nl = battle._tl ? battle._tl.lines.slice(_L0) : [];
     const ok = a.type === 'move' ? !!battle._mvOk : (nl.length > 0 && !nl.some(l => MOVE_FAIL_RX.test(l)));
     if(a.type === 'move' && normKey(baseMoveNameFromKey(mn)) === 'uproar' && !battle._upDone) uproarAfter(sd, idx, false).forEach(t => dLog(t));
+    if(a.type === 'move' && CRASH_MOVES.has(normKey(baseMoveNameFromKey(mn))) && battle._hadTarget && !battle._mvOk) crashLines(sd, idx).forEach(t => dLog(t));   // dano de queda
     if(ok && dS(sd).active.includes(idx)){ const ts = throatSprayLine(sd, idx, mn); if(ts) dLog(ts); }
   }
   return _r;
@@ -10630,6 +10768,7 @@ function dMoveAct(a, order){
   if(mk === 'fake out' && battle.turn !== (S.entry[idx] || 0) + 1){ dLog(LF.moveFail(att.name, 'Fake Out', 'não é o primeiro turno em campo')); return null; }
   if(mk === 'uproar' && !a.noPP){ const fo = dActives(dOpp(sd)); if(fo.length){ const f = fo[Math.floor(battleRandom() * fo.length)]; a.tgt = { sd: dOpp(sd), slot: f.slot }; } }   // Uproar: oponente aleatório
   const tg = dResolveTargets(a, m, mk);
+  battle._hadTarget = tg.list.length > 0;
   if(!tg.list.length){ dLog(`${nm} usou <b>${mn}</b>, mas não havia alvo!`); return null; }
   // Armor Tail / Queenly Majesty: um portador em campo protege a si e ao aliado de golpes de prioridade.
   { const _foeSides = [...new Set(tg.list.filter(t => t.sd !== sd).map(t => t.sd))];
@@ -10833,7 +10972,7 @@ function dHit(a, tSd, tIdx, o){
   for(let h = 0; h < nHits; h++){
     // Triple Axel/Kick e Population Bomb: precisão antes de cada hit (Skill Link: só a inicial).
     if(h > 0 && perHitAcc && !skillLink && battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ missAt = h + 1; break; }
-    const hc = battleCritEnabled && Math.floor(battleRandom() * 24) < 1;
+    const hc = rollCrit(sd, idx, m.moveKey, tSd, tIdx);   // estágio de crítico
     const ri = Math.floor(battleRandom() * 16);
     const hbp = tripleBP ? Math.trunc(calcBpFinal(tripleBP[h], m.detail.bpMods || []) * (o.hhMult || 1)) : o.obp;
     const r = dCalc(sd, idx, tSd, tIdx, mv, ROLL_MULTS[ri], hc, hbp, nHits > 1 || !!tripleBP);
@@ -10918,6 +11057,7 @@ function dHit(a, tSd, tIdx, o){
     const db = dragHitBlock(att, tSd, tIdx); if(db) dLog(LF.dragHitBlocked(def.name, db)); else dragHit = true;
   }
   if(!dragHit && dealt > 0 && !subbed && T.hp[tIdx] > 0 && !sheerForceOn(att, info)){ const it = heldItem(tSd, tIdx); if(it === 'eject button' || it === 'red card') (o.items || (o.items = [])).push({ sd: tSd, idx: tIdx, it, spe: dSpeed(tSd, tIdx) }); }
+  if(mk === 'fell stinger' && !subbed && T.hp[tIdx] <= 0 && S.hp[idx] > 0) dWith(sd, idx, () => dLog(`${dNm(sd, idx)} ${fmtStageChange(changeStage(sd, 'Atk', 3))} (Fell Stinger).`));   // Fell Stinger: Atk +3
   // Eelevate: nocauteou com golpe de dano => +1 no maior stat (não ativa se o nocaute encerra a batalha)
   if(!subbed && T.hp[tIdx] <= 0 && S.hp[idx] > 0 && tSd !== sd && normKey(att.ability || '') === 'eelevate' && !dSideDead(tSd)){
     const bst = beastBoostStat(att);
@@ -10971,6 +11111,14 @@ function dStatusAct(a){
   const H = `<b>${att.name}</b> usou <b>${m.Name}</b>`;
   const fail = r => { dLog(LF.moveFail(att.name, m.Name, r)); return null; };
   if(mk === 'destiny bond'){ const db = destinyBondUse(sd, idx); if(db.fail) return fail(db.fail); dLog(LF.moveText(att.name, m.Name, db.text)); return null; }
+  if(mk === 'focus energy'){ const fe = pumpApply(sd, idx, 2, 'Focus Energy'); if(fe.fail) return fail(fe.fail); dLog(LF.moveText(att.name, m.Name, fe.text)); return null; }
+  if(mk === 'dragon cheer'){   // aliado: +1 (+2 se Dragon); aliado com Soundproof é imune (lista sonora do usuário)
+    const al = dActives(sd).find(x => x.idx !== idx); if(!al) return fail('não há aliado em campo');
+    const ap = dP(al.idx);
+    if(isSoundMove(mk) && normKey(ap.ability || '') === 'soundproof' && !attackerIgnoresAbility(att)) return fail(LF.statusAbsorbImmune(ap.name, 'Soundproof'));
+    const dc = pumpApply(sd, al.idx, hasTypeP(ap, 'Dragon') ? 2 : 1, 'Dragon Cheer'); if(dc.fail) return fail(dc.fail);
+    dLog(LF.moveText(att.name, m.Name, dc.text)); return null;
+  }
   if(mk === 'rest'){
     if(a.viaSleepTalk) return fail('não funciona pelo Sleep Talk');
     const rf = restFail(sd, idx); if(rf) return fail(rf);
@@ -11004,7 +11152,7 @@ function dStatusAct(a){
     v.magnetRise = MAGNET_RISE_TURNS; refreshBattlePrepared();
     dLog(LF.moveText(att.name, m.Name, `${att.name} passou a flutuar com eletromagnetismo! (${MAGNET_RISE_TURNS} turnos)${battleGroundedIdx(sd, idx) ? ' (mas continua no chão)' : ''}`)); return null;
   }
-  if(mk === 'telekinesis' || mk === 'pain split' || mk === "forest's curse" || mk === 'trick-or-treat' || mk === 'reflect type' || mk === 'gastro acid' || mk === 'entrainment' || mk === 'electrify' || mk === 'memento' || mk === 'after you' || mk === 'strength sap' || mk === 'trick' || mk === 'switcheroo' || mk === 'yawn' || (mk in CONFUSE_STATUS) || FORCE_SWITCH_STATUS.has(mk)){
+  if(mk === 'telekinesis' || mk === 'pain split' || mk === 'psych up' || mk === 'simple beam' || mk === "forest's curse" || mk === 'trick-or-treat' || mk === 'reflect type' || mk === 'gastro acid' || mk === 'entrainment' || mk === 'electrify' || mk === 'memento' || mk === 'after you' || mk === 'strength sap' || mk === 'trick' || mk === 'switcheroo' || mk === 'yawn' || (mk in CONFUSE_STATUS) || FORCE_SWITCH_STATUS.has(mk)){
     // alvo escolhido (nunca o próprio usuário); sem alvo válido => primeiro oponente em campo
     const foes = dActives(o);
     let t = (a.tgt && !(a.tgt.sd === sd && S.active[a.tgt.slot] === idx)) ? a.tgt : null;
@@ -11034,6 +11182,14 @@ function dStatusAct(a){
       const ta = typeAddApply(sd, idx, t.sd, tIdx, mk === 'trick-or-treat' ? 'Ghost' : 'Grass', m.Name, attackerIgnoresAbility(att));
       if(ta.fail) return fail(ta.fail);
       dLog(LF.moveText(att.name, m.Name, ta.text)); return null;
+    }
+    if(mk === 'psych up'){ dLog(LF.moveText(att.name, m.Name, psychUpApply(sd, idx, t.sd, tIdx))); return null; }   // ignora o substituto
+    if(mk === 'simple beam'){
+      if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
+      const acc = battleMoveAccuracy(mk, m, t.sd, tIdx);
+      if(battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name })); return null; }
+      const sb = simpleBeamApply(sd, idx, t.sd, tIdx); if(sb.fail) return fail(sb.fail);
+      dLog(LF.moveText(att.name, m.Name, sb.text)); return null;
     }
     if(mk === 'pain split'){   // sempre acerta; substituto bloqueia
       if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
@@ -11236,14 +11392,16 @@ function dStatusAct(a){
     const ti = dS(a.tgt.sd).active[a.tgt.slot];
     if(ti != null && dAlive(a.tgt.sd, ti)){ const pi = powderImmune(dP(ti), a.tgt.sd, ti); if(pi) return fail(LF.powderImmune(dP(ti).name, pi)); }
   }
-  if((mk === 'sing' || mk === 'sleep powder') && a.tgt){   // fazem dormir (Sing atravessa o substituto)
+  if(STATUS_INFLICT_MOVES[mk] && a.tgt){   // Toxic / Will-O-Wisp / Thunder Wave / Glare / Stun Spore / Hypnosis / Sing / Sleep Powder
     const ts = a.tgt.sd, ti = dS(ts).active[a.tgt.slot];
     if(ti == null || !dAlive(ts, ti)) return fail('sem alvo');
-    if(mk === 'sleep powder' && (dS(ts).subs[ti] || 0) > 0 && ts !== sd) return fail('o substituto de ' + dP(ti).name + ' bloqueou');
-    const acc = battleMoveAccuracy(mk, m, ts, ti);
+    const sure = toxicSure(att, mk), tsm = dS(ts).semis[ti];
+    if(tsm && tsm.kind !== 'charge' && !sure && normKey(att.ability || '') !== 'no guard' && normKey(dP(ti).ability || '') !== 'no guard'){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name, semiDodge: dP(ti).name })); return null; }
+    if(!isSoundMove(mk) && (dS(ts).subs[ti] || 0) > 0 && ts !== sd) return fail('o substituto de ' + dP(ti).name + ' bloqueou');
+    const acc = sure ? 101 : sandVeilAcc(battleMoveAccuracy(mk, m, ts, ti), att, ts, ti);
     if(battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name })); return null; }
     if(pranksterDarkBlocks(a, dP(ti), ts !== sd)) return fail(LF.pranksterDark(dP(ti).name));
-    const sl = sleepMoveApply(sd, idx, ts, ti, m.Name); if(sl.fail) return fail(sl.fail);
+    const sl = statusMoveApply(sd, idx, ts, ti, m); if(sl.fail) return fail(sl.fail);
     dLog(LF.moveText(att.name, m.Name, sl.text)); return null;
   }
   { const si = soundImmuneNotes(sd, idx, mk); if(si.length){ dLog(LF.moveText(att.name, m.Name, '(sem efeito) ' + si.join(' '))); return null; } }   // Perish Song / Heal Bell: Soundproof
