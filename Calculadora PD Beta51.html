@@ -706,7 +706,7 @@ Adamant Nature
   <option value="Black Glasses"><option value="Metal Coat"><option value="Fairy Feather">
   <option value="Choice Band"><option value="Choice Specs"><option value="Choice Scarf">
   <option value="Life Orb"><option value="Assault Vest"><option value="Leftovers">
-  <option value="Focus Sash"><option value="Safety Goggles"><option value="Heavy-Duty Boots"><option value="Power Herb"><option value="Light Clay"><option value="Shell Bell"><option value="Big Root">
+  <option value="Focus Sash"><option value="Safety Goggles"><option value="Heavy-Duty Boots"><option value="Power Herb"><option value="Light Clay"><option value="Shell Bell"><option value="Big Root"><option value="Rocky Helmet"><option value="Lum Berry">
   <option value="Air Balloon"><option value="Eject Button"><option value="Red Card"><option value="White Herb"><option value="Sitrus Berry">
   <option value="Grassy Seed"><option value="Electric Seed"><option value="Psychic Seed"><option value="Misty Seed">
   <option value="Eviolite"><option value="Weakness Policy"><option value="Expert Belt">
@@ -715,7 +715,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 50; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 51; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
 const ICON_TRASH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
@@ -2259,11 +2259,22 @@ function baseMoveNameFromKey(moveKey){
 function getMovePriority(moveKey){
   return MOVE_PRIORITY_TABLE[normKey(baseMoveNameFromKey(moveKey))] || 0;
 }
-// Prioridade EFETIVA na batalha: tabela + Prankster (+1 em golpe de status). p = Pokémon preparado (habilidade efetiva).
+// Prioridade EFETIVA na batalha: tabela + Prankster (+1 em status) + Gale Wings (+1 em Flying com HP cheio) + Triage (+3 em cura).
+// p = Pokémon preparado (habilidade efetiva).
 // Quick Guard, Armor Tail / Queenly Majesty e a ordem do turno usam esta prioridade.
 function isStatusMoveName(name){ const i = findMoveInfo(baseMoveNameFromKey(name || '')); return !!i && (!!i.IsStatus || /status/i.test(String(i.Category || ''))); }
 function pranksterBoosts(p, name){ return !!p && normKey(p.ability || '') === 'prankster' && isStatusMoveName(name); }
-function effMovePriority(p, name){ return getMovePriority(name) + (pranksterBoosts(p, name) ? 1 : 0); }
+// Gale Wings: +1 em golpe Flying (inclusive de status) se o usuário estiver com HP CHEIO ao escolher o golpe.
+function galeWingsBoosts(p, name){
+  if(!p || normKey(p.ability || '') !== 'gale wings' || !battle || !battle.sides) return false;
+  const L = locOfPrepared(p); if(!L || battle.sides[L.side].hp[L.idx] < p.hpMax) return false;
+  const mr = getBattleMoveByKey(p, name), info = findMoveInfo(baseMoveNameFromKey(name || ''));
+  return ((mr && mr.detail && mr.detail.moveType) || (info && info.Type) || '') === 'Flying';
+}
+// Triage: +3 em golpes que recuperam HP (de dano e de status).
+const TRIAGE_MOVES = new Set(['absorb','bitter blade','draining kiss','drain punch','dream eater','floral healing','giga drain','heal order','heal pulse','healing wish','horn leech','leech life','lunar blessing','lunar dance','matcha gotcha','mega drain','milk drink','moonlight','morning sun','oblivion wing','parabolic charge','purify','recover','rest','revival blessing','roost','shore up','slack off','soft-boiled','strength sap','swallow','synthesis','wish']);
+function triageBoosts(p, name){ return !!p && normKey(p.ability || '') === 'triage' && TRIAGE_MOVES.has(normKey(baseMoveNameFromKey(name || ''))); }
+function effMovePriority(p, name){ return getMovePriority(name) + (pranksterBoosts(p, name) ? 1 : 0) + (galeWingsBoosts(p, name) ? 1 : 0) + (triageBoosts(p, name) ? 3 : 0); }
 // Prankster: golpe de status que ganhou prioridade não afeta oponente do tipo Dark (aliado Dark é afetado).
 function pranksterDarkBlocks(act, tp, isFoe){ return !!(act && act.pranksterBoosted) && !!isFoe && !!tp && (tp.type1 === 'Dark' || tp.type2 === 'Dark'); }
 // Armor Tail / Queenly Majesty: protegem TODO o lado aliado de golpes de prioridade (Singles e Doubles).
@@ -3095,6 +3106,68 @@ function strengthSapApply(aSd, aIdx, tSd, tIdx){
 //  Dark contra Prankster). Desmaia mesmo se os stats não caírem (Clear Body, -6). =====
 // ===== After You: o alvo age logo em seguida, ignorando a prioridade. Sempre acerta (exceto semi-invulnerável), passa pelo substituto;
 //  falha se o alvo já agiu ou não vai usar golpe. Não falha se a ordem não mudar. =====
+// ===== Item que NÃO pode ser roubado por Magician / Pickpocket (além de trickBlocked): Booster Energy se um dos dois tem Protosynthesis / Quark Drive. =====
+function stealBlocked(pa, pb, it){
+  if(trickBlocked(pa, '', pb, it)) return true;
+  if(it === 'booster energy' && [pa, pb].some(p => ['protosynthesis','quark drive'].includes(normKey((p && p.ability) || '')))) return true;
+  return false;
+}
+// Toma o item de (fSd, fIdx) para (tSd, tIdx). Devolve o nome do item ou ''.
+function moveItem(fSd, fIdx, tSd, tIdx){
+  const fp = battle.sharedPrepared[fIdx], name = rawItemName(fp);
+  if(!battle.itemOv) battle.itemOv = {};
+  battle.itemOv[tIdx] = name; battle.itemOv[fIdx] = '';
+  const T = battle.sides[tSd]; if(T.itemUsed) delete T.itemUsed[tIdx]; delete volOf(tSd, tIdx).choice;
+  refreshBattlePrepared();
+  return name;
+}
+// ===== Magician: depois do último hit de um golpe de DANO que acertou um Pokémon (não o substituto), se o usuário está de pé, ainda tem
+//  Magician (Mummy tira) e está sem item, rouba o item do alvo (no Doubles, do alvo mais rápido que tenha item que possa ser roubado).
+//  Vem depois de Thief / Covet / Knock Off / Pluck / Bug Bite; Focus Sash consumido não é roubado. Sticky Hold impede (se o alvo não caiu). =====
+function magicianLines(aSd, aIdx, targets){
+  const ap = battle.sharedPrepared[aIdx];
+  if(!ap || !(battle.sides[aSd].hp[aIdx] > 0) || normKey(ap.ability || '') !== 'magician' || rawHeldItem(aSd, aIdx)) return [];
+  for(const t of targets){
+    const tp = battle.sharedPrepared[t.idx], it = rawHeldItem(t.sd, t.idx); if(!tp || !it) continue;
+    if(normKey(tp.ability || '') === 'sticky hold' && battle.sides[t.sd].hp[t.idx] > 0) continue;
+    if(stealBlocked(ap, tp, it)) continue;
+    const name = moveItem(t.sd, t.idx, aSd, aIdx);
+    return [LF.stealAbility(ap.name, tp.name, name, 'Magician')].concat(applySeedActivations().map(c => LF.seed(c)));
+  }
+  return [];
+}
+// ===== Pickpocket: atingido por golpe de CONTATO (não no substituto), de pé e sem item => rouba o item do atacante (depois do último hit,
+//  depois de Magician / Thief / Knock Off / Shell Bell). Não age se o portador foi arrastado (Dragon Tail) ou se o atacante sai (U-turn).
+//  No Doubles, age o mais rápido que esteja sem item. Sticky Hold do atacante (de pé) impede. =====
+function pickpocketLines(aSd, aIdx, holders){
+  const ap = battle.sharedPrepared[aIdx], it = rawHeldItem(aSd, aIdx); if(!ap || !it) return [];
+  if(normKey(ap.ability || '') === 'sticky hold' && battle.sides[aSd].hp[aIdx] > 0) return [];
+  for(const h of holders){
+    const hp = battle.sharedPrepared[h.idx];
+    if(!hp || normKey(hp.ability || '') !== 'pickpocket' || !(battle.sides[h.sd].hp[h.idx] > 0) || rawHeldItem(h.sd, h.idx)) continue;
+    if(stealBlocked(hp, ap, it)) return [];
+    const name = moveItem(aSd, aIdx, h.sd, h.idx);
+    return [LF.stealAbility(hp.name, ap.name, name, 'Pickpocket')].concat(applySeedActivations().map(c => LF.seed(c)));
+  }
+  return [];
+}
+// ===== Lum Berry: com status não volátil ou confusão, consome e cura (depois de qualquer passo). Pluck / Bug Bite: cura quem comeu. =====
+function lumCure(sd, idx){
+  const S = battle.sides[sd], st = getStatusOf(sd, idx), v = volPeek(sd, idx), out = [];
+  if(st !== 'Healthy'){ S.status[idx] = 'Healthy'; if(S.sleepCounter) S.sleepCounter[idx] = 0; if(S.frozenCounter) S.frozenCounter[idx] = 0; if(S.toxicCounter) S.toxicCounter[idx] = 0; if(S.restSleep) delete S.restSleep[idx]; out.push(st); }
+  if(v.confused > 0){ delete volOf(sd, idx).confused; out.push('Confusion'); }
+  if(out.length && battle.format !== 'doubles' && window._stSnap && window._stSnap[sd]) window._stSnap[sd][idx] = 'Healthy';
+  return out;
+}
+function lumLines(){
+  const out = [];
+  ['A','B'].forEach(sd => fieldMons(sd).forEach(i => {
+    if(heldItem(sd, i) !== 'lum berry') return;
+    const st = getStatusOf(sd, i), v = volPeek(sd, i); if(st === 'Healthy' && !(v.confused > 0)) return;
+    useItem(sd, i); out.push(LF.lum(battle.sharedPrepared[i].name, lumCure(sd, i)));
+  }));
+  return out;
+}
 // ===== Minimize: quem usou fica "minimizado" até sair de campo. Flying Press contra ele: dano ×2 e sempre acerta (exceto semi-invulnerável). =====
 function minimizeSureHit(mk, tSd, tIdx, semi){ return mk === 'flying press' && !!volPeek(tSd, tIdx).minimize && !(semi && semi.kind !== 'charge'); }
 // ===== Magic Room: 5 turnos; os itens dos Pokémon EM CAMPO não fazem efeito (usar de novo encerra). Mega, Trick e Pluck/Bug Bite não são afetados. =====
@@ -3119,6 +3192,7 @@ function pluckLines(aSd, aIdx, tSd, tIdx){
   const berry = rawItemName(tp);
   if(!battle.itemOv) battle.itemOv = {}; battle.itemOv[tIdx] = '';
   let heal = 0;
+  if(it === 'lum berry'){ const c = lumCure(aSd, aIdx); if(c.length){ refreshBattlePrepared(); return [LF.pluck(ap.name, tp.name, berry, 0, A.hp[aIdx], ap.hpMax) + ' ' + LF.lum(ap.name, c).replace(/comeu a Lum Berry e /, '')]; } }
   if(it === 'sitrus berry' && A.hp[aIdx] < ap.hpMax){ const b = A.hp[aIdx]; A.hp[aIdx] = Math.min(ap.hpMax, b + Math.floor(ap.hpMax / (abOf(aSd, aIdx) === 'ripen' ? 2 : 4))); heal = A.hp[aIdx] - b; }
   refreshBattlePrepared();
   return [LF.pluck(ap.name, tp.name, berry, heal, A.hp[aIdx], ap.hpMax)];
@@ -3596,10 +3670,10 @@ function sitrusLines(){
 // Depois de qualquer passo da batalha: Sitrus Berry, formas e Protosynthesis. Singles => turnLog.actions · Doubles => dLog.
 function postStepEffects(turnLog){
   syncWeatherSuppression();   // Cloud Nine / Air Lock
-  const heals = sitrusLines(), lines = weatherReactionLines();
-  if(battle.format === 'doubles'){ heals.forEach(h => dLog(LF.heal(h))); lines.forEach(t => dLog(t)); return; }
+  const heals = sitrusLines(), lines = weatherReactionLines(), lums = lumLines();
+  if(battle.format === 'doubles'){ heals.forEach(h => dLog(LF.heal(h))); lums.forEach(t => dLog(t)); lines.forEach(t => dLog(t)); return; }
   if(!turnLog) return;
-  heals.forEach(h => turnLog.actions.push(h)); lines.forEach(t => turnLog.actions.push({ type: 'note', text: t }));
+  heals.forEach(h => turnLog.actions.push(h)); lums.forEach(t => turnLog.actions.push({ type: 'note', text: t })); lines.forEach(t => turnLog.actions.push({ type: 'note', text: t }));
 }
 
 // Símbolo da Mega Evolução: a imagem do emblema (CSS .mega-ico, embutida uma vez só no <style>).
@@ -5283,7 +5357,8 @@ function executeAction(action, ordered, actionIdx){
   if((moveNameKey === 'pluck' || moveNameKey === 'bug bite') && dealt > 0 && !subbed) pluckLines(action.side, attackerActiveIdx, defSide, s.activePokeIdx).forEach(t => { hitNote += ' ' + t; });
   if(moveNameKey === 'knock off' && dealt > 0 && !subbed) knockOffLines(action.side, attackerActiveIdx, defSide, s.activePokeIdx, _helmetKO).forEach(t => { hitNote += ' ' + t; });
   if(ITEM_STEAL_MOVES.has(moveNameKey) && dealt > 0 && !subbed) thiefLines(action.side, attackerActiveIdx, defSide, s.activePokeIdx, action.move.moveName).forEach(t => { hitNote += ' ' + t; });
-  { const _sb = shellBellHeal(action.side, attackerActiveIdx, dealt, moveInfo); if(_sb) hitNote += ' ' + _sb; }   // Shell Bell (depois de drenagem, recuo, Rough Skin, Thief)
+  if(dealt > 0 && !subbed) magicianLines(action.side, attackerActiveIdx, [{ sd: defSide, idx: s.activePokeIdx }]).forEach(t => { hitNote += ' ' + t; });   // Magician
+  { const _sb = shellBellHeal(action.side, attackerActiveIdx, dealt, moveInfo); if(_sb) hitNote += ' ' + _sb; }   // Shell Bell (depois de drenagem, recuo, Rough Skin, Thief, Magician)
   if(moveNameKey === 'plasma fists' && dealt > 0 && !subbed && battle.plasmaTurn !== battle.turn){ battle.plasmaTurn = battle.turn; refreshBattlePrepared(); hitNote += ' ' + LF.plasma(); }
   // Eelevate: nocauteou com golpe de dano => +1 no maior stat (não ativa se o nocaute encerra a batalha)
   if(!subbed && s.hp[s.activePokeIdx] <= 0 && attackerSideState.hp[attackerActiveIdx] > 0 && normKey(attacker.ability || '') === 'eelevate'
@@ -5338,6 +5413,8 @@ function executeAction(action, ordered, actionIdx){
       }
     }
   }
+  // Pickpocket do alvo (depois de Magician / Shell Bell; não se o alvo for arrastado ou sair pelo Eject Button, nem se o atacante sair por U-turn)
+  if(moveInfo && moveInfo.Contact && dealt > 0 && !subbed && !dragHit && !ejectSide && !PIVOT_DAMAGE_MOVES.has(moveNameKey)) pickpocketLines(action.side, attackerActiveIdx, [{ sd: defSide, idx: s.activePokeIdx }]).forEach(t => { hitNote += ' ' + t; });
   let inflicted = null;
   const defAbK = normKey(defender.ability || '');
   if(dealt > 0 && !subbed && attackerSideState.hp[attackerActiveIdx] > 0 && ((moveInfo && moveInfo.Contact && (defAbK === 'static' || defAbK === 'flame body')) || defAbK === 'spicy spray')){
@@ -6717,6 +6794,8 @@ const LF = {
   afterYou: t => `<b>${t}</b> vai agir logo em seguida!`,
   bounced: (t, mv) => `<b>${t}</b> refletiu o ${mv} com Magic Bounce!`,
   finalGambitFaint: n => `<b>${n}</b> desmaiou (Final Gambit)!`,
+  stealAbility: (n, t, item, ab) => `<b>${n}</b> roubou o item <b>${item}</b> de <b>${t}</b> (${ab})!`,
+  lum: (n, list) => `<b>${n}</b> comeu a Lum Berry e curou ${list.join(' e ')}!`,
   anticipation: n => `<b>${n}</b> estremeceu! (Anticipation)`,
   hydration: (n, st) => `<b>${n}</b> curou-se de <b>${st}</b> com Hydration!`,
   effectSpore: (holder, att, st) => `Effect Spore de <b>${holder}</b>: <b>${att}</b> agora está <b>${st}</b>!`,
@@ -7618,7 +7697,7 @@ function envSelectHtml(kind){
   return `<select data-manual-env="${kind}" style="font-family:var(--font-mono);font-size:11px;">${opts.map(([v, l]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${l}</option>`).join('')}</select><span style="font-family:var(--font-mono);font-size:11px;color:var(--text-dim);">${(kind === 'weather' ? battle.weather : battle.terrain) !== 'none' ? envTurnsText(kind === 'weather' ? battle.weatherInfo : battle.terrainInfo).replace(' · ', '') : ''}</span>`;
 }
 function getAllItemsList(cur){
-  const set = new Set([...RANDOM_ITEMS_POOL, ...MEGA_STONE_NAMES, 'Eject Button', 'Red Card', 'Light Clay', 'Shell Bell', 'Big Root', 'Focus Sash','Life Orb','Leftovers','Sitrus Berry','Choice Band','Choice Specs','Choice Scarf','Assault Vest','White Herb','Safety Goggles', ...currentPokemons.map(p => p && p.item).filter(Boolean), cur].filter(Boolean));
+  const set = new Set([...RANDOM_ITEMS_POOL, ...MEGA_STONE_NAMES, 'Eject Button', 'Red Card', 'Light Clay', 'Shell Bell', 'Big Root', 'Rocky Helmet', 'Lum Berry', 'Focus Sash','Life Orb','Leftovers','Sitrus Berry','Choice Band','Choice Specs','Choice Scarf','Assault Vest','White Herb','Safety Goggles', ...currentPokemons.map(p => p && p.item).filter(Boolean), cur].filter(Boolean));
   return [...set].sort();
 }
 function getAllAbilitiesList(cur){
@@ -10122,12 +10201,13 @@ function dMoveAct(a, order){
   const _hd = `<b>${att.name}</b> usou <b>${mn}</b>!`;
   const ho = { spread, obp, hhMult, order, mk, info, headTxt: spread ? null : _hd, headDone: !!spread, noteTxt: note + hhNote };
   if(spread) dLog(`${_hd}${note}${hhNote} <span style="color:var(--text-dim)">[área ×0,75]</span>`);
-  let total = 0, totalAll = 0, anyHit = false, fgHit = false;
+  let total = 0, totalAll = 0, anyHit = false, fgHit = false; const hitMons = [];
   const _spStart = (spread && battle._tl) ? battle._tl.lines.length : -1;
   for(const t of tg.list){
     if(battle.finished) break;
     const r = dHit(a, t.sd, t.idx, ho);
     total += r.dealt || 0; totalAll += r.dealtAll || 0; if(r.hit) anyHit = true; if(r.hit && r.eff > 0) fgHit = true;
+    if(r.hitMon && r.idx !== idx) hitMons.push({ sd: r.sd, idx: r.idx, dragged: !!r.dragged });
   }
   // Golpe em área: o HP de todos os alvos cai AO MESMO TEMPO (a 1ª linha "↳" já anima todas as barras).
   if(_spStart >= 0 && battle._tl){
@@ -10157,7 +10237,10 @@ function dMoveAct(a, order){
   }
   if(SELF_KO_MOVES.has(mk) && S.hp[idx] > 0){ S.hp[idx] = 0; dLog(`${nm} se autodestruiu!`); }
   if(mk === 'final gambit' && fgHit && S.hp[idx] > 0){ S.hp[idx] = 0; battle._oozeFirst = { side: sd, turn: battle.turn }; dLog(LF.finalGambitFaint(att.name)); }   // o usuário cai antes do alvo
-  { const sb = shellBellHeal(sd, idx, totalAll, info); if(sb) dLog(sb); }   // Shell Bell: dano total do golpe (todos os alvos), depois do recuo
+  { const byS = hitMons.slice().sort((p, q) => dSpeed(q.sd, q.idx) - dSpeed(p.sd, p.idx));   // o mais rápido primeiro
+    magicianLines(sd, idx, byS.filter(x => dS(x.sd).active.includes(x.idx))).forEach(t => dLog(t));   // Magician
+    const sb = shellBellHeal(sd, idx, totalAll, info); if(sb) dLog(sb);   // Shell Bell: dano total do golpe (todos os alvos), depois do recuo e do Magician
+    if(info && info.Contact && !PIVOT_DAMAGE_MOVES.has(mk)) pickpocketLines(sd, idx, byS.filter(x => !x.dragged && dS(x.sd).active.includes(x.idx))).forEach(t => dLog(t)); }   // Pickpocket
   // Mudanças de stage do usuário (Close Combat, Draco Meteor...)
   if(total > 0 && S.hp[idx] > 0 && SELF_STAT_CHANGES[mk]){
     dWith(sd, idx, () => { const ch = SELF_STAT_CHANGES[mk]; const txt = Object.keys(ch).map(k => fmtStageChange(changeStage(sd, k, ch[k]))).join(', '); dLog(`${nm}: ${txt}.`); });
@@ -10333,7 +10416,7 @@ function dHit(a, tSd, tIdx, o){
   }
   const subbed = subAbs > 0 && hpDone === 0;
   const dealt = subbed ? subAbs : Math.max(0, hpBefore - T.hp[tIdx]);
-  res.dealt = hpDone; res.dealtAll = dealt; res.hit = true; res.eff = lastRes ? lastRes.typeEff : 0;
+  res.dealt = hpDone; res.dealtAll = dealt; res.hit = true; res.eff = lastRes ? lastRes.typeEff : 0; res.hitMon = dealt > 0 && !subbed; res.sd = tSd; res.idx = tIdx;
   if(battle._tl && hitRecs.length){
     const rec = { _dblCalc: true, type: 'move', attackerName: att.name, defenderName: def.name, moveName: m.moveName, defenderMax: def.hpMax };
     if(nHits > 1 || tripleBP){ rec.hits = hitRecs; rec.multiStrike = true; rec.missAt = missAt; rec.calc = Object.assign({}, hitRecs[0].calc, { multi: hitRecs.length, damage: totalDmg }); }
@@ -10407,7 +10490,7 @@ function dHit(a, tSd, tIdx, o){
   if(T.hp[tIdx] <= 0){ T.subs[tIdx] = 0; }   // "foi nocauteado!" já vem na linha de dano (fmtDamageHtml), igual ao Singles
   if(dragHit && T.hp[tIdx] > 0 && T.active.includes(tIdx)){   // Dragon Tail / Circle Throw: arrasta um aleatório do banco
     const bench = dBench(tSd);
-    if(bench.length){ const to = bench[Math.floor(battleRandom() * bench.length)]; dLogEntry(LF.dragged(def.name, dP(to).name)); dEnter(tSd, T.active.indexOf(tIdx), to, false); }
+    if(bench.length){ const to = bench[Math.floor(battleRandom() * bench.length)]; dLogEntry(LF.dragged(def.name, dP(to).name)); dEnter(tSd, T.active.indexOf(tIdx), to, false); res.dragged = true; }
   }
   return res;
 }
