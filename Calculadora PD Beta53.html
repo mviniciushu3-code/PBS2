@@ -715,7 +715,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 52; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 53; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
 const ICON_TRASH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
@@ -2977,10 +2977,14 @@ function statusMoveTypeFor(m, aIdx){
   else if(battle.plasmaTurn === battle.turn && t === 'Normal') t = 'Electric';
   return t;
 }
+// Sap Sipper: golpe de STATUS Grass que mira o portador (Strength Sap, Leech Seed, Sleep Powder, Stun Spore, Worry Seed,
+//  Cotton Spore, Spicy Extract, Forest's Curse...) não faz efeito e dá Atk +1 (Showdown: onTryHit, target !== source, type Grass).
 function electricStatusAbsorb(aSd, aIdx, tSd, tIdx, m){
-  if(aIdx === tIdx || statusMoveTypeFor(m, aIdx) !== 'Electric') return null;
+  const _ty = statusMoveTypeFor(m, aIdx);
+  if(aIdx === tIdx || (_ty !== 'Electric' && _ty !== 'Grass')) return null;
   const ap = battle.sharedPrepared[aIdx], tp = battle.sharedPrepared[tIdx], T = battle.sides[tSd]; if(!tp) return null;
-  const ab = ELECTRIC_ABSORB[normKey(tp.ability || '')]; if(!ab || attackerIgnoresAbility(ap)) return null;
+  const _tak = normKey(tp.ability || '');
+  const ab = _ty === 'Grass' ? (_tak === 'sap sipper' ? 'Sap Sipper' : null) : ELECTRIC_ABSORB[_tak]; if(!ab || attackerIgnoresAbility(ap)) return null;
   const fx = ABSORB_EFFECT[ab];
   if(fx.stage){ const [st, n] = fx.stage; let txt = ''; withMon(tSd, tIdx, () => { txt = canChangeStage(tSd, st, n) ? LF.statusAbsorbStage(tp.name, ab, fmtStageChange(changeStage(tSd, st, n))) : LF.statusAbsorbImmune(tp.name, ab); }); return txt; }
   const h = Math.min(tp.hpMax - T.hp[tIdx], Math.max(1, Math.floor(tp.hpMax * fx.heal)));
@@ -3169,6 +3173,10 @@ function lumLines(){
   }));
   return out;
 }
+// Nocaute duplo no fim da partida: vence o lado do Pokémon que cai POR ÚLTIMO. Marca o lado que caiu primeiro neste turno
+//  (Singles e Doubles). Autodestruição, Final Gambit, Liquid Ooze, Rough Skin / Iron Barbs / Rocky Helmet: o usuário cai primeiro.
+//  Recuo e Life Orb: o alvo nocauteado cai primeiro (o usuário vence); se o alvo não caiu, o usuário caiu primeiro.
+function faintFirst(sd){ battle._oozeFirst = { side: sd, turn: battle.turn }; }
 // ===== Life Orb: depois de um golpe de dano que causou dano (inclusive no substituto), o portador perde 1/10 do HP máx. (mín. 1).
 //  Magic Guard impede; Sheer Force (golpe com efeito secundário) impede. Vem depois do Magician e antes do Shell Bell. Devolve o texto. =====
 function lifeOrbRecoil(sd, idx, total, info){
@@ -3230,6 +3238,8 @@ function sandVeilAcc(acc, att, tSd, tIdx){
   return Math.trunc((acc * 3277 + 2047) / 4096);
 }
 // ===== Pó e esporos: Grass, Overcoat e Safety Goggles são imunes (golpes de pó, Rage Powder e Effect Spore) =====
+// Golpes de STATUS Grass que miram um oponente (Sap Sipper do alvo absorve antes da imunidade a pó — Showdown: TryHit vem antes).
+const SAP_FOE_STATUS = new Set(['cotton spore','forest\'s curse','grass whistle','leech seed','sleep powder','spicy extract','spore','strength sap','stun spore','worry seed']);
 const POWDER_MOVES = new Set(['cotton spore','magic powder','poison powder','powder','rage powder','sleep powder','spore','stun spore']);
 function powderImmune(p, sd, idx){
   if(!p) return null;
@@ -3269,11 +3279,13 @@ function hydrationCure(sd, idx){
 // ===== Moonlight / Synthesis / Morning Sun / Shore Up: cura conforme o clima (arredondamento do Showdown) =====
 //  Moonlight / Synthesis / Morning Sun (clima efetivo do usuário): sem clima ou Strong Winds 1/2 · sol 0,667 (2732/4096) ·
 //  chuva, areia, neve 1/4. Shore Up: areia 0,667 · fora dela 1/2. Cloud Nine / Air Lock = sem clima.
-const WEATHER_HEAL_MOVES = new Set(['moonlight','synthesis','morning sun','shore up']);
+// Recover: recupera 50% do HP máx., arredondado PARA CIMA (regra do usuário). Mesmo log/animação dos outros golpes de cura.
+const WEATHER_HEAL_MOVES = new Set(['moonlight','synthesis','morning sun','shore up','recover']);
 function weatherHealApply(sd, idx, mk){
   const S = battle.sides[sd], p = battle.sharedPrepared[idx];
   if(volPeek(sd, idx).healBlock > 0) return { fail: 'Heal Block' };
   if(S.hp[idx] >= p.hpMax) return { fail: 'o HP de ' + p.name + ' já está cheio' };
+  if(mk === 'recover'){ const b0 = S.hp[idx]; S.hp[idx] = Math.min(p.hpMax, b0 + Math.ceil(p.hpMax / 2)); return { text: LF.healMove(p.name, S.hp[idx] - b0, S.hp[idx], p.hpMax) }; }
   let f;
   if(mk === 'shore up') f = sandOn() ? 0.667 : 0.5;
   else { const w = effWeatherFor(sd, idx); f = ['sun','harshsun'].includes(w) ? 0.667 : ['rain','heavyrain','sand','snow','hail'].includes(w) ? 0.25 : 0.5; }
@@ -4811,6 +4823,14 @@ function executeAction(action, ordered, actionIdx){
     }
     const _failS = r => ({ side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.Name, reason: r });
     const _txtS = t => ({ side: action.side, type: 'move-text', attackerName: attacker.name, moveName: action.move.Name, text: t });
+    if(SAP_FOE_STATUS.has(moveNameKey)){   // Sap Sipper do alvo: proteção e semi-invulnerável vêm antes; depois absorve (Atk +1)
+      const _spv = protectionVerdict(moveNameKey, { status: true, foeStatus: true, priority: effMovePriority(attacker, action.move.Name), spread: false, contact: false }, Object.assign({ prot: defenderSideState.protected || null }, defenderSideState.sideProt || {}));
+      if(_spv.blocked) return { side: action.side, type: 'blocked', attackerName: attacker.name, moveName: action.move.Name, defenderName: defender.name, by: _spv.by };
+      const _ds = getSemi(defSide);
+      if(_ds && _ds.kind !== 'charge' && normKey(attacker.ability||'') !== 'no guard' && normKey(defender.ability||'') !== 'no guard')
+        return { side: action.side, type: 'move-miss', attackerName: attacker.name, moveName: action.move.Name, semiDodge: defender.name };
+      const _ea = electricStatusAbsorb(action.side, attackerActiveIdx, defSide, defenderSideState.activePokeIdx, action.move); if(_ea) return _txtS(_ea);
+    }
     if(POWDER_MOVES.has(moveNameKey) && moveNameKey !== 'rage powder'){   // pó/esporos: Grass, Overcoat e Safety Goggles são imunes
       const _pi = powderImmune(defender, defSide, defenderSideState.activePokeIdx); if(_pi) return _failS(LF.powderImmune(defender.name, _pi));
     }
@@ -4827,7 +4847,7 @@ function executeAction(action, ordered, actionIdx){
       _r._sleepTalkLine = LF.moveText(attacker.name, 'Sleep Talk', `Chamou <b>${_pk.type === 'move' ? _pk.move.moveName : _pk.move.Name}</b>!`);
       return _r;
     }
-    if(WEATHER_HEAL_MOVES.has(moveNameKey)){   // Moonlight / Synthesis / Morning Sun / Shore Up
+    if(WEATHER_HEAL_MOVES.has(moveNameKey)){   // Moonlight / Synthesis / Morning Sun / Shore Up / Recover
       const _h = weatherHealApply(action.side, attackerActiveIdx, moveNameKey);
       return _h.fail ? _failS(_h.fail) : Object.assign(_txtS(_h.text), { healHead: true });
     }
@@ -5092,7 +5112,7 @@ function executeAction(action, ordered, actionIdx){
     const _pv = protectionVerdict(moveNameKey, { status: false, spread: !!(action.move.detail && action.move.detail.isSpreadCapable), priority: effMovePriority(attacker, action.move.moveKey), contact: !!(_pInfo && _pInfo.Contact) }, Object.assign({ prot: defenderSideState.protected || null }, defenderSideState.sideProt || {}));
     if(_pv.blocked){
       let _sk = false, _note = '', _fnt = false;
-      if(SELF_KO_MOVES.has(moveNameKey)){ attackerSideState.hp[attackerActiveIdx] = 0; _sk = true; }
+      if(SELF_KO_MOVES.has(moveNameKey)){ attackerSideState.hp[attackerActiveIdx] = 0; _sk = true; faintFirst(action.side); }
       else if(_pv.contact){
         _note = applyProtectContact(_pv.contact, {
           name: attacker.name, hpMax: attacker.hpMax, ability: attacker.ability, t1: attacker.type1, t2: attacker.type2,
@@ -5115,7 +5135,7 @@ function executeAction(action, ordered, actionIdx){
     const _ng = normKey(attacker.ability||'') === 'no guard' || normKey(defender.ability||'') === 'no guard';
     if(!_ng && !SEMI_HITTERS[dSemi.kind].has(moveNameKey)){
       let _sk2 = false;
-      if(SELF_KO_MOVES.has(moveNameKey)){ attackerSideState.hp[attackerActiveIdx] = 0; _sk2 = true; }
+      if(SELF_KO_MOVES.has(moveNameKey)){ attackerSideState.hp[attackerActiveIdx] = 0; _sk2 = true; faintFirst(action.side); }
       return { side: action.side, type: 'move-miss', attackerName: attacker.name, moveName: action.move.moveName, semiDodge: defender.name, attackerFainted: _sk2, selfKO: _sk2 };
     }
   }
@@ -5281,6 +5301,7 @@ function executeAction(action, ordered, actionIdx){
     else if(_da === 'seed sower'){ if(setBattleTerrain('grassy', defSide, battle.turn)){ hitNote = ` ${defender.name} criou o Grassy Terrain!`; refreshBattlePrepared(); } }
   }
   const _contactKO = (contactHurt > 0 || helmetHurt > 0) && attackerSideState.hp[attackerActiveIdx] <= 0;
+  if(_contactKO) faintFirst(action.side);
   if(focusBandHits) hitNote += ` ${defender.name} aguentou com 1 HP (Focus Band)!`;
   if(contactHurt > 0) hitNote += ' ' + LF.contactHurt(attacker.name, _cRA, contactHurt, helmetHurt > 0 ? attackerSideState.hp[attackerActiveIdx] + helmetHurt : attackerSideState.hp[attackerActiveIdx], attacker.hpMax);
   if(helmetHurt > 0) hitNote += ' ' + LF.contactHurt(attacker.name, 'Rocky Helmet', helmetHurt, attackerSideState.hp[attackerActiveIdx], attacker.hpMax);
@@ -5289,10 +5310,13 @@ function executeAction(action, ordered, actionIdx){
     useItem(defSide, s.activePokeIdx); refreshBattlePrepared(); hitNote += ` O Air Balloon de ${defender.name} estourou!`;
   }
   const _midSnap = snapView();
+  // Passos depois do dano no alvo: cada um vira uma linha própria do log, com a sua animação de HP (LF.drain / recoil / selfKO / lifeOrb / faint)
+  const _after = [], _aft = t => _after.push({ side: action.side, type: 'note', text: t, _snap: snapView() });
+  const _defKO = () => !subbed && s.hp[s.activePokeIdx] <= 0;
   let drainHeal = 0, drainApplicable = false, drainPct = 0, drainHpBefore = 0, drainHpAfter = 0, _oozeKO = false, _loKO = false;
   const _isDrain = dealt > 0 && attackerSideState.hp[attackerActiveIdx] > 0 && (DRAIN_MOVES_50.has(moveNameKey) || DRAIN_MOVES_75.has(moveNameKey));
   const _oz = _isDrain ? liquidOozeHit(attacker, defender, action.side, attackerActiveIdx, drainAmount(action.side, attackerActiveIdx, dealt, DRAIN_MOVES_75.has(moveNameKey) ? 0.75 : 0.5)) : null;
-  if(_oz){ hitNote += ' ' + _oz.text; _oozeKO = attackerSideState.hp[attackerActiveIdx] <= 0; }   // Liquid Ooze: o usuário perde o que drenaria
+  if(_oz){ hitNote += ' ' + _oz.text; _oozeKO = attackerSideState.hp[attackerActiveIdx] <= 0; if(_oozeKO) faintFirst(action.side); }   // Liquid Ooze: o usuário perde o que drenaria (e cai primeiro)
   else if(_isDrain && !(volPeek(action.side, attackerActiveIdx).healBlock > 0)){
     drainApplicable = true;
     const pct = DRAIN_MOVES_75.has(moveNameKey) ? 0.75 : 0.5;
@@ -5302,6 +5326,7 @@ function executeAction(action, ordered, actionIdx){
     drainHeal = newAttackerHP - attackerHP;
     drainPct = pct; drainHpBefore = attackerHP; drainHpAfter = newAttackerHP;
     attackerSideState.hp[attackerActiveIdx] = newAttackerHP;
+    if(drainHeal > 0) _aft(LF.drain(attacker.name, drainHeal, newAttackerHP, attacker.hpMax));
   }
 
   let recoilDmg = 0, recoilBlockedBy = null, attackerFainted = false;
@@ -5326,16 +5351,24 @@ function executeAction(action, ordered, actionIdx){
       attackerSideState.hp[attackerActiveIdx] = after;
       recoilDmg = before - after;
       attackerFainted = after <= 0;
+      if(recoilDmg > 0) _aft(LF.recoil(attacker.name, recoilDmg, after, attacker.hpMax));
+      if(after <= 0){ _aft(LF.faint(attacker.name)); faintFirst(_defKO() ? defSide : action.side); }
     }
   }
 
   if(attackerSideState.hp[attackerActiveIdx] <= 0) attackerFainted = true;   // inclui Rough Skin / Iron Barbs (o atacante cai primeiro)
   let selfKO = false;
+  const _hpPreSK = attackerSideState.hp[attackerActiveIdx];
   if(moveNameKey === 'final gambit' && lastRes && lastRes.typeEff > 0 && attackerSideState.hp[attackerActiveIdx] > 0){
     attackerSideState.hp[attackerActiveIdx] = 0; attackerFainted = true; selfKO = true;   // acertou: o usuário desmaia (antes do alvo)
   }
   if(SELF_KO_MOVES.has(moveNameKey) && attackerSideState.hp[attackerActiveIdx] > 0){
     attackerSideState.hp[attackerActiveIdx] = 0; attackerFainted = true; selfKO = true;
+  }
+  if(selfKO){   // dano no usuário → nocaute do usuário → nocaute do alvo (o usuário cai primeiro e perde)
+    _aft(LF.selfKO(attacker.name, moveNameKey, _hpPreSK, attacker.hpMax)); _aft(LF.faint(attacker.name));
+    if(_defKO()) _aft(LF.faint(defender.name));
+    faintFirst(action.side);
   }
 
   let thawedDefender = false;
@@ -5368,8 +5401,8 @@ function executeAction(action, ordered, actionIdx){
   if(moveNameKey === 'knock off' && dealt > 0 && !subbed) knockOffLines(action.side, attackerActiveIdx, defSide, s.activePokeIdx, _helmetKO).forEach(t => { hitNote += ' ' + t; });
   if(ITEM_STEAL_MOVES.has(moveNameKey) && dealt > 0 && !subbed) thiefLines(action.side, attackerActiveIdx, defSide, s.activePokeIdx, action.move.moveName).forEach(t => { hitNote += ' ' + t; });
   if(dealt > 0 && !subbed) magicianLines(action.side, attackerActiveIdx, [{ sd: defSide, idx: s.activePokeIdx }]).forEach(t => { hitNote += ' ' + t; });   // Magician
-  { const _lo = lifeOrbRecoil(action.side, attackerActiveIdx, dealt, moveInfo); if(_lo){ hitNote += ' ' + _lo; if(attackerSideState.hp[attackerActiveIdx] <= 0){ attackerFainted = true; _loKO = true; } } }   // Life Orb
-  { const _sb = shellBellHeal(action.side, attackerActiveIdx, dealt, moveInfo); if(_sb) hitNote += ' ' + _sb; }   // Shell Bell (depois de drenagem, recuo, Rough Skin, Thief, Magician, Life Orb)
+  { const _lo = lifeOrbRecoil(action.side, attackerActiveIdx, dealt, moveInfo); if(_lo){ _aft(_lo); if(attackerSideState.hp[attackerActiveIdx] <= 0){ attackerFainted = true; _loKO = true; _aft(LF.faint(attacker.name)); faintFirst(_defKO() ? defSide : action.side); } } }   // Life Orb: depois do dano (e do nocaute) do alvo
+  { const _sb = shellBellHeal(action.side, attackerActiveIdx, dealt, moveInfo); if(_sb) _aft(_sb); }   // Shell Bell: depois do dano (e de drenagem, recuo, Rough Skin, Thief, Magician, Life Orb)
   if(moveNameKey === 'plasma fists' && dealt > 0 && !subbed && battle.plasmaTurn !== battle.turn){ battle.plasmaTurn = battle.turn; refreshBattlePrepared(); hitNote += ' ' + LF.plasma(); }
   // Eelevate: nocauteou com golpe de dano => +1 no maior stat (não ativa se o nocaute encerra a batalha)
   if(!subbed && s.hp[s.activePokeIdx] <= 0 && attackerSideState.hp[attackerActiveIdx] > 0 && normKey(attacker.ability || '') === 'eelevate'
@@ -5449,13 +5482,14 @@ function executeAction(action, ordered, actionIdx){
     isCrit, focusSashConsumed, endureHeld, thawedDefender,
     drainHeal, drainApplicable, drainPct, drainHpBefore, drainHpAfter, drainDealt: dealt, attackerMaxHp: attacker.hpMax,
     hitNote, recoil: recoilDmg, recoilBlockedBy, attackerFainted, contactKO: _contactKO || _oozeKO || _loKO, fgFaint: moveNameKey === 'final gambit' && selfKO, selfKO, isStruggle: isStruggleMove,
-    _midSnap: (drainHeal > 0 || recoilDmg > 0) ? _midSnap : undefined,
+    _split: true, _after, _faintLater: selfKO && _defKO(),   // _after: linhas de dreno / recuo / autodestruição / Life Orb / Shell Bell (runTurn)
     subHit: subbed, subAbsorbed, subBroken, subRemain: s.sub || 0, pivot, eject: ejectSide,
     doubleKO: attackerFainted && s.hp[s.activePokeIdx] <= 0,
     ...(dragHit ? (() => { const _d = singlesDragOut(defSide);   // Dragon Tail / Circle Throw
       return _d ? { weatherChanges: [{ side: defSide, type: 'note', text: _d.text, _snap: _d.snap }].concat(_d.entries) } : {}; })() : {}),
     ...(redCard ? (() => { const _rs = redCard.pre, _d = singlesDragOut(action.side);
       return { _snap: _rs, weatherChanges: [{ side: defSide, type: 'note', text: redCard.note, _snap: _rs }, { side: action.side, type: 'note', text: _d.text, _snap: _d.snap }].concat(_d.entries) }; })() : {}),
+    ...(_after.length ? { _snap: _midSnap } : {}),   // a linha do dano mostra só o HP do alvo caindo; o resto anima nas linhas seguintes
   };
 }
 
@@ -5833,6 +5867,20 @@ function applyEndOfTurnHydration(turnLog){
     if(window._stSnap && window._stSnap[side]) window._stSnap[side][idx] = 'Healthy';
   }
 }
+// Leftovers: no fim do turno recupera 1/16 do HP máx. (mín. 1). Showdown: residual 5.4 — depois do Hydration (5.3), antes do Ingrain (7).
+function leftoversHeal(sd, idx){
+  const S = battle.sides[sd], p = battle.sharedPrepared[idx];
+  if(!p || !(S.hp[idx] > 0) || S.hp[idx] >= p.hpMax || heldItem(sd, idx) !== 'leftovers' || volPeek(sd, idx).healBlock > 0) return 0;
+  const h = Math.min(p.hpMax - S.hp[idx], Math.max(1, Math.floor(p.hpMax / 16)));
+  S.hp[idx] += h; return h;
+}
+function applyEndOfTurnLeftovers(turnLog){
+  for(const side of ['A', 'B']){
+    const s = battle.sides[side], idx = s.activePokeIdx, pr = battle.sharedPrepared[idx];
+    const h = leftoversHeal(side, idx); if(!h) continue;
+    turnLog.actions.push({ side, type: 'status-heal', name: pr.name, heal: h, label: 'Leftovers', hpAfter: s.hp[idx], hpMax: pr.hpMax });
+  }
+}
 // Ingrain: cura no fim do turno (antes de queimadura/veneno).
 function applyEndOfTurnIngrain(turnLog){
   for(const side of ['A', 'B']){
@@ -5903,7 +5951,7 @@ function diffStatus(turnLog){
 }
 function snapView(){
   const o = {};
-  ['A','B'].forEach(sd => { const S = battle.sides[sd], i = S.activePokeIdx; o[sd] = { i, hp: S.hp[i], sub: S.sub || 0, cur: isCursed(S, i), spe: (S.stages && S.stages.Spe) || 0, mg: !!(battle.megaOv && battle.megaOv[i]) }; });
+  ['A','B'].forEach(sd => { const S = battle.sides[sd], i = S.activePokeIdx; o[sd] = { i, hp: S.hp[i], sub: S.sub || 0, cur: isCursed(S, i), spe: (S.stages && S.stages.Spe) || 0, mg: !!(battle.megaOv && battle.megaOv[i]), iu: !!(S.itemUsed && S.itemUsed[i]) }; });
   return o;
 }
 function newTurnLog(turn){
@@ -6114,6 +6162,7 @@ function runTurn(ctx, startIdx){
     const res = executeAction(action, ordered, actIdx);
     if(res && res._sleepTalkLine) turnLog.actions.push({ side: action.side, type: 'note', text: res._sleepTalkLine, _snap: _preSnap });
     turnLog.actions.push(res);
+    if(res && res._after) res._after.forEach(e => turnLog.actions.push(e));   // dreno / recuo / autodestruição / Life Orb / Shell Bell: depois do dano no alvo
     trackFaints();
     diffStatus(turnLog);
     applySeedActivations().forEach(c => turnLog.actions.push(c));
@@ -6139,6 +6188,7 @@ function runTurn(ctx, startIdx){
 
   applyEndOfTurnSand(turnLog);
   applyEndOfTurnHydration(turnLog);
+  applyEndOfTurnLeftovers(turnLog);   // Leftovers
   applyEndOfTurnIngrain(turnLog);
   applyEndOfTurnStatusDamage(turnLog);
   orbLines().forEach(o => { turnLog.actions.push({ side: o.sd, type: 'note', text: o.text }); if(window._stSnap && window._stSnap[o.sd]) window._stSnap[o.sd][o.idx] = o.st; });   // Flame / Toxic Orb
@@ -6161,9 +6211,10 @@ function runTurn(ctx, startIdx){
   const bHasAlive = battle.sides.B.roster.some(i => battle.sides.B.hp[i] > 0);
   const infiniteCpu = battle.mode === 'pvc' && Number(battle.infiniteMode) > 0;
 
-  const recoilKill = turnLog.actions.find(a => a && a.attackerFainted);
+  // Nocaute duplo: vence quem caiu por último (faintFirst marca quem caiu primeiro). Sem marca neste turno: empate.
+  const _ff = battle._oozeFirst && battle._oozeFirst.turn === battle.turn ? battle._oozeFirst.side : null;
   if(!aHasAlive && !infiniteCpu){
-    battle.finished = true; battle.winner = (!bHasAlive && !infiniteCpu) ? (recoilKill ? (recoilKill.side === 'A' ? 'B' : 'A') : 'draw') : 'B';
+    battle.finished = true; battle.winner = (!bHasAlive && !infiniteCpu) ? (_ff ? (_ff === 'A' ? 'B' : 'A') : 'draw') : 'B';
     pushEndOfBattleLog(turnLog);
     pushSnapshot(); renderBattle(); return;
   }
@@ -6816,7 +6867,15 @@ const LF = {
   healAmt: (h, max) => battleShowDamageAsPercent ? `+${max > 0 ? Math.round(h / max * 100) : 0}%` : `+${h} HP`,
   healMove: (n, h, hpA, max) => `<b>${n}</b> recuperou <span style="color:var(--mint);">${LF.healAmt(h, max)}</span>. ${hpA}/${max} HP.`,
   moveHead: (n, mv) => `<b>${n}</b> usou <b>${mv}</b>!`,
-  lifeOrb: (n, d, hpA, max) => `<b>${n}</b> perdeu <span class="dmg">${d} HP</span> pelo Life Orb (${hpA}/${max})!${hpA <= 0 ? ` <b>${n}</b> foi nocauteado!` : ''}`,
+  lifeOrb: (n, d, hpA, max) => `<b>${n}</b> perdeu <span class="dmg">${d} HP</span> pelo Life Orb (${hpA}/${max})!`,   // o nocaute vem na linha seguinte (LF.faint)
+  // Passos do golpe depois do dano no alvo (Singles e Doubles): cada um com a sua animação de HP e a sua linha de log.
+  //  Dreno: 1) dano no alvo, 2) % e HP do alvo, 3) animação da cura, 4) esta linha. · Recuo / Life Orb: depois do nocaute do alvo.
+  //  Autodestruição (Self-Destruct, Explosion, Final Gambit...): dano no alvo → dano no usuário → nocaute do usuário → nocaute do alvo.
+  faint: n => `<b>${n}</b> foi nocauteado!`,
+  dmgAmt: (d, max) => battleShowDamageAsPercent ? `−${max > 0 ? Math.round(d / max * 100) : 0}%` : `−${d} HP`,
+  drain: (n, h, hpA, max) => `<b>${n}</b> drenou <span style="color:var(--mint);">${LF.healAmt(h, max)}</span>. ${hpA}/${max} HP.`,
+  recoil: (n, d, hpA, max) => `<b>${n}</b> sofreu recuo: <span class="dmg">${LF.dmgAmt(d, max)}</span>. ${hpA}/${max} HP.`,
+  selfKO: (n, mk, d, max) => `<b>${n}</b> ${mk === 'final gambit' ? 'entregou todo o HP (Final Gambit)' : 'se autodestruiu'}: <span class="dmg">${LF.dmgAmt(d, max)}</span>. 0/${max} HP.`,
   confuseGain: n => `<b>${n}</b> ficou confuso!`,
   mega: (from, to, ab) => `${MEGA_ICON} <b>${from}</b> Mega Evoluiu para <b>${to}</b>!${ab ? ' (habilidade: ' + ab + ')' : ''}`,
   megaRevert: (from, to) => `↩️ <b>${from}</b> voltou à forma normal (<b>${to}</b>).`,
@@ -6854,14 +6913,15 @@ function fmtDamageHtml(a, opt){
       const eff = a.typeEff === 0 ? ' (imune)' : a.typeEff !== 1 ? ` (${a.typeEff}×)` : '';
       const _multi = isMultiStrikeResult(a);
       const rollStr = (battleShowRolls && !_multi) ? ` [R${a.rollIdx+1}]` : '';
-      const faint = a.fainted ? ` ${a.defenderName} foi nocauteado!` : '';
+      const faint = (a.fainted && !a._faintLater) ? ` ${a.defenderName} foi nocauteado!` : '';   // autodestruição: o nocaute do alvo vem depois do nocaute do usuário
       const rechargeTag = a.causesRecharge ? ' 🔋' : '';
       const critStr = (!_multi && a.isCrit) ? ' CRIT!' : '';
       const multiStr = _multi ? ` <span style="color:var(--amber);">(${a.hits.length} hits: ${a.hits.map(h => (battleShowDamageAsPercent ? (a.defenderMax > 0 ? Math.round(h.damage / a.defenderMax * 100) + '%' : '0%') : h.damage) + (h.isCrit ? ' CRIT' : '') + (battleShowRolls ? ' R' + (h.rollIdx + 1) : '')).join(' + ')})</span>` : '';
       const focusSashStr = (a.focusSashConsumed ? ` ${a.defenderName} sobreviveu com Focus Sash!` : '') + (a.endureHeld ? ` ${a.defenderName} resistiu com Endure!` : '');
       const thawStr = a.thawedDefender ? ` ${a.defenderName} descongelou!` : '';
       let recoilStr = '';
-      if(a.recoil && a.recoil > 0){
+      if(a.recoil && a.recoil > 0 && a._split){ /* recuo em linha própria (LF.recoil) */ }
+      else if(a.recoil && a.recoil > 0){
         recoilStr = battleShowDamageAsPercent
           ? ` <span style="color:var(--coral);">(recoil −${a.attackerMaxHp > 0 ? Math.round((a.recoil / a.attackerMaxHp) * 100) : 0}% HP)</span>`
           : ` <span style="color:var(--coral);">(recoil −${a.recoil} HP)</span>`;
@@ -6869,10 +6929,10 @@ function fmtDamageHtml(a, opt){
         recoilStr = ` <span style="color:var(--text-dim);">(${a.recoilBlockedBy} evitou o recoil)</span>`;
       }
       const hitNoteStr = a.hitNote || '';
-      const attackerFaintStr = hitNoteStr + (a.attackerFainted ? (a.selfKO ? (a.fgFaint ? ' ' + LF.finalGambitFaint(a.attackerName) : ` ${a.attackerName} se autodestruiu!`) : (a.contactKO ? '' : ` ${a.attackerName} foi nocauteado pelo recoil!`)) : '');
+      const attackerFaintStr = a._split ? hitNoteStr : hitNoteStr + (a.attackerFainted ? (a.selfKO ? (a.fgFaint ? ' ' + LF.finalGambitFaint(a.attackerName) : ` ${a.attackerName} se autodestruiu!`) : (a.contactKO ? '' : ` ${a.attackerName} foi nocauteado pelo recoil!`)) : '');
       const drainFullStr = (a.drainApplicable && !(a.drainHeal > 0)) ? ' <span style="color:var(--text-dim);">(HP cheio, sem cura)</span>' : '';
       let drainStr = '';
-      if(a.drainHeal && a.drainHeal > 0){
+      if(a.drainHeal && a.drainHeal > 0 && !a._split){
         const drainPct = a.attackerMaxHp > 0 ? Math.round((a.drainHeal / a.attackerMaxHp) * 100) : 0;
         drainStr = ` <span style="color:var(--mint);">(+${a.drainHeal} HP${battleShowDamageAsPercent ? ' · +' + drainPct + '%' : ''} recuperados)</span>`;
       }
@@ -7370,8 +7430,11 @@ function battleSideCardInner(side){
     : '';
 
   const _selStyle = 'font-family:var(--font-mono);font-size:11px;max-width:140px;';
+  // Item consumido / perdido: some da barra; o hover mostra qual era (Singles e Doubles — o card é o mesmo)
+  const _itGone = !!active.item && itemGoneIdx(s.activePokeIdx, side);
+  const _itTip = _itGone ? ` title="Item usado: ${String(active.item).replace(/"/g, '&quot;')}"` : '';
   const abilityItemHtml = `<div class="battle-meta-info">
-    ${battleManual.item ? `<select data-manual-field="item" data-idx="${s.activePokeIdx}" style="${_selStyle}">${getAllItemsList(active.item).map(x => `<option value="${x}"${x === active.item ? ' selected' : ''}>${x}</option>`).join('')}</select>` : (active.item || '—')} &nbsp;·&nbsp;
+    ${battleManual.item ? `<select data-manual-field="item" data-idx="${s.activePokeIdx}" style="${_selStyle}"${_itTip}>${_itGone ? '<option value="" selected>—</option>' : ''}${getAllItemsList(active.item).map(x => `<option value="${x}"${(x === active.item && !_itGone) ? ' selected' : ''}>${x}</option>`).join('')}</select>` : (_itGone ? `<span${_itTip} style="cursor:help;">—</span>` : (active.item || '—'))} &nbsp;·&nbsp;
     ${battleManual.ability ? `<select data-manual-field="ability" data-idx="${s.activePokeIdx}" style="${_selStyle}">${getAllAbilitiesList(active.ability).map(x => `<option value="${x}"${x === active.ability ? ' selected' : ''}>${x}</option>`).join('')}</select>` : (active.ability || '—')}
   </div>`;
 
@@ -7673,7 +7736,17 @@ function manualChangeField(idx, field, value){
   const prep = battle.sharedPrepared[idx];
   const sd0 = ['A','B'].find(sd => battle.sides[sd].roster.includes(idx));
   if(prep && sd0) actions.push({ side: sd0, type: 'manual-field', name: prep.name, field, value });
-  if(field === 'item'){ ['A','B'].forEach(sd => { const S = battle.sides[sd]; if(S.itemUsed) delete S.itemUsed[idx]; }); applySeedActivations().forEach(c => actions.push(c)); }
+  if(field === 'item'){ ['A','B'].forEach(sd => { const S = battle.sides[sd]; if(S.itemUsed) delete S.itemUsed[idx]; }); applySeedActivations().forEach(c => actions.push(c));
+    // Efeito IMEDIATO do item novo (Singles e Doubles): Sitrus Berry (HP < 50%), Lum Berry (status / confusão), White Herb (stages negativos)
+    const _fs = fieldSideOf(idx);
+    if(_fs && battle.sides[_fs].hp[idx] > 0){
+      if(heldItem(_fs, idx) === 'white herb') withMon(_fs, idx, () => {
+        const st = battle.sides[_fs].stages, neg = Object.keys(st).filter(k => st[k] < 0);
+        if(neg.length){ neg.forEach(k => { st[k] = 0; }); useItem(_fs, idx); actions.push({ side: _fs, type: 'note', text: `<b>${prep.name}</b> usou White Herb: ${neg.join(', ')} ${neg.length > 1 ? 'voltaram' : 'voltou'} a 0.` }); }
+      });
+      sitrusLines().forEach(h => actions.push(h));
+      lumLines().forEach(t => actions.push({ side: _fs, type: 'note', text: t }));
+    } }
   if(field === 'ability'){
     // efeito imediato da habilidade nova (Intimidate, Trace, clima/terreno...) — Singles e Doubles (os dois slots)
     const _fs = fieldSideOf(idx);
@@ -8100,6 +8173,7 @@ function renderBattle(){
     if(v){ ['A','B'].forEach(sd => { const S = _F.sides[sd]; if(!v[sd]) return; S.activePokeIdx = v[sd].i; S.hp = Object.assign({}, S.hp, { [v[sd].i]: v[sd].hp }); S.sub = v[sd].sub; if(!S.roster.includes(v[sd].i)) S.roster = S.roster.concat([v[sd].i]);
       // Velocidade (stage de Spe) e Mega acompanham o log na hora; o resto continua congelado (regra 13)
       if(v[sd].spe !== undefined) S.stages = Object.assign({}, S.stages, { Spe: v[sd].spe });
+      if(v[sd].iu !== undefined) S.itemUsed = Object.assign({}, S.itemUsed, { [v[sd].i]: v[sd].iu });   // item consumido some do card junto com a linha do log
       if(v[sd].mg){ _F.sharedPrepared[v[sd].i] = _real.sharedPrepared[v[sd].i]; _F.megaOv = Object.assign({}, _F.megaOv || {}, { [v[sd].i]: (_real.megaOv || {})[v[sd].i] }); } }); }
     battle = _F;
     try { renderBattleInner(); } finally { battle = _real; }
@@ -8327,6 +8401,7 @@ function renderBattleInner(){
   }));
   document.querySelectorAll('[data-manual-field]').forEach(sel => sel.addEventListener('change', e => {
     const i = Number(sel.dataset.idx), f = sel.dataset.manualField, v = e.target.value;
+    if(f === 'item' && !v) return;   // "—" (item já usado): nada a trocar
     presGateDefer(() => manualChangeField(i, f, v));
   }));
   cont.querySelectorAll('[data-toggle-log]').forEach(el => { el.addEventListener('click', () => { battleLogCollapsed = !battleLogCollapsed; renderBattle(); }); });
@@ -9767,10 +9842,10 @@ function dNewTL(turn){ return { turn, lines: [], heads: [], snaps: [], atts: [],
 function dViewSnap(){
   const o = {};
   ['A','B'].forEach(sd => {
-    const S = battle.sides[sd], hp = {}, st = {}, sub = {}, stg = {}, rech = {}, semi = {}, cur = {};
+    const S = battle.sides[sd], hp = {}, st = {}, sub = {}, stg = {}, rech = {}, semi = {}, cur = {}, iu = {};
     S.roster.forEach(i => { hp[i] = S.hp[i]; st[i] = S.status[i] || 'Healthy'; });
-    S.active.forEach(i => { if(i == null) return; sub[i] = S.subs[i] || 0; cur[i] = isCursed(S, i); stg[i] = Object.assign({}, S.stg[i] || dEmptyStg()); rech[i] = !!S.rech[i]; semi[i] = S.semis[i] ? Object.assign({}, S.semis[i]) : null; });
-    o[sd] = { hp, st, sub, stg, rech, semi, cur, a: S.active.slice() };
+    S.active.forEach(i => { if(i == null) return; iu[i] = !!(S.itemUsed && S.itemUsed[i]); sub[i] = S.subs[i] || 0; cur[i] = isCursed(S, i); stg[i] = Object.assign({}, S.stg[i] || dEmptyStg()); rech[i] = !!S.rech[i]; semi[i] = S.semis[i] ? Object.assign({}, S.semis[i]) : null; });
+    o[sd] = { hp, st, sub, stg, rech, semi, cur, iu, a: S.active.slice() };
   });
   o.mg = Object.assign({}, battle.megaOv || {});
   o.env = { weather: battle.weather, terrain: battle.terrain, wi: battle.weatherInfo ? Object.assign({}, battle.weatherInfo) : null, ti: battle.terrainInfo ? Object.assign({}, battle.terrainInfo) : null, tr: battle.trickRoom, tw: Object.assign({}, battle.tailwind) };
@@ -9861,6 +9936,7 @@ function dRenderPres(){
     try {
       ['A','B'].forEach(sd => { const S = _F.sides[sd], w = v && v[sd]; if(!w) return;
         S.hp = Object.assign({}, S.hp, w.hp); S.active = w.a.slice(); S.subs = Object.assign({}, S.subs, w.sub);
+        if(w.iu) S.itemUsed = Object.assign({}, S.itemUsed, w.iu);   // item consumido some do card junto com a linha do log
         S.active.forEach(i => { if(i != null && !S.roster.includes(i)) S.roster = S.roster.concat([i]); });
         // Velocidade (stage de Spe) acompanha o log na hora (regra 13: o resto fica congelado)
         S.active.forEach(i => { if(i != null && w.stg && w.stg[i]) S.stg = Object.assign({}, S.stg, { [i]: Object.assign({}, S.stg[i] || dEmptyStg(), { Spe: w.stg[i].Spe || 0 }) }); });
@@ -10217,12 +10293,13 @@ function dMoveAct(a, order){
   const _hd = `<b>${att.name}</b> usou <b>${mn}</b>!`;
   const ho = { spread, obp, hhMult, order, mk, info, headTxt: spread ? null : _hd, headDone: !!spread, noteTxt: note + hhNote };
   if(spread) dLog(`${_hd}${note}${hhNote} <span style="color:var(--text-dim)">[área ×0,75]</span>`);
-  let total = 0, totalAll = 0, anyHit = false, fgHit = false; const hitMons = [];
+  let total = 0, totalAll = 0, anyHit = false, fgHit = false, foeKO = false; const hitMons = [];
   const _spStart = (spread && battle._tl) ? battle._tl.lines.length : -1;
   for(const t of tg.list){
     if(battle.finished) break;
     const r = dHit(a, t.sd, t.idx, ho);
     total += r.dealt || 0; totalAll += r.dealtAll || 0; if(r.hit) anyHit = true; if(r.hit && r.eff > 0) fgHit = true;
+    if(r.hit && r.sd && r.sd !== sd && !(dS(r.sd).hp[r.idx] > 0)) foeKO = true;
     if(r.hitMon && r.idx !== idx) hitMons.push({ sd: r.sd, idx: r.idx, dragged: !!r.dragged });
   }
   // Golpe em área: o HP de todos os alvos cai AO MESMO TEMPO (a 1ª linha "↳" já anima todas as barras).
@@ -10249,13 +10326,18 @@ function dMoveAct(a, order){
   if(recoilBase > 0 && S.hp[idx] > 0){
     const ab = normKey(dP(idx).ability || '');   // habilidade atual (ex.: Rock Head que virou Mummy sofre recuo)
     if(ab === 'magic guard' || (!m.isStruggle && !ROCK_HEAD_NO_BLOCK.has(rk) && ab === 'rock head')) dLog(`${nm} não sofre recuo (${dP(idx).ability}).`);
-    else { const b = S.hp[idx]; S.hp[idx] = Math.max(0, b - recoilBase); dLog(`${nm} sofreu <b>${b - S.hp[idx]}</b> de recuo (${b} → ${S.hp[idx]}/${att.hpMax}).${S.hp[idx] <= 0 ? ' Nocauteado!' : ''}`); }
+    else { const b = S.hp[idx]; S.hp[idx] = Math.max(0, b - recoilBase); dLog(LF.recoil(att.name, b - S.hp[idx], S.hp[idx], att.hpMax));   // recuo: depois do dano e do nocaute do alvo
+      if(S.hp[idx] <= 0){ dLog(LF.faint(att.name)); faintFirst(foeKO ? dOpp(sd) : sd); } }
   }
-  if(SELF_KO_MOVES.has(mk) && S.hp[idx] > 0){ S.hp[idx] = 0; dLog(`${nm} se autodestruiu!`); }
-  if(mk === 'final gambit' && fgHit && S.hp[idx] > 0){ S.hp[idx] = 0; battle._oozeFirst = { side: sd, turn: battle.turn }; dLog(LF.finalGambitFaint(att.name)); }   // o usuário cai antes do alvo
+  // Autodestruição: dano no usuário → nocaute do usuário → nocaute do(s) alvo(s). O usuário cai primeiro.
+  if((SELF_KO_MOVES.has(mk) || (mk === 'final gambit' && fgHit)) && S.hp[idx] > 0){
+    const b = S.hp[idx]; S.hp[idx] = 0; faintFirst(sd);
+    dLog(LF.selfKO(att.name, mk, b, att.hpMax)); dLog(LF.faint(att.name));
+    (ho.lateFaints || []).forEach(n => dLog(LF.faint(n)));
+  }
   { const byS = hitMons.slice().sort((p, q) => dSpeed(q.sd, q.idx) - dSpeed(p.sd, p.idx));   // o mais rápido primeiro
     magicianLines(sd, idx, byS.filter(x => dS(x.sd).active.includes(x.idx))).forEach(t => dLog(t));   // Magician
-    const lo = lifeOrbRecoil(sd, idx, totalAll, info); if(lo){ dLog(lo); if(S.hp[idx] <= 0) battle._oozeFirst = { side: sd, turn: battle.turn }; }   // Life Orb (o usuário cai antes)
+    const lo = lifeOrbRecoil(sd, idx, totalAll, info); if(lo){ dLog(lo); if(S.hp[idx] <= 0){ dLog(LF.faint(att.name)); faintFirst(foeKO ? dOpp(sd) : sd); } }   // Life Orb: depois do dano (e do nocaute) do alvo
     const sb = shellBellHeal(sd, idx, totalAll, info); if(sb) dLog(sb);   // Shell Bell: dano total do golpe (todos os alvos), depois do recuo, do Magician e do Life Orb
     if(info && info.Contact && !PIVOT_DAMAGE_MOVES.has(mk)) pickpocketLines(sd, idx, byS.filter(x => !x.dragged && dS(x.sd).active.includes(x.idx))).forEach(t => dLog(t)); }   // Pickpocket
   // Mudanças de stage do usuário (Close Combat, Draco Meteor...)
@@ -10445,6 +10527,8 @@ function dHit(a, tSd, tIdx, o){
     rollIdx: hitRecs[hitRecs.length - 1].rollIdx, isCrit: crit, defenderAfter: T.hp[tIdx], subHit: subbed, subAbsorbed: subAbs,
     subBroken: (T.subs[tIdx] || 0) <= 0, subRemain: T.subs[tIdx] || 0, fainted: T.hp[tIdx] <= 0 && !subbed, focusSashConsumed: sash, endureHeld: endured,
     hitNote: (!sp && !o.headDone) ? (o.noteTxt || '') : '' };
+  // Autodestruição (Self-Destruct, Explosion... / Final Gambit que acertou): o nocaute do alvo vem depois do nocaute do usuário
+  if(_rec.fainted && S.hp[idx] > 0 && (SELF_KO_MOVES.has(mk) || (mk === 'final gambit' && eff > 0))){ _rec._faintLater = true; (o.lateFaints || (o.lateFaints = [])).push(def.name); }
   if(nHits > 1 || tripleBP){ _rec.hits = hitRecs.map(h => ({ damage: h.damage, isCrit: h.isCrit, rollIdx: h.rollIdx })); _rec.multiStrike = true; _rec.missAt = missAt; }
   { const _fo = { nohead: sp || !!o.headDone }; dLog(fmtDamageHtml(_rec, _fo), fmtDamageHtml(Object.assign({}, _rec, { _headOnly: true, _hitsShown: 0 }), _fo)); } o.headDone = true;   // MESMO formatador do Singles
   if(fband) dLog(`${dn} aguentou com 1 HP (Focus Band)!`);
@@ -10481,10 +10565,10 @@ function dHit(a, tSd, tIdx, o){
   if(dealt > 0 && (DRAIN_MOVES_50.has(mk) || DRAIN_MOVES_75.has(mk)) && S.hp[idx] > 0){
     const pct = DRAIN_MOVES_75.has(mk) ? 0.75 : 0.5, heal = drainAmount(sd, idx, dealt, pct);   // Big Root
     const oz = liquidOozeHit(att, def, sd, idx, heal);
-    if(oz){ dLog(oz.text); if(S.hp[idx] <= 0) battle._oozeFirst = { side: sd, turn: battle.turn }; }   // Liquid Ooze: o usuário cai antes do alvo
+    if(oz){ dLog(oz.text); if(S.hp[idx] <= 0) faintFirst(sd); }   // Liquid Ooze: o usuário cai antes do alvo
     else if(!(volPeek(sd, idx).healBlock > 0)){
       const b = S.hp[idx], n = Math.min(att.hpMax, b + heal);
-      if(n > b){ S.hp[idx] = n; dLog(`${nm} drenou ${n - b} HP (${b} → ${n}/${att.hpMax}).`); }
+      if(n > b){ S.hp[idx] = n; dLog(LF.drain(att.name, n - b, n, att.hpMax)); }   // depois da linha do dano: animação da cura + esta linha
     }
   }
   if(!subbed && getStatusOf(tSd, tIdx) === 'Frozen' && eff > 0 && ((info && info.Type === 'Fire') || THAW_MOVES.has(mk))){ T.status[tIdx] = 'Healthy'; T.frozenCounter[tIdx] = 0; dLog(`${dn} descongelou!`); }
@@ -10534,7 +10618,7 @@ function dStatusAct(a){
     const sub = { side: sd, slot: a.slot, idx, type: pk.type, move: pk.move, priority: 0, speed: 0, tgt: ft ? { sd: o, slot: ft.slot } : null, noPP: true, viaSleepTalk: true };
     return pk.type === 'move' ? dMoveAct(sub, D.ctx ? D.ctx.order : [sub]) : dStatusAct(sub);
   }
-  if(WEATHER_HEAL_MOVES.has(mk)){   // Moonlight / Synthesis / Morning Sun / Shore Up
+  if(WEATHER_HEAL_MOVES.has(mk)){   // Moonlight / Synthesis / Morning Sun / Shore Up / Recover
     const h = weatherHealApply(sd, idx, mk); if(h.fail) return fail(h.fail);
     dLog(LF.moveText(att.name, m.Name, h.text), LF.moveHead(att.name, m.Name)); return null;
   }
@@ -10756,6 +10840,14 @@ function dStatusAct(a){
       const ea = electricStatusAbsorb(sd, idx, ts, ti, m); if(ea){ dLog(LF.moveText(att.name, m.Name, ea)); return null; }
       if(pranksterDarkBlocks(a, dP(ti), ts !== sd)) return fail(LF.pranksterDark(dP(ti).name)); }
   }
+  if(SAP_FOE_STATUS.has(mk) && a.tgt){   // golpe de status Grass sem efeito programado: o Sap Sipper do alvo ainda absorve (Atk +1)
+    const ti = dS(a.tgt.sd).active[a.tgt.slot], ts = a.tgt.sd;
+    if(ti != null && dAlive(ts, ti) && ts !== sd){
+      const TT = dS(ts), spv = protectionVerdict(mk, { status: true, foeStatus: true, priority: effMovePriority(att, m.Name), spread: false, contact: false }, { prot: TT.prot[ti] || null, wide: TT.wide, quick: TT.quick, crafty: TT.crafty, mat: TT.mat });
+      if(spv.blocked){ dLog(LF.blocked({ attackerName: att.name, moveName: m.Name, defenderName: dP(ti).name, by: spv.by })); return null; }
+      const ea = electricStatusAbsorb(sd, idx, ts, ti, m); if(ea){ dLog(LF.moveText(att.name, m.Name, ea)); return null; }
+    }
+  }
   if(POWDER_MOVES.has(mk) && a.tgt){   // pó/esporos sem efeito programado: ainda assim Grass, Overcoat e Safety Goggles são imunes
     const ti = dS(a.tgt.sd).active[a.tgt.slot];
     if(ti != null && dAlive(a.tgt.sd, ti)){ const pi = powderImmune(dP(ti), a.tgt.sd, ti); if(pi) return fail(LF.powderImmune(dP(ti).name, pi)); }
@@ -10797,6 +10889,7 @@ function dEndTurn(){
     { const sdm = sandDamage(sd, idx); if(sdm){ const q = dP(idx), Q = dS(sd); dLog(LF.weatherDamage(q.name, sdm, Q.hp[idx], q.hpMax)); } }   // tempestade de areia
     { const ho = hydrationCure(sd, idx); if(ho) dLog(LF.hydration(dP(idx).name, ho)); }   // Hydration: antes do dano de status
     const S = dS(sd), p = dP(idx), st = getStatusOf(sd, idx); if(S.hp[idx] <= 0) return;
+    { const lh = leftoversHeal(sd, idx); if(lh) dLog(LF.heal({ name: p.name, heal: lh, label: 'Leftovers', hpAfter: S.hp[idx], hpMax: p.hpMax })); }   // Leftovers (antes do Ingrain)
     { const ih = ingrainHealAmount(sd, idx); if(ih > 0){ S.hp[idx] += ih; dLog(LF.heal({ name: p.name, heal: ih, label: 'Ingrain', hpAfter: S.hp[idx], hpMax: p.hpMax })); } }
     const mg = normKey(p.ability || '') === 'magic guard', max = p.hpMax; let dmg = 0, heal = 0, label = '';
     if(st === 'Burned'){ dmg = mg ? 0 : Math.floor(max / 16); label = 'queimadura'; }
