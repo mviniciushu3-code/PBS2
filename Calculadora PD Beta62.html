@@ -718,7 +718,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 61; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 62; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 const GAME_GEN = 9;      // Pokémon Champions = 9ª geração (regra 17): mecânicas que mudaram entre gerações seguem a Gen 9
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
@@ -2283,7 +2283,12 @@ function galeWingsBoosts(p, name){
 // Triage: +3 em golpes que recuperam HP (de dano e de status).
 const TRIAGE_MOVES = new Set(['absorb','bitter blade','draining kiss','drain punch','dream eater','floral healing','giga drain','heal order','heal pulse','healing wish','horn leech','leech life','lunar blessing','lunar dance','matcha gotcha','mega drain','milk drink','moonlight','morning sun','oblivion wing','parabolic charge','purify','recover','rest','revival blessing','roost','shore up','slack off','soft-boiled','strength sap','swallow','synthesis','wish']);
 function triageBoosts(p, name){ return !!p && normKey(p.ability || '') === 'triage' && TRIAGE_MOVES.has(normKey(baseMoveNameFromKey(name || ''))); }
-function effMovePriority(p, name){ return getMovePriority(name) + (pranksterBoosts(p, name) ? 1 : 0) + (galeWingsBoosts(p, name) ? 1 : 0) + (triageBoosts(p, name) ? 3 : 0); }
+function effMovePriority(p, name){ return getMovePriority(name) - (grassyGlideNoBoost(p, name) ? 1 : 0) + (pranksterBoosts(p, name) ? 1 : 0) + (galeWingsBoosts(p, name) ? 1 : 0) + (triageBoosts(p, name) ? 3 : 0); }
+// Grassy Glide (Gen 9): prioridade +1 só no Grassy Terrain e com o usuário no chão (a tabela tem +1; na batalha fora disso vale 0).
+function grassyGlideNoBoost(p, name){
+  if(!battle || !battle.sides || !p || normKey(baseMoveNameFromKey(name || '')) !== 'grassy glide') return false;
+  const L = locOfPrepared(p); return !(battle.terrain === 'grassy' && L && battleGroundedIdx(L.side, L.idx));
+}
 // Prankster: golpe de status que ganhou prioridade não afeta oponente do tipo Dark (aliado Dark é afetado).
 // Tipos EFETIVOS na batalha (Burn Up, Reflect Type, tipo adicionado por Forest's Curse / Trick-or-Treat = type3).
 function typesOfP(p){ return p ? [p.type1, p.type2, p.type3].filter(Boolean) : []; }
@@ -3528,7 +3533,7 @@ function condList(side, idx){
   add(battle.fairyLock === battle.turn, '🧚', 'Fairy Lock', 'ninguém pode trocar neste turno');
   add(v.noRetreat, '⛓️', 'No Retreat', 'não pode trocar por escolha (Shed Shell solta; Ghost troca); não usa No Retreat de novo');
   add(v.hangry, '😠', 'Hangry Mode (Hunger Switch)', 'Aura Wheel vira Dark; alterna no fim de cada turno');
-  add(v.wideOpen, '🎯', 'Wide Open (Glaive Rush)', 'golpes contra ele causam dano ×2 e sempre acertam; some na próxima ação dele ou ao sair de campo');
+  add(v.wideOpen, '🎯', 'Wide Open (Glaive Rush)', v.wideOpen && battle.turn >= v.wideOpen ? 'neste turno, golpes contra ele causam dano ×2 e sempre acertam (até ele agir)' : 'no próximo turno, golpes contra ele causarão dano ×2 e sempre acertarão');
   add(isCursed(S, idx), '👻', 'Amaldiçoado (Curse)', 'perde 1/4 do HP no fim de cada turno');
   add(v.ingrain, '🌱', 'Ingrain', 'recupera 1/16 do HP por turno, fica no chão e não pode trocar');
   add(v.magnetRise > 0, '🧲', 'Magnet Rise', 'flutuando: imune a golpes Ground', v.magnetRise > 0 ? v.magnetRise + 't' : '');
@@ -3605,7 +3610,7 @@ function volBadgesHtml(side, idx){
   if(v.smacked) b.push(['⬇️', 'Derrubado ao chão (Smack Down / Thousand Arrows)']);
   if(v.confused > 0) b.push(['💫', 'Confuso']);
   if(v.perish > 0) b.push(['🎵', `Perish Song — contagem ${v.perish}`]);
-  if(v.wideOpen) b.push(['🎯', 'Wide Open (Glaive Rush): dano ×2 e sempre acerta']);
+  if(v.wideOpen) b.push(['🎯', battle.turn >= v.wideOpen ? 'Wide Open (Glaive Rush): dano ×2 e sempre acerta neste turno' : 'Wide Open (Glaive Rush): no próximo turno']);
   return b.length ? `<span class="hz-badges">${b.map(([i, t]) => `<span class="hz-badge" title="${t}">${i}</span>`).join('')}</span>` : '';
 }
 // ===== Confusão (volátil: vol.confused = turnos que faltam) — Singles e Doubles =====
@@ -4048,6 +4053,23 @@ function megaNow(side, idx, revert){
   pushSnapshot(); renderBattle();
 }
 const PRIORITY_GUARD_ABILITIES = new Set(['armor tail', 'queenly majesty']);
+// Golpes de status que afetam o CAMPO TODO (target "all" no Showdown): com prioridade, também são barrados por Armor Tail /
+//  Queenly Majesty de um oponente (exceto Perish Song, Flower Shield e Rototiller).
+const FIELD_ALL_STATUS = new Set(['rain dance','sunny day','sandstorm','snowscape','hail','chilly reception','electric terrain','grassy terrain','misty terrain','psychic terrain','haze','gravity','magic room','wonder room','trick room','fairy lock','court change','mud sport','water sport','ion deluge']);
+// Golpe de status que mira o oponente (para Armor Tail / Queenly Majesty / Psychic Terrain).
+function statusTargetsFoe(k, m){
+  if(VOL_TARGET_STATUS.has(k) || SAP_FOE_STATUS.has(k) || STATUS_INFLICT_MOVES[k] || CANT_ESCAPE_MOVES.has(k) || k === 'octolock' || k === 'floral healing' || (k in CONFUSE_STATUS)) return true;
+  const pl = statusMovePlan(m); return !!(pl && pl.target.length);
+}
+// Psychic Terrain (Showdown conditions psychicterrain onTryHit): golpe com prioridade > 0 contra um OPONENTE no chão (não
+//  semi-invulnerável) falha. Não protege aliados nem Pokémon fora do chão.
+function psychicTerrainBlocks(attacker, moveName, tSd, tIdx, aSd){
+  if(!battle || battle.terrain !== 'psychic' || tSd === aSd) return false;
+  if(effMovePriority(attacker, moveName) <= 0) return false;
+  const sm = battle.format === 'doubles' ? (dS(tSd).semis || {})[tIdx] : getSemi(tSd);
+  if(sm && sm.kind !== 'charge') return false;
+  return battleGroundedIdx(tSd, tIdx);
+}
 function priorityGuardHolder(attacker, moveKey, sideMons){
   if(effMovePriority(attacker, moveKey) <= 0) return null;
   if(attacker && attackerIgnoresAbility(attacker)) return null;
@@ -4279,6 +4301,17 @@ function battleDynBaseBP(attacker, defender, moveResult){
     const uw = battleWeightOf(attacker, null), tw = battleWeightOf(defender, attacker);
     base = heavySlamBP(uw.hg, tw.hg);
     note = `Peso do usuário ${uw.txt} ÷ peso do alvo ${tw.txt} = ${String(Math.round(uw.hg / tw.hg * 100) / 100).replace('.', ',')}× → BP ${base}`;
+  } else if(EARTHQUAKE_LIKE_MOVES.has(k) && battle.terrain === 'grassy'){
+    // Grassy Terrain: Earthquake / Bulldoze / Magnitude ×0,5 só contra alvo no chão e não semi-invulnerável (Showdown onBasePower)
+    const dL = defLocOf(defender); if(!dL) return null;
+    const sm = battle.format === 'doubles' ? (dS(dL.side).semis || {})[dL.idx] : getSemi(dL.side);
+    const want = battleGroundedIdx(dL.side, dL.idx) && !(sm && sm.kind !== 'charge');
+    const lbl = 'Grassy Terrain reduz EQ (×0.5)', has = (d.bpModifierLabels || []).includes(lbl);
+    if(want === has) return null;
+    const mods = (d.bpMods || []).slice(), labels = (d.bpModifierLabels || []).slice();
+    if(has){ labels.splice(labels.indexOf(lbl), 1); const mi = mods.indexOf(0.5); if(mi >= 0) mods.splice(mi, 1); labels.unshift('Grassy Terrain: alvo fora do chão (sem ×0,5)'); }
+    else { mods.push(0.5); labels.push(lbl); }
+    return { bp: calcBpFinal(Number(d.basePower) || 0, mods), labels };
   } else if(REVENGE_MOVES.has(k)){
     const aL = locOfPrepared(attacker), dL = defLocOf(defender);
     if(!aL || !dL || !damagedByThisTurn(aL.side, aL.idx, dL.side, dL.idx)) return null;
@@ -4304,7 +4337,11 @@ function battleWeightOf(p, attacker){
   return { hg, kg: hg / 10, txt: mods.length ? `${f(kg0)} (${mods.join(', ')} → ${f(hg / 10)})` : f(kg0) };
 }
 // Glaive Rush: o usuário fica "Wide Open" ao acertar — golpes contra ele causam dano ×2 (Dmod Glaive Rush) e sempre acertam.
-function wideOpenAt(sd, idx){ return !!(battle && battle.sides && sd && idx != null && volPeek(sd, idx).wideOpen); }
+// Texto oficial de SV (PokémonDB): "attacks from opposing Pokémon during the NEXT turn cannot miss and will inflict double damage" —
+//  regra do usuário: o ×2 / acerto garantido valem só a partir do turno SEGUINTE ao Glaive Rush (vol.wideOpen = número desse turno),
+//  até o usuário agir de novo; some no fim desse turno de qualquer jeito.
+function wideOpenAt(sd, idx){ const w = (battle && battle.sides && sd && idx != null) ? volPeek(sd, idx).wideOpen : 0; return !!w && battle.turn >= w; }
+function glaiveRushExpire(){ ['A','B'].forEach(sd => fieldMons(sd).forEach(i => { const v = volPeek(sd, i); if(v.wideOpen && battle.turn >= v.wideOpen) delete v.wideOpen; })); }
 // Dura até a PRÓXIMA AÇÃO do usuário (Showdown: condition glaiverush, onBeforeMovePriority 100 — sai antes do sono, flinch,
 //  paralisia e recarga; pesquisa da Smogon em SV: Glaive Rush no turno 1 e Ice Shard no turno 2 => ataques no turno 2 já não
 //  dobram). Vale para QUALQUER golpe, inclusive outro Glaive Rush (que devolve o estado se acertar). Sair de campo também remove.
@@ -4473,7 +4510,8 @@ function bindOctoTick(sd, idx, emit){
   }
   if(S.hp[idx] > 0 && v.octolock){
     if(!trapSourceOn(v.octolock)) delete v.octolock;
-    else { const src = battle.sharedPrepared[v.octolock.idx]; const t = withMon(sd, idx, () => applyStageList(sd, [['Def', -1], ['SpD', -1]], { ignoreAbility: attackerIgnoresAbility(src), byFoe: true })); emit(LF.octolockTick(p.name, t)); }
+    else { const src = battle.sharedPrepared[v.octolock.idx]; const rs = withMon(sd, idx, () => [['Def', -1], ['SpD', -1]].map(([st, n]) => changeStage(sd, st, n, { ignoreAbility: attackerIgnoresAbility(src), byFoe: true, src: { sd: v.octolock.sd, idx: v.octolock.idx } }))).filter(r => !r.blocked);
+      if(rs.length) emit(LF.octolockTick(p.name, rs.map(fmtStageChange).join(', '))); }
   }
 }
 function rapidSpinFree(sd, idx){ const v = volPeek(sd, idx); if(!v.bound) return ''; const b = v.bound; delete v.bound; return LF.boundEnd(battle.sharedPrepared[idx].name, b.move); }
@@ -4488,7 +4526,22 @@ function floralHealApply(tSd, tIdx){
   T.hp[tIdx] += h;
   return { text: LF.floralHeal(tp.name, h, T.hp[tIdx], tp.hpMax) };
 }
-const PROTECTABLE_TRAP_STATUS = new Set(['octolock', 'floral healing']);   // Mean Look / Block / Spider Web não são bloqueados por Protect
+const PROTECTABLE_TRAP_STATUS = new Set(['octolock', 'floral healing']);
+// ===== PARTING SHOT (Gen 7+; Showdown data/moves.ts partingshot + texto do usuário) =====
+//  Atk −1 e SpA −1 no alvo e o usuário troca. Sonoro: passa pelo substituto; Soundproof é imune (e com Liquid Voice vira Water:
+//  Water Absorb / Storm Drain / Dry Skin bloqueiam). Protect bloqueia. Se nenhum stat cair (Clear Body, Hyper Cutter + SpA no
+//  mínimo, −6/−6; Contrary em +6/+6) o usuário NÃO troca; com Mirror Armor do alvo ele troca mesmo assim. Magic Bounce do alvo:
+//  o efeito volta (Atk/SpA do usuário caem) e quem troca é o ALVO. Sem Pokémon no banco: os stats caem, mas não há troca.
+function partingShotApply(aSd, aIdx, tSd, tIdx, ign){
+  const ap = battle.sharedPrepared[aIdx], tp = battle.sharedPrepared[tIdx];
+  if(abOf(tSd, tIdx) === 'magic bounce' && !ign){
+    const r = withMon(aSd, aIdx, () => [['Atk', -1], ['SpA', -1]].map(([st, n]) => changeStage(aSd, st, n, { byFoe: true, src: { sd: tSd, idx: tIdx }, mirrored: true })));
+    return { text: `<b>${tp.name}</b> refletiu o Parting Shot com Magic Bounce! ${ap.name} ${r.map(fmtStageChange).join(', ')}.`, bounce: true };
+  }
+  const r = withMon(tSd, tIdx, () => [['Atk', -1], ['SpA', -1]].map(([st, n]) => changeStage(tSd, st, n, { ignoreAbility: ign, byFoe: tSd !== aSd, src: { sd: aSd, idx: aIdx } })));
+  const ok = r.some(x => x.changed || x.mirror);
+  return { text: `${tp.name} ${r.map(fmtStageChange).join(', ')}.` + (ok ? '' : ' (nenhum stat caiu: o usuário não troca)'), ok };
+}   // Mean Look / Block / Spider Web não são bloqueados por Protect
 // Hunger Switch (Showdown: onResidualOrder 29): no fim de cada turno o Morpeko alterna Full Belly ↔ Hangry (vol.hangry; volta ao
 //  Full Belly ao sair de campo). Aura Wheel: Electric no Full Belly, Dark no Hangry.
 function hungerSwitchLines(){
@@ -4560,6 +4613,8 @@ function _computeBattleDamage(attacker, defender, moveResult, roll, isCrit, atkS
   let t1 = defender.type1 ? (chart[defender.type1] !== undefined ? chart[defender.type1] : 1) : 1;
   let t2 = defender.type2 ? (chart[defender.type2] !== undefined ? chart[defender.type2] : 1) : 1;
   let t3 = defender.type3 ? (chart[defender.type3] !== undefined ? chart[defender.type3] : 1) : 1;   // tipo adicionado (Forest's Curse / Trick-or-Treat)
+  if((d.moveType === 'Normal' || d.moveType === 'Fighting') && normKey(attacker.ability || '') === 'scrappy'){   // Scrappy: Normal e Fighting acertam Ghost
+    if(defender.type1 === 'Ghost') t1 = 1; if(defender.type2 === 'Ghost') t2 = 1; if(defender.type3 === 'Ghost') t3 = 1; }
   if(isFreezeDryMove(baseMoveNameFromKey(moveResult.moveKey || ''))){ if(defender.type1 === 'Water') t1 = 2; if(defender.type2 === 'Water') t2 = 2; } // Freeze-Dry: Water sempre ×2
   const _isFP = normKey(baseMoveNameFromKey(moveResult.moveKey || '')) === 'flying press';
   if(_isFP){ const fc = TYPE_CHART['Flying'] || {}; if(defender.type1) t1 *= (fc[defender.type1] ?? 1); if(defender.type2) t2 *= (fc[defender.type2] ?? 1); if(defender.type3) t3 *= (fc[defender.type3] ?? 1); }   // Flying Press: tipo do golpe + Flying
@@ -5264,7 +5319,7 @@ function cpuChooseAction(side){
   
   const _isSK = m => SELF_KO_MOVES.has(normKey(baseMoveNameFromKey(m.moveKey)));
   // Médio e Difícil: golpe de prioridade contra Armor Tail / Queenly Majesty falha => vale 0 de dano (com Illusion: se algum suspeito tiver a habilidade)
-  const _guarded = m => (logic === 'hard' || logic === 'maxdamage') && _views.some(v => !!priorityGuardHolder(active, m.moveKey, [v.def]));
+  const _guarded = m => (logic === 'hard' || logic === 'maxdamage') && (_views.some(v => !!priorityGuardHolder(active, m.moveKey, [v.def])) || psychicTerrainBlocks(active, m.moveKey, oppSide, battle.sides[oppSide].activePokeIdx, side));
   const _considered = (logic === 'hard' && movesToConsider.some(m => !_isSK(m))) ? movesToConsider.filter(m => !_isSK(m)) : movesToConsider;
   const scored = _considered.map(m => {
     // Com suspeitos (Illusion): vale o PIOR caso entre o que vê e os suspeitos (fração do HP); só "nocauteia" se nocautear todos
@@ -5341,7 +5396,7 @@ function cpuChooseAction(side){
     return buildAction(side, 'switch', bestSwitch.idx);
   }
 
-  const priorityMoves = movesToConsider.filter(m => getMovePriority(m.moveKey) > 0 && !_guarded(m));   // Armor Tail / Queenly Majesty: prioridade falha
+  const priorityMoves = movesToConsider.filter(m => effMovePriority(active, m.moveKey) > 0 && !_guarded(m));   // Armor Tail / Queenly Majesty: prioridade falha
   let bestPrio = null, bestPrioDmg = -1, bestPrioIsRecharge = false;
   for(const m of priorityMoves){
     const r = estimateDamageRange(active, opp, m, myStages, oppStages, undefined, myStatus);
@@ -5397,6 +5452,13 @@ function canChangeStage(side, stat, delta, opts){
   const eff = stageDeltaFor(side, delta, opts), cur = battle.sides[side].stages[stat] || 0;
   return Math.max(-6, Math.min(6, cur + eff)) !== cur;
 }
+// ===== Queda de stat causada por OUTRO Pokémon (Showdown data/abilities.ts onTryBoost; Singles e Doubles) =====
+//  Clear Body / White Smoke / Full Metal Body: impedem qualquer queda · Hyper Cutter: Atk · Big Pecks: Def · Keen Eye: precisão.
+//  Mirror Armor: devolve a queda para quem a causou (se o stat do portador já não estiver em −6).
+//  Mold Breaker / Teravolt / Turboblaze (e Sunsteel Strike) ignoram todas, menos o Full Metal Body. O Intimidate tem a própria lista.
+//  opts.byFoe (oponente) ou opts.src = { sd, idx } (quem causou; aliado também conta) ativam a checagem; mudança no próprio usuário não.
+const STAT_DROP_BLOCK = { 'clear body': 'Clear Body', 'white smoke': 'White Smoke', 'full metal body': 'Full Metal Body' };
+const STAT_DROP_BLOCK_ONE = { 'hyper cutter': ['Atk', 'Hyper Cutter'], 'big pecks': ['Def', 'Big Pecks'], 'keen eye': ['Acc', 'Keen Eye'] };
 function changeStage(side, stat, delta, opts){
   const S = battle.sides[side];
   const contrary = hasContrary(side, opts);
@@ -5404,6 +5466,20 @@ function changeStage(side, stat, delta, opts){
   const _simple = !(opts && opts.ignoreAbility) && normKey(((battle.sharedPrepared && getSidePrepared(side)) || {}).ability || '') === 'simple';
   const eff = (contrary ? -delta : delta) * (_simple ? 2 : 1);
   const before = S.stages[stat] || 0;
+  { const _src = opts && opts.src, _other = !!(opts && (opts.byFoe || (_src && !(_src.sd === side && _src.idx === S.activePokeIdx))));
+    if(_other && eff < 0){
+      const ab = normKey(((battle.sharedPrepared && getSidePrepared(side)) || {}).ability || ''), ign = !!(opts && opts.ignoreAbility);
+      let by = null;
+      if(ab === 'full metal body') by = 'Full Metal Body';
+      else if(!ign && STAT_DROP_BLOCK[ab]) by = STAT_DROP_BLOCK[ab];
+      else if(!ign && STAT_DROP_BLOCK_ONE[ab] && STAT_DROP_BLOCK_ONE[ab][0] === stat) by = STAT_DROP_BLOCK_ONE[ab][1];
+      if(by) return { stat, requested: delta, delta: 0, before, after: before, contrary, changed: false, blocked: by };
+      if(!ign && ab === 'mirror armor' && _src && !(opts && opts.mirrored) && before > -6){   // Mirror Armor: a queda volta para quem a causou
+        const SS = battle.sides[_src.sd]; let mt = '';
+        if(SS && SS.hp[_src.idx] > 0) mt = withMon(_src.sd, _src.idx, () => fmtStageChange(changeStage(_src.sd, stat, delta, { src: { sd: side, idx: S.activePokeIdx }, mirrored: true })));
+        return { stat, requested: delta, delta: 0, before, after: before, contrary, changed: false, mirror: { name: (battle.sharedPrepared[_src.idx] || {}).name || '', txt: mt } };
+      }
+    } }
   const after = Math.max(-6, Math.min(6, before + eff));
   S.stages[stat] = after;
   const r = { stat, requested: delta, delta: eff, before, after, contrary, changed: after !== before };
@@ -5417,6 +5493,8 @@ function changeStage(side, stat, delta, opts){
   return r;
 }
 function fmtStageChange(r){
+  if(r.blocked) return `${r.stat}: não baixou (${r.blocked})`;
+  if(r.mirror) return `${r.stat}: Mirror Armor devolveu → ${r.mirror.name} ${r.mirror.txt}`;
   return `${r.stat} ${r.delta > 0 ? '+' : ''}${r.delta}${r.contrary ? ' (Contrary)' : ''}${r.changed ? '' : ' (limite)'}${r.react ? ' → ' + r.react : ''}`;
 }
 function applyStageList(side, list, opts){ return list.map(([st, d]) => fmtStageChange(changeStage(side, st, d, opts))).join(', '); }
@@ -5505,6 +5583,18 @@ function applySelfStatChanges(action, attacker, moveNameKey){
   }
   return out;
 }
+// FLINCH (Singles e Doubles): só acontece se quem causa o flinch age ANTES e o alvo ainda vai usar um golpe neste turno
+//  (trocar não conta; quem entrou em campo neste turno não age, então não pode hesitar).
+function singlesFlinchOK(ordered, actionIdx, defSide){
+  if(!ordered || actionIdx == null) return false;
+  const pos = ordered.findIndex(a => a.side === defSide); if(pos < 0 || pos <= actionIdx) return false;
+  const a = ordered[pos]; if(!(a.type === 'move' || a.type === 'status-move')) return false;
+  return a.pokeIdx === undefined || a.pokeIdx === battle.sides[defSide].activePokeIdx;
+}
+function dFlinchOK(tSd, tIdx){
+  const ord = (D.ctx && D.ctx.order) || [];
+  return ord.some(z => z.side === tSd && z.idx === tIdx && !z.done && (z.type === 'move' || z.type === 'status-move') && dS(tSd).active[z.slot] === tIdx);
+}
 function applySecondaryEffects(action, attacker, defender, moveInfo){
   const out = [];
   if(!battleSecEffects) return out;
@@ -5534,12 +5624,12 @@ function applySecondaryEffects(action, attacker, defender, moveInfo){
     if(m){
       const stat = STAT[m[1].toLowerCase()], n = Number(m[3]);
       if(toUser){ out.push(`${attacker.name} ${fmtStageChange(changeStage(aSide, stat, n))}`); }
-      else if(dS.hp[dIdx] > 0){ out.push(`${defender.name} ${fmtStageChange(changeStage(dSide, stat, -n, { ignoreAbility: attackerIgnoresAbility(attacker), byFoe: true }))}`); }
+      else if(dS.hp[dIdx] > 0){ const _r = changeStage(dSide, stat, -n, { ignoreAbility: attackerIgnoresAbility(attacker), byFoe: true, src: { sd: aSide, idx: aS.activePokeIdx } }); if(!_r.blocked) out.push(`${defender.name} ${fmtStageChange(_r)}`); }   // bloqueado (Clear Body...): sem mensagem
       return;
     }
     if(dS.hp[dIdx] <= 0) return;
     const key = normKey(effect);
-    if(key === 'flinch'){ dS.flinched = true; out.push(`${defender.name} hesitou`); return; }
+    if(key === 'flinch'){ if(battle._flinchOK){ dS.flinched = true; out.push(`${defender.name} hesitou`); } return; }   // só se o alvo ainda vai agir
     if(key === 'traps'){ if(aS.hp[aS.activePokeIdx] > 0){ const _ce = cantEscapeApply(aSide, aS.activePokeIdx, dSide, dIdx, moveInfo.Name); if(_ce.text) out.push(_ce.text); } return; }   // Spirit Shackle / Anchor Shot
     if(key === 'throat chop'){ throatChopApply(dSide, dIdx); return; }   // sem mensagem (como no jogo)
     if(key === 'confusion'){ if(applyConfusion(dSide, dIdx, true).ok) out.push(`${defender.name} ficou confuso`); return; }
@@ -5613,6 +5703,9 @@ function _executeAction(action, ordered, actionIdx){
     }
     const _failS = r => ({ side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.Name, reason: r });
     const _txtS = t => ({ side: action.side, type: 'move-text', attackerName: attacker.name, moveName: action.move.Name, text: t });
+    { const _foeT = statusTargetsFoe(moveNameKey, action.move), _all = FIELD_ALL_STATUS.has(moveNameKey);   // prioridade: Armor Tail / Queenly Majesty / Psychic Terrain
+      if(_foeT || _all){ const _pg = priorityGuardHolder(attacker, action.move.Name, [defender]); if(_pg) return _failS(_pg.ability + ' de ' + _pg.name); }
+      if(_foeT && psychicTerrainBlocks(attacker, action.move.Name, defSide, defenderSideState.activePokeIdx, action.side)) return _failS(LF.psyTerrainBlock(defender.name)); }
     if(SAP_FOE_STATUS.has(statusKeyFor(action.move, attackerActiveIdx))){   // habilidade que absorve (Sap Sipper, Water Absorb, Flash Fire...): proteção e semi-invulnerável vêm antes
       const _spv = protectionVerdict(moveNameKey, { status: true, foeStatus: true, priority: effMovePriority(attacker, action.move.Name), spread: false, contact: false }, Object.assign({ prot: defenderSideState.protected || null }, defenderSideState.sideProt || {}));
       if(_spv.blocked) return { side: action.side, type: 'blocked', attackerName: attacker.name, moveName: action.move.Name, defenderName: defender.name, by: _spv.by };
@@ -5626,6 +5719,21 @@ function _executeAction(action, ordered, actionIdx){
     }
     if(moveNameKey === 'destiny bond'){ const _db = destinyBondUse(action.side, attackerActiveIdx); return _db.fail ? _failS(_db.fail) : _txtS(_db.text); }
     if(moveNameKey === 'perish song'){ const _ps = perishSongApply(action.side, attackerActiveIdx); return _ps.fail ? _failS(_ps.fail) : _txtS(_ps.text); }
+    if(moveNameKey === 'parting shot'){
+      const _dIdx = defenderSideState.activePokeIdx;
+      { const _spv = protectionVerdict(moveNameKey, { status: true, foeStatus: true, priority: effMovePriority(attacker, action.move.Name), spread: false, contact: false }, Object.assign({ prot: defenderSideState.protected || null }, defenderSideState.sideProt || {}));
+        if(_spv.blocked) return { side: action.side, type: 'blocked', attackerName: attacker.name, moveName: action.move.Name, defenderName: defender.name, by: _spv.by }; }
+      const _ds = getSemi(defSide);
+      if(_ds && _ds.kind !== 'charge' && normKey(attacker.ability||'') !== 'no guard' && normKey(defender.ability||'') !== 'no guard')
+        return { side: action.side, type: 'move-miss', attackerName: attacker.name, moveName: action.move.Name, semiDodge: defender.name };
+      { const _ea = electricStatusAbsorb(action.side, attackerActiveIdx, defSide, _dIdx, action.move); if(_ea) return _txtS(_ea); }   // Soundproof / Water Absorb (Liquid Voice)
+      if(pranksterDarkBlocks(action, defender, true)) return _failS(LF.pranksterDark(defender.name));
+      const _ps = partingShotApply(action.side, attackerActiveIdx, defSide, _dIdx, attackerIgnoresAbility(attacker));
+      const _res = _txtS(_ps.text);
+      if(_ps.bounce){ if(getAvailableSwitchTargets(defSide).length) { _res.eject = defSide; _res.ejectVia = 'Parting Shot (Magic Bounce)'; } }
+      else if(_ps.ok && getAvailableSwitchTargets(action.side).length) _res.pivot = { passStages: false, passSub: false, via: 'Parting Shot' };
+      return _res;
+    }
     if(CANT_ESCAPE_MOVES.has(moveNameKey) || moveNameKey === 'octolock' || moveNameKey === 'floral healing'){   // golpes de status com alvo: prisão / Floral Healing
       const _dIdx = defenderSideState.activePokeIdx;
       if(PROTECTABLE_TRAP_STATUS.has(moveNameKey)){ const _spv = protectionVerdict(moveNameKey, { status: true, foeStatus: true, priority: effMovePriority(attacker, action.move.Name), spread: false, contact: false }, Object.assign({ prot: defenderSideState.protected || null }, defenderSideState.sideProt || {}));
@@ -5856,7 +5964,7 @@ function _executeAction(action, ordered, actionIdx){
         const _txt = applyStatusPlan(_plan, {
           user: { side: action.side, name: attacker.name, wrap: _wr },
           target: { side: defSide, name: defender.name, wrap: _wr },
-          targetOpts: { ignoreAbility: attackerIgnoresAbility(attacker), byFoe: true }
+          targetOpts: { ignoreAbility: attackerIgnoresAbility(attacker), byFoe: true, src: { sd: action.side, idx: attackerActiveIdx } }
         });
         const _dfg = moveNameKey === 'defog' && (clearHazards('A') | clearHazards('B'));   // Defog remove as armadilhas dos DOIS lados
         const _dfs = moveNameKey === 'defog' ? clearScreens(defSide) : [];   // ... e as telas do lado do alvo
@@ -5966,6 +6074,8 @@ function _executeAction(action, ordered, actionIdx){
 
   { const _pg = priorityGuardHolder(attacker, action.move.moveKey, [defender]);
     if(_pg) return { side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.moveName, reason: _pg.ability + ' de ' + _pg.name }; }
+  if(psychicTerrainBlocks(attacker, action.move.moveKey, defSide, defenderSideState.activePokeIdx, action.side))
+    return { side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.moveName, reason: LF.psyTerrainBlock(defender.name) };
 
   const dSemi = getSemi(defSide);
   if(dSemi && dSemi.kind !== 'charge'){
@@ -6131,7 +6241,7 @@ function _executeAction(action, ordered, actionIdx){
 
   const dealt = subbed ? subAbsorbed : Math.max(0, hpBefore - s.hp[s.activePokeIdx]);
   if(hpDamageDone > 0) battleHitRecord(action.side, attackerActiveIdx, defSide, s.activePokeIdx);   // Avalanche / Revenge do alvo: "o atacante me causou dano neste turno"
-  if(moveNameKey === 'glaive rush' && lastRes && lastRes.typeEff > 0) volOf(action.side, attackerActiveIdx).wideOpen = true;   // Glaive Rush acertou: usuário fica Wide Open
+  if(moveNameKey === 'glaive rush' && lastRes && lastRes.typeEff > 0) volOf(action.side, attackerActiveIdx).wideOpen = battle.turn + 1;   // vale no turno seguinte   // Glaive Rush acertou: usuário fica Wide Open
   if(dealt > 0 && !subbed){
     const _en = s.currentEntryTurn || 0, _r = s.rage;
     const _prev = (_r && _r.idx === s.activePokeIdx && _r.entry === _en) ? _r.n : 0;
@@ -6242,18 +6352,16 @@ function _executeAction(action, ordered, actionIdx){
 
   // Fake Out: o flinch é efeito secundário — só se o golpe causou dano ao Pokémon (Ghost imune, substituto: não). Não vale se o alvo já agiu.
   if(moveNameKey === 'fake out' && dealt > 0 && !subbed && s.hp[s.activePokeIdx] > 0 && !sheerForceOn(attacker, moveInfo)){   // Sheer Force: sem flinch
-    const oppPos = ordered ? ordered.findIndex(a => a.side === defSide) : -1;
-    const oppAct = oppPos >= 0 ? ordered[oppPos] : null;
-    const oppAttackedFirst = !!oppAct && (oppAct.type === 'move' || oppAct.type === 'status-move') && oppPos < actionIdx;
-    if(!oppAttackedFirst) battle.sides[defSide].flinched = true;
+    if(singlesFlinchOK(ordered, actionIdx, defSide)) battle.sides[defSide].flinched = true;
   }
+  battle._flinchOK = singlesFlinchOK(ordered, actionIdx, defSide);
   const secEffects = (dealt > 0 && !subbed ? applySecondaryEffects(action, attacker, defender, moveInfo) : []).concat(dealt > 0 ? applySelfStatChanges(action, attacker, moveNameKey) : []);
   if(dealt > 0 && !subbed && normKey(defender.ability || '') === 'stamina' && s.hp[s.activePokeIdx] > 0 && canChangeStage(defSide, 'Def', 1)){
     secEffects.push(`${defender.name} ${fmtStageChange(changeStage(defSide, 'Def', 1))} (Stamina)`);
   }
   // Smack Down / Thousand Arrows: o alvo fica no chão (perde Magnet Rise e Telekinesis)
   if(GROUNDING_HIT_MOVES.has(moveNameKey) && dealt > 0 && !subbed){ const _gt = applyGroundingHit(defSide, s.activePokeIdx, dSemi); if(_gt && !_semiCut) hitNote += ' ' + _gt; }
-  if((moveNameKey === 'pluck' || moveNameKey === 'bug bite') && dealt > 0 && !subbed) pluckLines(action.side, attackerActiveIdx, defSide, s.activePokeIdx).forEach(t => { hitNote += ' ' + t; });
+  if((moveNameKey === 'pluck' || moveNameKey === 'bug bite') && dealt > 0 && !subbed) pluckLines(action.side, attackerActiveIdx, defSide, s.activePokeIdx).forEach(t => _aft(t));   // linha própria: primeiro o dano no alvo, depois a cura da berry
   if(moveNameKey === 'knock off' && dealt > 0 && !subbed) knockOffLines(action.side, attackerActiveIdx, defSide, s.activePokeIdx, _helmetKO).forEach(t => { hitNote += ' ' + t; });
   if(ITEM_STEAL_MOVES.has(moveNameKey) && dealt > 0 && !subbed) thiefLines(action.side, attackerActiveIdx, defSide, s.activePokeIdx, action.move.moveName).forEach(t => { hitNote += ' ' + t; });
   if(dealt > 0 && !subbed) magicianLines(action.side, attackerActiveIdx, [{ sd: defSide, idx: s.activePokeIdx }]).forEach(t => { hitNote += ' ' + t; });   // Magician
@@ -6268,6 +6376,10 @@ function _executeAction(action, ordered, actionIdx){
     const _bst = beastBoostStat(attacker);
     if(_bst && canChangeStage(action.side, _bst, 1)) secEffects.push(LF.eelevate(attacker.name, fmtStageChange(changeStage(action.side, _bst, 1))));
   }
+  // Moxie: nocauteou com golpe de dano => Atk +1 (depois do Fell Stinger; não ativa se o nocaute encerra a batalha)
+  if(!subbed && s.hp[s.activePokeIdx] <= 0 && attackerSideState.hp[attackerActiveIdx] > 0 && normKey(getSidePrepared(action.side).ability || '') === 'moxie'
+     && (singlesSideAlive(defSide) || (battle.mode === 'pvc' && Number(battle.infiniteMode) > 0)) && canChangeStage(action.side, 'Atk', 1))
+    secEffects.push(LF.moxie(attacker.name, fmtStageChange(changeStage(action.side, 'Atk', 1))));
   if(dealt > 0 && !subbed && s.hp[s.activePokeIdx] > 0 && ((action.move.detail && action.move.detail.moveType) || (moveInfo && moveInfo.Type)) === 'Water'){
     const _it = normKey(defender.item || '');
     const _di = s.activePokeIdx;
@@ -6347,7 +6459,7 @@ function _executeAction(action, ordered, actionIdx){
       return _d ? { weatherChanges: [{ side: defSide, type: 'note', text: _d.text, _snap: _d.snap, _slowSwap: true }].concat(_d.entries) } : {}; })() : {}),
     ...(redCard ? (() => { const _rs = redCard.pre, _d = singlesDragOut(action.side);
       return { _snap: _rs, weatherChanges: [{ side: defSide, type: 'note', text: redCard.note, _snap: _rs }, { side: action.side, type: 'note', text: _d.text, _snap: _d.snap, _slowSwap: true }].concat(_d.entries) }; })() : {}),
-    ...(_after.length ? { _snap: _midSnap } : {}),   // a linha do dano mostra só o HP do alvo caindo; o resto anima nas linhas seguintes
+    ...((_after.length || dragHit) ? { _snap: _midSnap } : {}),   // a linha do dano mostra só o HP do alvo caindo (Dragon Tail: ANTES da troca); o resto anima nas linhas seguintes
   };
 }
 
@@ -6732,6 +6844,15 @@ function leftoversHeal(sd, idx){
   const h = Math.min(p.hpMax - S.hp[idx], Math.max(1, Math.floor(p.hpMax / 16)));
   S.hp[idx] += h; return h;
 }
+// Grassy Terrain (Showdown onResidualOrder 5, subOrder 2 — antes do Leftovers): cura 1/16 do HP máx. de quem está no chão e não
+//  está semi-invulnerável. Heal Block impede.
+function grassyHealAmount(sd, idx){
+  if(!battle || battle.terrain !== 'grassy') return 0;
+  const S = battle.sides[sd], p = battle.sharedPrepared[idx]; if(!p || !(S.hp[idx] > 0) || S.hp[idx] >= p.hpMax) return 0;
+  if(!battleGroundedIdx(sd, idx) || volPeek(sd, idx).healBlock > 0) return 0;
+  const sm = battle.format === 'doubles' ? (S.semis || {})[idx] : getSemi(sd); if(sm && sm.kind !== 'charge') return 0;
+  return Math.min(p.hpMax - S.hp[idx], Math.max(1, Math.floor(p.hpMax / 16)));
+}
 function applyEndOfTurnLeftovers(turnLog){
   for(const side of ['A', 'B']){
     const s = battle.sides[side], idx = s.activePokeIdx, pr = battle.sharedPrepared[idx];
@@ -7049,7 +7170,7 @@ function runTurn(ctx, startIdx){
     if(res.pivot || res.eject){
       // Eject Button troca o portador primeiro (o dono escolhe); depois o pivô (U-turn, Baton Pass...) troca quem usou.
       const _q = [];
-      if(res.eject) _q.push({ side: res.eject, pv: { passStages: false, passSub: false, via: 'Eject Button' } });
+      if(res.eject) _q.push({ side: res.eject, pv: { passStages: false, passSub: false, via: res.ejectVia || 'Eject Button' } });
       if(res.pivot) _q.push({ side: action.side, pv: res.pivot });
       if(singlesPivotQueue(_q, { ordered, turnLog, actionTargets, nextIdx: actIdx + 1 })) return;
     }
@@ -7064,6 +7185,7 @@ function runTurn(ctx, startIdx){
 
   applyEndOfTurnSand(turnLog);
   applyEndOfTurnHydration(turnLog);
+  ['A','B'].forEach(sd => { const S = battle.sides[sd], i = S.activePokeIdx, h = grassyHealAmount(sd, i); if(h > 0){ const pr = battle.sharedPrepared[i]; S.hp[i] += h; turnLog.actions.push({ side: sd, type: 'status-heal', name: pr.name, heal: h, label: 'Grassy Terrain', hpAfter: S.hp[i], hpMax: pr.hpMax }); } });   // Grassy Terrain
   applyEndOfTurnLeftovers(turnLog);   // Leftovers
   applyEndOfTurnIngrain(turnLog);
   applyEndOfTurnStatusDamage(turnLog);
@@ -7073,6 +7195,7 @@ function runTurn(ctx, startIdx){
   applyEndOfTurnAbilities(turnLog);
   yawnTickLines().forEach(y => { turnLog.actions.push({ side: y.sd, type: 'note', text: y.text }); if(window._stSnap && window._stSnap[y.sd]) window._stSnap[y.sd][y.idx] = 'Asleep'; });
   perishTick((sd, idx, text) => turnLog.actions.push({ side: sd, type: 'note', text, _snap: snapView() }));   // Perish Song
+  glaiveRushExpire();   // Glaive Rush: o turno de vulnerabilidade acabou
   uproarThroatTickLines().forEach(t => turnLog.actions.push({ type: 'note', text: t }));   // Uproar / Throat Chop
   hungerSwitchLines().forEach(t => turnLog.actions.push({ type: 'note', text: t }));   // Hunger Switch (Morpeko)
   tickEnvironment(turnLog);
@@ -7750,6 +7873,8 @@ const LF = {
   noRetreatTrap: n => `<b>${n}</b> não pode mais fugir (No Retreat)!`,
   clangCost: (n, c, hp, max) => `<b>${n}</b> perdeu ${c} HP (${hp}/${max}).`,
   hungerSwitch: (n, h) => `<b>${n}</b> mudou para o <b>${h ? 'Hangry Mode' : 'Full Belly Mode'}</b> (Hunger Switch)!`,
+  psyTerrainBlock: n => `o Psychic Terrain protegeu ${n}`,
+  moxie: (n, t) => `Moxie de <b>${n}</b>: ${t}.`,
   perishStart: names => `Todos os Pokémon que ouviram a canção vão desmaiar em três turnos! (contagem ${PERISH_START}: ${names.map(n => '<b>' + n + '</b>').join(', ')})`,
   perishMiss: n => `<b>${n}</b> está invulnerável e não ouviu a canção.`,
   perishCount: (n, c) => `Contagem do Perish Song de <b>${n}</b>: ${c}.`,
@@ -9080,7 +9205,7 @@ function presStep(token){
     pres.cur = null; pres.hitsShown = 0;
     pres.shown++;
     renderBattle();
-    delay = 700;
+    delay = (pres.queue[0] && pres.queue[0].slow) ? 1400 : 700;   // arrasto: pausa maior antes do Pokémon novo aparecer
   } else {
     const v0 = pres.view;
     pres.view = st.view;
@@ -9089,7 +9214,7 @@ function presStep(token){
     if(_swap && pres.queue.length && pres.queue[0].text){
       pres.queue.shift(); pres.cur = null; pres.hitsShown = 0; pres.shown++;
       renderBattle(); delay = 700;
-    } else if(st.slow){ renderBattle(); delay = 700; }
+    } else if(st.slow){ renderBattle(); delay = 1000; }
     else if(JSON.stringify(v0) !== JSON.stringify(st.view)){
       renderBattle();
       delay = hpAnimDur(presHpDelta(v0, st.view)) + 300;
@@ -10777,7 +10902,12 @@ function dLog(html, head){
 // Linha de entrada em campo (troca / envio). O dEnter logo em seguida faz essa linha já mostrar quem entrou, com o HP
 // de ANTES das armadilhas — assim a barra anima o dano de cada hazard na linha seguinte.
 function dLogEntry(html, slow){ dLog(html); battle._entryMark = battle._tl.lines.length - 1; if(slow) (battle._tl.slow || (battle._tl.slow = {}))[battle._entryMark] = true; }   // slow: arrasto — o Pokémon novo aparece um pouco depois da linha
-function dNewTL(turn){ return { turn, lines: [], heads: [], snaps: [], atts: [], actions: [], hp0: dViewSnap() }; }
+function dNewTL(turn){
+  const tl = { turn, lines: [], heads: [], snaps: [], atts: [], actions: [], hp0: dViewSnap() };
+  const op = tl.actions.push;   // cada cálculo guarda a linha do log em que aparece (_line): o painel Cálculo acompanha a animação
+  tl.actions.push = function(...xs){ xs.forEach(x => { if(x && typeof x === 'object' && x._line == null) x._line = tl.lines.length; }); return op.apply(this, xs); };
+  return tl;
+}
 function dViewSnap(){
   const o = {};
   ['A','B'].forEach(sd => {
@@ -10835,7 +10965,7 @@ function dPresStep(token){
   const tl = p.log; let delay = 0;
   if(p.phase === 'swap'){   // arrasto (Roar, Dragon Tail...): a linha já apareceu; agora o Pokémon novo entra no card
     p.view = p.next; p.next = null; p.phase = 'hp'; dblPresScrollReq = p.swapReq || null; p.swapReq = null; renderBattle();
-    p.timer = setTimeout(() => dPresStep(token), 700); return;
+    p.timer = setTimeout(() => dPresStep(token), 1000); return;
   }
   if(p.shown >= tl.lines.length){ tl._shown = tl.lines.length; dpres = null; renderBattle(); presFlushDeferred(); return; }
   if(p.phase === 'hp'){
@@ -10856,7 +10986,7 @@ function dPresStep(token){
     // Entrou outro Pokémon em campo: o card troca e a linha do log aparece NO MESMO instante.
     const swap = ['A','B'].some(k => JSON.stringify((p.view[k] || {}).a || []) !== JSON.stringify((nv[k] || {}).a || []));
     const slow = swap && d === 0 && tl.slow && tl.slow[p.shown];
-    if(slow){ p.next = nv; p.swapReq = dblPresScrollReq; dblPresScrollReq = null; p.shown++; p.phase = 'swap'; renderBattle(); p.timer = setTimeout(() => dPresStep(token), 700); return; }   // arrasto: primeiro a linha do log, depois o Pokémon novo
+    if(slow){ p.next = nv; p.swapReq = dblPresScrollReq; dblPresScrollReq = null; p.shown++; p.phase = 'swap'; renderBattle(); p.timer = setTimeout(() => dPresStep(token), 1400); return; }   // arrasto: primeiro a linha do log, depois o Pokémon novo
     p.view = nv; p.phase = 'text';
     if(changed && swap && d === 0){ p.shown++; p.phase = 'hp'; renderBattle(); delay = 700; }
     else if(changed){ renderBattle(); delay = d > 0 ? hpAnimDur(d) + 300 : 250; }
@@ -10877,7 +11007,7 @@ function dRenderPres(){
       if(t !== dpres.log) return t;
       const ls = t.lines.slice(0, dpres.shown);
       if(dpres.phase === 'text' && t.heads && t.heads[dpres.shown]) ls.push(t.heads[dpres.shown]);
-      return Object.assign({}, t, { lines: ls });
+      return Object.assign({}, t, { lines: ls, actions: (t.actions || []).filter(a => a._line == null || a._line < dpres.shown) });   // Cálculo: só o que já apareceu
     });
     _F.need = null; _F.await = null; _F.finished = false; _F.winner = null;
     battle = _F;
@@ -10903,7 +11033,7 @@ function dRenderPres(){
     const ls = t.lines.slice(0, dpres.shown);
     // fase 'text' = a barra de HP está animando: mostra só o cabeçalho da linha pendente
     if(dpres.phase === 'text' && t.heads && t.heads[dpres.shown]) ls.push(t.heads[dpres.shown]);
-    return Object.assign({}, t, { lines: ls });
+    return Object.assign({}, t, { lines: ls, actions: (t.actions || []).filter(a => a._line == null || a._line < dpres.shown) });   // Cálculo: só o que já apareceu
   });
   battle.need = null; battle.await = null; battle.finished = false;
   try { renderBattleInner(); }
@@ -11150,7 +11280,7 @@ function dContinue(start){
     postStepEffects();   // Sitrus Berry / formas / Protosynthesis
     // Eject Button primeiro (o portador sai); depois o pivô de quem atacou (U-turn, Volt Switch, Flip Turn...)
     if(r && r.eject){
-      if(dPivotAt(r.eject.sd, r.eject.slot, r.eject.idx, i, { pass: false, via: 'Eject Button' })){ if(r.pivot) battle.await.then = { a: { side: a.side, slot: a.slot, idx: a.idx }, pv: r.pivot }; renderBattle(); return; }
+      if(dPivotAt(r.eject.sd, r.eject.slot, r.eject.idx, i, { pass: false, via: r.eject.via || 'Eject Button' })){ if(r.pivot) battle.await.then = { a: { side: a.side, slot: a.slot, idx: a.idx }, pv: r.pivot }; renderBattle(); return; }
     }
     if(r && r.pivot && dS(a.side).active[a.slot] === a.idx && dPivot(a, i, r.pivot)) { renderBattle(); return; }
   }
@@ -11278,7 +11408,7 @@ function _dMoveAct(a, order){
     const r = dHit(a, t.sd, t.idx, ho);
     total += r.dealt || 0; totalAll += r.dealtAll || 0; if(r.hit) anyHit = true; if(r.hit && r.eff > 0) fgHit = true;
     if(r.hit && r.sd && r.sd !== sd && !(dS(r.sd).hp[r.idx] > 0)) foeKO = true;
-    if(mk === 'glaive rush' && r.hit && r.eff > 0) volOf(sd, idx).wideOpen = true;   // Glaive Rush acertou: usuário fica Wide Open
+    if(mk === 'glaive rush' && r.hit && r.eff > 0) volOf(sd, idx).wideOpen = battle.turn + 1;   // vale no turno seguinte   // Glaive Rush acertou: usuário fica Wide Open
     if((mk === 'steel roller' || mk === 'ice spinner') && r.hit && r.eff > 0){ const sr = steelRollerClear(); if(sr) dLog(sr); }   // Steel Roller / Ice Spinner: destroem o terreno (Ice Spinner: mesmo se o usuário cair)
     if(r.hitMon && r.idx !== idx) hitMons.push({ sd: r.sd, idx: r.idx, dragged: !!r.dragged });
   }
@@ -11377,12 +11507,12 @@ function dSec(sd, idx, tSd, tIdx, info, mk){
     if(mm){
       const stat = STAT[mm[1].toLowerCase()], n = Number(mm[3]);
       if(toUser){ if(dS(sd).hp[idx] > 0) dWith(sd, idx, () => dLog(`${dNm(sd, idx)} ${fmtStageChange(changeStage(sd, stat, n))}.`)); }
-      else if(T.hp[tIdx] > 0) dWith(tSd, tIdx, () => dLog(`${dNm(tSd, tIdx)} ${fmtStageChange(changeStage(tSd, stat, -n, { ignoreAbility: attackerIgnoresAbility(att), byFoe: tSd !== sd }))}.`));
+      else if(T.hp[tIdx] > 0) dWith(tSd, tIdx, () => { const r = changeStage(tSd, stat, -n, { ignoreAbility: attackerIgnoresAbility(att), byFoe: tSd !== sd, src: { sd, idx } }); if(!r.blocked) dLog(`${dNm(tSd, tIdx)} ${fmtStageChange(r)}.`); });   // bloqueado (Clear Body...): sem mensagem
       return;
     }
     if(T.hp[tIdx] <= 0) return;
     const key = normKey(effect);
-    if(key === 'flinch'){ T.flinch[tIdx] = true; return; }
+    if(key === 'flinch'){ if(dFlinchOK(tSd, tIdx)) T.flinch[tIdx] = true; return; }   // só se o alvo ainda vai agir
     if(key === 'traps'){ if(dS(sd).hp[idx] > 0){ const ce = cantEscapeApply(sd, idx, tSd, tIdx, info.Name); if(ce.text) dLog(ce.text); } return; }   // Spirit Shackle / Anchor Shot
     if(key === 'throat chop'){ throatChopApply(tSd, tIdx); return; }   // sem mensagem (como no jogo)
     if(key === 'confusion'){ const c = applyConfusion(tSd, tIdx, true); if(c.ok) dLog(c.text); return; }
@@ -11416,6 +11546,7 @@ function dHit(a, tSd, tIdx, o){
     }
     if(_pv.lift){ T.prot[tIdx] = false; T.wide = false; T.quick = false; T.mat = false; dLog(`A proteção de <b>${def.name}</b> foi quebrada por <b>${m.moveName}</b>!`); }
   }
+  if(psychicTerrainBlocks(att, m.moveKey, tSd, tIdx, sd)){ dLog(sp ? `↳ ${LF.psyTerrainBlock(def.name)}` : LF.moveFail(att.name, m.moveName, LF.psyTerrainBlock(def.name))); o.headDone = true; return res; }   // Psychic Terrain
   const noGuard = normKey(att.ability || '') === 'no guard' || normKey(def.ability || '') === 'no guard';
   const dsemi = T.semis[tIdx];
   if(dsemi && dsemi.kind !== 'charge' && !noGuard && !SEMI_HITTERS[dsemi.kind].has(mk)){ dLog(sp ? `↳ <b>${def.name}</b> está invulnerável!` : LF.miss({ attackerName: att.name, moveName: m.moveName, semiDodge: def.name })); o.headDone = true; return res; }
@@ -11561,6 +11692,9 @@ function dHit(a, tSd, tIdx, o){
     const bst = beastBoostStat(att);
     if(bst) dWith(sd, idx, () => { if(canChangeStage(sd, bst, 1)) dLog(LF.eelevate(att.name, fmtStageChange(changeStage(sd, bst, 1)))); });
   }
+  // Moxie: nocauteou (até aliado) com golpe de dano => Atk +1 (depois do Fell Stinger; não ativa se o nocaute encerra a batalha)
+  if(!subbed && T.hp[tIdx] <= 0 && S.hp[idx] > 0 && tIdx !== idx && normKey(dP(idx).ability || '') === 'moxie' && !dSideDead(tSd))
+    dWith(sd, idx, () => { if(canChangeStage(sd, 'Atk', 1)) dLog(LF.moxie(dP(idx).name, fmtStageChange(changeStage(sd, 'Atk', 1)))); });
   if(dealt > 0 && !subbed){
     if(dAb === 'sand spit'){ if(dWith(tSd, tIdx, () => setBattleWeather('sand', tSd, battle.turn))){ refreshBattlePrepared(); dLog(`${dn} levantou uma tempestade de areia!`); } }
     else if(dAb === 'seed sower'){ if(dWith(tSd, tIdx, () => setBattleTerrain('grassy', tSd, battle.turn))){ refreshBattlePrepared(); dLog(`${dn} criou o Grassy Terrain!`); } }
@@ -11575,7 +11709,7 @@ function dHit(a, tSd, tIdx, o){
     }
   }
   if(!subbed && getStatusOf(tSd, tIdx) === 'Frozen' && eff > 0 && ((info && info.Type === 'Fire') || THAW_MOVES.has(mk))){ T.status[tIdx] = 'Healthy'; T.frozenCounter[tIdx] = 0; dLog(`${dn} descongelou!`); }
-  if(mk === 'fake out' && dealt > 0 && !subbed && !sheerForceOn(att, info)){ const x = o.order.find(z => z.idx === tIdx && z.side === tSd); if(!x || !x.done) T.flinch[tIdx] = true; }
+  if(mk === 'fake out' && dealt > 0 && !subbed && !sheerForceOn(att, info) && dFlinchOK(tSd, tIdx)) T.flinch[tIdx] = true;   // só se o alvo ainda vai agir
   if(dealt > 0 && !subbed) dSec(sd, idx, tSd, tIdx, info, mk);   // igual ao Singles: com o alvo nocauteado ainda vale o bônus no usuário (Ancient Power); efeitos no alvo exigem alvo vivo (dSec)
   if(dealt > 0 && !subbed && T.hp[tIdx] > 0){
     if(dAb === 'stamina') dWith(tSd, tIdx, () => { if(canChangeStage(tSd, 'Def', 1)) dLog(`${dn} ${fmtStageChange(changeStage(tSd, 'Def', 1))} (Stamina).`); });
@@ -11608,8 +11742,32 @@ function dStatusAct(a){
   choiceLockSet(sd, idx, m.Name);
   const H = `<b>${att.name}</b> usou <b>${m.Name}</b>`;
   const fail = r => { dLog(LF.moveFail(att.name, m.Name, r)); return null; };
+  { const foeT = statusTargetsFoe(mk, m), all = FIELD_ALL_STATUS.has(mk);   // prioridade: Armor Tail / Queenly Majesty / Psychic Terrain
+    const tg0 = (a.tgt && a.tgt.sd === o) ? dS(o).active[a.tgt.slot] : null;
+    const tIdx0 = tg0 != null && dAlive(o, tg0) ? tg0 : (foeT && !(a.tgt && a.tgt.sd === sd) && dActives(o)[0] ? dActives(o)[0].idx : null);
+    if((foeT && tIdx0 != null) || all){ const pg = priorityGuardHolder(att, m.Name, dActives(o).map(x => dP(x.idx))); if(pg) return fail(pg.ability + ' de ' + pg.name); }
+    if(foeT && tIdx0 != null && psychicTerrainBlocks(att, m.Name, o, tIdx0, sd)) return fail(LF.psyTerrainBlock(dP(tIdx0).name)); }
   if(mk === 'destiny bond'){ const db = destinyBondUse(sd, idx); if(db.fail) return fail(db.fail); dLog(LF.moveText(att.name, m.Name, db.text)); return null; }
   if(mk === 'perish song'){ const ps = perishSongApply(sd, idx); if(ps.fail) return fail(ps.fail); dLog(LF.moveText(att.name, m.Name, ps.text)); return null; }
+  if(mk === 'parting shot'){
+    const foes = dActives(o);
+    let t = (a.tgt && !(a.tgt.sd === sd && S.active[a.tgt.slot] === idx)) ? a.tgt : null;
+    let tIdx = t ? dS(t.sd).active[t.slot] : null;
+    if(tIdx == null || !dAlive(t.sd, tIdx)){ t = null; tIdx = null; if(foes[0]){ t = { sd: o, slot: foes[0].slot }; tIdx = foes[0].idx; } }
+    if(!t) return fail('sem alvo');
+    if(t.sd === o){ const rd = dRedirFor(o, sd, idx); if(rd != null && dAlive(o, rd)){ tIdx = rd; t = { sd: o, slot: dS(o).active.indexOf(rd) }; } }
+    const T = dS(t.sd), tp = dP(tIdx);
+    { const spv = protectionVerdict(mk, { status: true, foeStatus: t.sd !== sd, priority: effMovePriority(att, m.Name), spread: false, contact: false }, { prot: T.prot[tIdx] || null, wide: T.wide, quick: T.quick, crafty: T.crafty, mat: T.mat });
+      if(spv.blocked){ dLog(LF.blocked({ attackerName: att.name, moveName: m.Name, defenderName: tp.name, by: spv.by })); return null; } }
+    const tsm = T.semis[tIdx];
+    if(tsm && tsm.kind !== 'charge' && normKey(att.ability || '') !== 'no guard' && normKey(tp.ability || '') !== 'no guard'){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name, semiDodge: tp.name })); return null; }
+    { const ea = electricStatusAbsorb(sd, idx, t.sd, tIdx, m); if(ea){ dLog(LF.moveText(att.name, m.Name, ea)); return null; } }
+    if(pranksterDarkBlocks(a, tp, t.sd !== sd)) return fail(LF.pranksterDark(tp.name));
+    const ps = partingShotApply(sd, idx, t.sd, tIdx, attackerIgnoresAbility(att));
+    dLog(LF.moveText(att.name, m.Name, ps.text));
+    if(ps.bounce) return dBench(t.sd).length ? { eject: { sd: t.sd, slot: t.slot, idx: tIdx, via: 'Parting Shot (Magic Bounce)' } } : null;
+    return (ps.ok && dBench(sd).length) ? { pivot: { pass: false, via: 'Parting Shot' } } : null;
+  }
   if(CANT_ESCAPE_MOVES.has(mk) || mk === 'octolock' || mk === 'floral healing'){   // golpes de status com alvo: prisão / Floral Healing (aliado ou oponente)
     const foes = dActives(o);
     let t = (a.tgt && !(a.tgt.sd === sd && S.active[a.tgt.slot] === idx)) ? a.tgt : null;
@@ -11871,7 +12029,7 @@ function dStatusAct(a){
         team: dActives(sd).map(x => ({ side: sd, name: dP(x.idx).name, wrap: fn => dWith(sd, x.idx, fn),
           immune: (x.idx !== idx && isSoundMove(m.Name) && normKey(dP(x.idx).ability || '') === 'soundproof' && !attackerIgnoresAbility(att)) ? 'Soundproof' : null })),   // Howl: aliado com Soundproof é imune
         target: tg ? { side: tg.sd, name: dP(tg.idx).name, wrap: fn => dWith(tg.sd, tg.idx, fn) } : null,
-        targetOpts: { ignoreAbility: attackerIgnoresAbility(att), byFoe: !!tg && tg.sd !== sd }
+        targetOpts: { ignoreAbility: attackerIgnoresAbility(att), byFoe: !!tg && tg.sd !== sd, src: { sd, idx } }
       });
       const dfg = mk === 'defog' && (clearHazards('A') | clearHazards('B'));   // Defog remove as armadilhas dos DOIS lados
       const dfs = (mk === 'defog' && tg) ? clearScreens(tg.sd) : [];   // ... e as telas do lado do alvo
@@ -11962,6 +12120,7 @@ function dEndTurn(){
     { const sdm = sandDamage(sd, idx); if(sdm){ const q = dP(idx), Q = dS(sd); dLog(LF.weatherDamage(q.name, sdm, Q.hp[idx], q.hpMax)); } }   // tempestade de areia
     { const ho = hydrationCure(sd, idx); if(ho) dLog(LF.hydration(dP(idx).name, ho)); }   // Hydration: antes do dano de status
     const S = dS(sd), p = dP(idx), st = getStatusOf(sd, idx); if(S.hp[idx] <= 0) return;
+    { const gh = grassyHealAmount(sd, idx); if(gh > 0){ S.hp[idx] += gh; dLog(LF.heal({ name: p.name, heal: gh, label: 'Grassy Terrain', hpAfter: S.hp[idx], hpMax: p.hpMax })); } }   // Grassy Terrain (antes do Leftovers)
     { const lh = leftoversHeal(sd, idx); if(lh) dLog(LF.heal({ name: p.name, heal: lh, label: 'Leftovers', hpAfter: S.hp[idx], hpMax: p.hpMax })); }   // Leftovers (antes do Ingrain)
     { const ih = ingrainHealAmount(sd, idx); if(ih > 0){ S.hp[idx] += ih; dLog(LF.heal({ name: p.name, heal: ih, label: 'Ingrain', hpAfter: S.hp[idx], hpMax: p.hpMax })); } }
     const mg = normKey(p.ability || '') === 'magic guard', max = p.hpMax; let dmg = 0, heal = 0, label = '';
@@ -11991,6 +12150,7 @@ function dEndTurn(){
   }));
   yawnTickLines().forEach(y => dLog(y.text));
   perishTick((sd, idx, text) => dLog(text));   // Perish Song
+  glaiveRushExpire();   // Glaive Rush: o turno de vulnerabilidade acabou
   uproarThroatTickLines().forEach(t => dLog(t));   // Uproar / Throat Chop
   hungerSwitchLines().forEach(t => dLog(t));   // Hunger Switch (Morpeko)
   dTickEnv();
@@ -12138,6 +12298,7 @@ function dCpuChoose(sd, slot){
     const views = cpuTargetViews(tSd, tIdx, sd, battle.cpuLogic), mt = (base.detail && base.detail.moveType) || '';
     // Médio e Difícil: golpe de prioridade contra um lado com Armor Tail / Queenly Majesty em campo falha => 0 (o Fácil é aleatório)
     if(battle.cpuLogic !== 'random' && battleMoveFailReason(sd, idx, base, tSd, tIdx)) return { f: 0, ko: false, guard: true };   // golpe que vai falhar
+    if(battle.cpuLogic !== 'random' && psychicTerrainBlocks(p, base.moveKey, tSd, tIdx, sd)) return { f: 0, ko: false, guard: true };   // Psychic Terrain
     if(battle.cpuLogic !== 'random' && tSd !== sd && priorityGuardHolder(p, base.moveKey, dActives(tSd).map(x => dP(x.idx)).concat(views.map(v => v.def)))) return { f: 0, ko: false, guard: true };
     const info = findMoveInfo(baseMoveNameFromKey(base.moveKey));
     const acc = Math.min(1, battleMoveAccuracy(baseMoveNameFromKey(base.moveKey), info) / 100);
