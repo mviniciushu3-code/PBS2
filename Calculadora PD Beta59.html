@@ -718,7 +718,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 58; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 59; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 const GAME_GEN = 9;      // Pokémon Champions = 9ª geração (regra 17): mecânicas que mudaram entre gerações seguem a Gen 9
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
@@ -3509,7 +3509,7 @@ function condList(side, idx){
   add(v.confused > 0, '💫', 'Confuso', '1/3 de chance de se ferir em vez de agir; some ao sair de campo');
   add(v.yawn > 0, '😪', 'Sonolento (Yawn)', 'adormece no fim do próximo turno');
   add(v.perish > 0, '🎵', 'Perish Song', 'a contagem cai 1 no fim de cada turno; em 0 é nocauteado. Sair de campo remove a contagem (Baton Pass transfere)', v.perish > 0 ? String(v.perish) : '');
-  add(v.wideOpen, '🎯', 'Wide Open (Glaive Rush)', 'golpes contra ele causam dano ×2 e sempre acertam; some ao usar outro golpe ou sair de campo');
+  add(v.wideOpen, '🎯', 'Wide Open (Glaive Rush)', 'golpes contra ele causam dano ×2 e sempre acertam; some na próxima ação dele ou ao sair de campo');
   add(isCursed(S, idx), '👻', 'Amaldiçoado (Curse)', 'perde 1/4 do HP no fim de cada turno');
   add(v.ingrain, '🌱', 'Ingrain', 'recupera 1/16 do HP por turno, fica no chão e não pode trocar');
   add(v.magnetRise > 0, '🧲', 'Magnet Rise', 'flutuando: imune a golpes Ground', v.magnetRise > 0 ? v.magnetRise + 't' : '');
@@ -4231,8 +4231,8 @@ function battleDynBaseBP(attacker, defender, moveResult){
   const k = normKey(baseMoveNameFromKey(moveResult.moveKey || '')), d = moveResult.detail || {};
   let base, note;
   if(WEIGHT_BASED_MOVES.has(k)){
-    const de = findDexEntry(defender.realName || defender.name), w = (de && de.Weight > 0) ? de.Weight : 0;
-    base = WEIGHT_RANGES[weightToRangeIndex(w)].bp; note = `Peso do alvo ${String(w).replace('.', ',')} kg → BP ${base}`;
+    const bw = battleWeightOf(defender, attacker);
+    base = WEIGHT_RANGES[weightToRangeIndex(bw.kg)].bp; note = `Peso do alvo ${bw.txt} → BP ${base}`;
   } else if(REVENGE_MOVES.has(k)){
     const aL = locOfPrepared(attacker), dL = defLocOf(defender);
     if(!aL || !dL || !damagedByThisTurn(aL.side, aL.idx, dL.side, dL.idx)) return null;
@@ -4241,13 +4241,30 @@ function battleDynBaseBP(attacker, defender, moveResult){
   const bm = bpModsForBase(d, base);
   return { bp: calcBpFinal(base, bm.mods), labels: [note].concat(bm.labels) };
 }
+// Peso EFETIVO na batalha (Showdown sim/pokemon.ts getWeight + evento ModifyWeight), em hectogramas como no Showdown:
+//  peso da aba Dex → Heavy Metal ×2 (roda primeiro) → Light Metal ÷2 (truncado) → Float Stone ÷2 (truncado) → mínimo 0,1 kg.
+//  Mold Breaker / Teravolt / Turboblaze do atacante ignoram Heavy Metal e Light Metal (habilidades "breakable"); o Float Stone
+//  só conta se o item estiver ativo (consumido, Magic Room etc. => não). Autotomize não existe na Gen 9 nem na planilha.
+function battleWeightOf(p, attacker){
+  const de = findDexEntry(p.realName || p.name), kg0 = (de && de.Weight > 0) ? de.Weight : 0;
+  let hg = Math.round(kg0 * 10); const mods = [];
+  const ign = !!attacker && attackerIgnoresAbility(attacker), ab = normKey(p.ability || '');
+  if(ab === 'heavy metal' && !ign){ hg = hg * 2; mods.push('Heavy Metal ×2'); }
+  if(ab === 'light metal' && !ign){ hg = Math.trunc(hg / 2); mods.push('Light Metal ÷2'); }
+  const L = defLocOf(p), it = L ? heldItem(L.side, L.idx) : normKey(p.item || '');
+  if(it === 'float stone'){ hg = Math.trunc(hg / 2); mods.push('Float Stone ÷2'); }
+  hg = Math.max(1, hg);
+  const f = x => String(x).replace('.', ',') + ' kg';
+  return { kg: hg / 10, txt: mods.length ? `${f(kg0)} (${mods.join(', ')} → ${f(hg / 10)})` : f(kg0) };
+}
 // Glaive Rush: o usuário fica "Wide Open" ao acertar — golpes contra ele causam dano ×2 (Dmod Glaive Rush) e sempre acertam.
 function wideOpenAt(sd, idx){ return !!(battle && battle.sides && sd && idx != null && volPeek(sd, idx).wideOpen); }
-// Some quando o usuário usa um golpe DIFERENTE (regra do usuário; no Showdown sai no onBeforeMove) ou sai de campo.
+// Dura até a PRÓXIMA AÇÃO do usuário (Showdown: condition glaiverush, onBeforeMovePriority 100 — sai antes do sono, flinch,
+//  paralisia e recarga; pesquisa da Smogon em SV: Glaive Rush no turno 1 e Ice Shard no turno 2 => ataques no turno 2 já não
+//  dobram). Vale para QUALQUER golpe, inclusive outro Glaive Rush (que devolve o estado se acertar). Sair de campo também remove.
 function glaiveRushClear(sd, idx, a){
-  if(!a || (a.type !== 'move' && a.type !== 'status-move')) return;
-  const nm = a.type === 'move' ? baseMoveNameFromKey(a.move.moveKey || '') : (a.move.Name || '');
-  if(normKey(nm) !== 'glaive rush') delete volOf(sd, idx).wideOpen;
+  if(!a || (a.type !== 'move' && a.type !== 'status-move' && a.type !== 'recharge')) return;
+  const v = volPeek(sd, idx); if(v.wideOpen) delete v.wideOpen;
 }
 // extra = { hh: 1.5 } → Helping Hand (Doubles): BP ×1,5 (detalhado em "BP Final" no log de cálculo).
 function computeBattleDamage(attacker, defender, moveResult, roll, isCrit, atkStages, defStages, overrideBP, atkStatus, noMulti, extra){
@@ -5003,8 +5020,8 @@ function cpuChooseAction(side){
   }
   
   const _isSK = m => SELF_KO_MOVES.has(normKey(baseMoveNameFromKey(m.moveKey)));
-  // Difícil: golpe de prioridade contra Armor Tail / Queenly Majesty falha => vale 0 de dano (com Illusion: se algum suspeito tiver a habilidade)
-  const _guarded = m => logic === 'hard' && _views.some(v => !!priorityGuardHolder(active, m.moveKey, [v.def]));
+  // Médio e Difícil: golpe de prioridade contra Armor Tail / Queenly Majesty falha => vale 0 de dano (com Illusion: se algum suspeito tiver a habilidade)
+  const _guarded = m => (logic === 'hard' || logic === 'maxdamage') && _views.some(v => !!priorityGuardHolder(active, m.moveKey, [v.def]));
   const _considered = (logic === 'hard' && movesToConsider.some(m => !_isSK(m))) ? movesToConsider.filter(m => !_isSK(m)) : movesToConsider;
   const scored = _considered.map(m => {
     // Com suspeitos (Illusion): vale o PIOR caso entre o que vê e os suspeitos (fração do HP); só "nocauteia" se nocautear todos
@@ -5248,6 +5265,7 @@ function applySecondaryEffects(action, attacker, defender, moveInfo){
   if(!battleSecEffects) return out;
   const _ov = moveInfo && SEC_OVERRIDES[normKey(moveInfo.Name || '')];
   if(!moveInfo || (!_ov && (!moveInfo.SecondaryEffect || !moveInfo.SecEffects || !moveInfo.SecEffects.length))) return out;
+  if(sheerForceOn(attacker, moveInfo)) return out;   // Sheer Force: remove os efeitos secundários (o BP Mod ×1,3 vem da Calculadora)
   const aSide = action.side, dSide = aSide === 'A' ? 'B' : 'A';
   const aS = battle.sides[aSide], dS = battle.sides[dSide], dIdx = dS.activePokeIdx;
   const blocked = normKey(defender.ability || '') === 'shield dust' || normKey(defender.item || '') === 'covert cloak';
@@ -5947,7 +5965,7 @@ function executeAction(action, ordered, actionIdx){
   }
 
   // Fake Out: o flinch é efeito secundário — só se o golpe causou dano ao Pokémon (Ghost imune, substituto: não). Não vale se o alvo já agiu.
-  if(moveNameKey === 'fake out' && dealt > 0 && !subbed && s.hp[s.activePokeIdx] > 0){
+  if(moveNameKey === 'fake out' && dealt > 0 && !subbed && s.hp[s.activePokeIdx] > 0 && !sheerForceOn(attacker, moveInfo)){   // Sheer Force: sem flinch
     const oppPos = ordered ? ordered.findIndex(a => a.side === defSide) : -1;
     const oppAct = oppPos >= 0 ? ordered[oppPos] : null;
     const oppAttackedFirst = !!oppAct && (oppAct.type === 'move' || oppAct.type === 'status-move') && oppPos < actionIdx;
@@ -6651,7 +6669,7 @@ function runTurn(ctx, startIdx){
     if(s.activePokeIdx !== actionTargets[action.side]){ turnLog.actions.push({ side: action.side, type: 'skip', reason: 'switched' }); continue; }
     if(s.hp[s.activePokeIdx] <= 0){ turnLog.actions.push({ side: action.side, type: 'skip', reason: 'fainted', name: getSidePrepared(action.side).name }); continue; }
     if(action.type !== 'switch') destinyBondClear(action.side, s.activePokeIdx, action);   // Destiny Bond acaba quando o usuário age de novo
-    glaiveRushClear(action.side, s.activePokeIdx, action);   // Glaive Rush: Wide Open some ao usar um golpe diferente
+    glaiveRushClear(action.side, s.activePokeIdx, action);   // Glaive Rush: Wide Open some na próxima ação do usuário (antes de recarga, flinch, sono...)
 
     if(action.type === 'recharge'){
       s.recharge = false;
@@ -10841,10 +10859,10 @@ function dExec(a, order){
   const sd = a.side, S = dS(sd), idx = a.idx;
   if(S.active[a.slot] !== idx || S.hp[idx] <= 0) return null;
   if(a.type === 'switch') return dDoSwitch(sd, a.slot, a.to);
+  glaiveRushClear(sd, idx, a);    // Glaive Rush: Wide Open some na próxima ação do usuário (antes de recarga, flinch, sono...)
   if(a.type === 'recharge'){ S.rech[idx] = false; dLog(LF.recharge(dP(idx).name)); return null; }
   const _sp = () => { if(a.type === 'move' && !a.semiAttack) solarPrevented(sd, idx, a.move); };
   destinyBondClear(sd, idx, a);   // Destiny Bond acaba quando o usuário age de novo
-  glaiveRushClear(sd, idx, a);    // Glaive Rush: Wide Open some ao usar um golpe diferente
   if(S.flinch[idx]){ S.flinch[idx] = false; S.semis[idx] = null; _sp(); dLog(LF.flinch(dP(idx).name)); return null; }
   if((a.type === 'move' || a.type === 'status-move') && throatChopBlocks(sd, idx, a.type === 'move' ? a.move.moveKey : a.move.Name)){   // Throat Chop
     dLog(LF.throatChopBlock(dP(idx).name)); if(a.type === 'move' && normKey(baseMoveNameFromKey(a.move.moveKey)) === 'uproar') uproarAfter(sd, idx, false).forEach(t => dLog(t)); return null; }
@@ -11019,6 +11037,7 @@ function dSec(sd, idx, tSd, tIdx, info, mk){
   const ov = SEC_OVERRIDES[mk];
   if(!info || (!ov && (!info.SecondaryEffect || !info.SecEffects || !info.SecEffects.length))) return;
   const att = dP(idx), def = dP(tIdx), T = dS(tSd);
+  if(sheerForceOn(att, info)) return;   // Sheer Force: remove os efeitos secundários (o BP Mod ×1,3 vem da Calculadora)
   const blocked = normKey(def.ability || '') === 'shield dust' || normKey(def.item || '') === 'covert cloak';
   const serene = normKey(att.ability || '') === 'serene grace';
   const dT = typesOfP(def), dAb = normKey(def.ability || '');
@@ -11232,7 +11251,7 @@ function dHit(a, tSd, tIdx, o){
     }
   }
   if(!subbed && getStatusOf(tSd, tIdx) === 'Frozen' && eff > 0 && ((info && info.Type === 'Fire') || THAW_MOVES.has(mk))){ T.status[tIdx] = 'Healthy'; T.frozenCounter[tIdx] = 0; dLog(`${dn} descongelou!`); }
-  if(mk === 'fake out' && dealt > 0 && !subbed){ const x = o.order.find(z => z.idx === tIdx && z.side === tSd); if(!x || !x.done) T.flinch[tIdx] = true; }
+  if(mk === 'fake out' && dealt > 0 && !subbed && !sheerForceOn(att, info)){ const x = o.order.find(z => z.idx === tIdx && z.side === tSd); if(!x || !x.done) T.flinch[tIdx] = true; }
   if(dealt > 0 && !subbed) dSec(sd, idx, tSd, tIdx, info, mk);   // igual ao Singles: com o alvo nocauteado ainda vale o bônus no usuário (Ancient Power); efeitos no alvo exigem alvo vivo (dSec)
   if(dealt > 0 && !subbed && T.hp[tIdx] > 0){
     if(dAb === 'stamina') dWith(tSd, tIdx, () => { if(canChangeStage(tSd, 'Def', 1)) dLog(`${dn} ${fmtStageChange(changeStage(tSd, 'Def', 1))} (Stamina).`); });
@@ -11770,8 +11789,8 @@ function dCpuChoose(sd, slot){
   const frac = (tSd, tIdx, mv, base) => {
     // Illusion: a CPU vê o disfarce; no Difícil vale o pior caso entre o que vê e os suspeitos
     const views = cpuTargetViews(tSd, tIdx, sd, battle.cpuLogic), mt = (base.detail && base.detail.moveType) || '';
-    // Difícil: golpe de prioridade contra um lado com Armor Tail / Queenly Majesty em campo falha => 0
-    if(battle.cpuLogic === 'hard' && tSd !== sd && priorityGuardHolder(p, base.moveKey, dActives(tSd).map(x => dP(x.idx)).concat(views.map(v => v.def)))) return { f: 0, ko: false, guard: true };
+    // Médio e Difícil: golpe de prioridade contra um lado com Armor Tail / Queenly Majesty em campo falha => 0 (o Fácil é aleatório)
+    if(battle.cpuLogic !== 'random' && tSd !== sd && priorityGuardHolder(p, base.moveKey, dActives(tSd).map(x => dP(x.idx)).concat(views.map(v => v.def)))) return { f: 0, ko: false, guard: true };
     const info = findMoveInfo(baseMoveNameFromKey(base.moveKey));
     const acc = Math.min(1, battleMoveAccuracy(baseMoveNameFromKey(base.moveKey), info) / 100);
     let f = Infinity, ko = true;
