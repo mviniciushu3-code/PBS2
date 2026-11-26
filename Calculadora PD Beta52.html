@@ -715,7 +715,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 51; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 52; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
 const ICON_TRASH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
@@ -2268,8 +2268,9 @@ function pranksterBoosts(p, name){ return !!p && normKey(p.ability || '') === 'p
 function galeWingsBoosts(p, name){
   if(!p || normKey(p.ability || '') !== 'gale wings' || !battle || !battle.sides) return false;
   const L = locOfPrepared(p); if(!L || battle.sides[L.side].hp[L.idx] < p.hpMax) return false;
-  const mr = getBattleMoveByKey(p, name), info = findMoveInfo(baseMoveNameFromKey(name || ''));
-  return ((mr && mr.detail && mr.detail.moveType) || (info && info.Type) || '') === 'Flying';
+  // Showdown: a prioridade é decidida ANTES de -ate / Electrify mudarem o tipo => vale o tipo original do golpe.
+  const info = findMoveInfo(baseMoveNameFromKey(name || ''));
+  return ((info && info.Type) || '') === 'Flying';
 }
 // Triage: +3 em golpes que recuperam HP (de dano e de status).
 const TRIAGE_MOVES = new Set(['absorb','bitter blade','draining kiss','drain punch','dream eater','floral healing','giga drain','heal order','heal pulse','healing wish','horn leech','leech life','lunar blessing','lunar dance','matcha gotcha','mega drain','milk drink','moonlight','morning sun','oblivion wing','parabolic charge','purify','recover','rest','revival blessing','roost','shore up','slack off','soft-boiled','strength sap','swallow','synthesis','wish']);
@@ -3099,7 +3100,7 @@ function strengthSapApply(aSd, aIdx, tSd, tIdx){
   const oz = liquidOozeHit(up, xp, uSd, uIdx, amt);
   if(oz) healTxt = oz.text;
   else if(volPeek(uSd, uIdx).healBlock > 0) healTxt = `${up.name} não pode se curar (Heal Block).`;
-  else { const U = battle.sides[uSd], b = U.hp[uIdx]; U.hp[uIdx] = Math.min(up.hpMax, b + amt); healTxt = U.hp[uIdx] > b ? LF.heal({ name: up.name, heal: U.hp[uIdx] - b, label: 'Strength Sap', hpAfter: U.hp[uIdx], hpMax: up.hpMax }) : `${up.name} já está com o HP cheio.`; }
+  else { const U = battle.sides[uSd], b = U.hp[uIdx]; U.hp[uIdx] = Math.min(up.hpMax, b + amt); healTxt = U.hp[uIdx] > b ? LF.healMove(up.name, U.hp[uIdx] - b, U.hp[uIdx], up.hpMax) : `${up.name} já está com o HP cheio.`; }
   return { text: `${pre}${xp.name} ${drop}. ${healTxt}` };
 }
 // ===== Memento: o usuário desmaia e o alvo perde 2 de Atk e 2 de SpA. Não desmaia se falhar (sem alvo, errou, substituto, Protect,
@@ -3167,6 +3168,14 @@ function lumLines(){
     useItem(sd, i); out.push(LF.lum(battle.sharedPrepared[i].name, lumCure(sd, i)));
   }));
   return out;
+}
+// ===== Life Orb: depois de um golpe de dano que causou dano (inclusive no substituto), o portador perde 1/10 do HP máx. (mín. 1).
+//  Magic Guard impede; Sheer Force (golpe com efeito secundário) impede. Vem depois do Magician e antes do Shell Bell. Devolve o texto. =====
+function lifeOrbRecoil(sd, idx, total, info){
+  const p = battle.sharedPrepared[idx], S = battle.sides[sd];
+  if(!p || !(total > 0) || !(S.hp[idx] > 0) || heldItem(sd, idx) !== 'life orb' || normKey(p.ability || '') === 'magic guard' || sheerForceOn(p, info)) return '';
+  const b = S.hp[idx]; S.hp[idx] = Math.max(0, b - Math.max(1, Math.trunc(p.hpMax / 10)));
+  return LF.lifeOrb(p.name, b - S.hp[idx], S.hp[idx], p.hpMax);
 }
 // ===== Minimize: quem usou fica "minimizado" até sair de campo. Flying Press contra ele: dano ×2 e sempre acerta (exceto semi-invulnerável). =====
 function minimizeSureHit(mk, tSd, tIdx, semi){ return mk === 'flying press' && !!volPeek(tSd, tIdx).minimize && !(semi && semi.kind !== 'charge'); }
@@ -3466,7 +3475,7 @@ function restApply(sd, idx){
   S.hp[idx] = p.hpMax; S.status[idx] = 'Asleep'; S.sleepCounter[idx] = 0; if(S.toxicCounter) S.toxicCounter[idx] = 0;
   if(!S.restSleep) S.restSleep = {}; S.restSleep[idx] = abOf(sd, idx) === 'early bird' ? 1 : 2;
   if(battle.format !== 'doubles' && window._stSnap && window._stSnap[sd]) window._stSnap[sd][idx] = 'Asleep';   // a mensagem do Rest já diz que dormiu
-  return `${p.name} dormiu e recuperou ${p.hpMax - b} HP (${p.hpMax}/${p.hpMax})! (dorme ${S.restSleep[idx]} turno${S.restSleep[idx] > 1 ? 's' : ''})`;
+  return `${p.name} dormiu (${S.restSleep[idx]} turno${S.restSleep[idx] > 1 ? 's' : ''}) e ${LF.healMove(p.name, p.hpMax - b, p.hpMax, p.hpMax).replace(/^<b>[^<]*<\/b> /, '')}`;
 }
 // Acordou? (sono do Rest: tempo fixo; sono comum: 25% por turno, no máximo no 3º)
 function sleepWakes(S, idx){
@@ -3549,6 +3558,7 @@ function trickBlocked(pa, ia, pb, ib){
     if(it === 'rusted shield' && any(/^zamazenta/)) return it;
     if(/ mask$/.test(it) && any(/^ogerpon/)) return it;
     if(megaStoneUsableBy(it, [pa.name, pb.name])) return it;   // tabela MEGA_STONES
+    if(it === 'booster energy' && [pa, pb].some(p => ['protosynthesis','quark drive'].includes(normKey((p && p.ability) || '')))) return it;   // Booster Energy (Trick, Thief, Knock Off, Magician, Pickpocket)
   }
   return null;
 }
@@ -4807,7 +4817,7 @@ function executeAction(action, ordered, actionIdx){
     if(moveNameKey === 'rest'){
       if(action.viaSleepTalk) return _failS('não funciona pelo Sleep Talk');
       const _rf = restFail(action.side, attackerActiveIdx); if(_rf) return _failS(_rf);
-      return _txtS(restApply(action.side, attackerActiveIdx));
+      return Object.assign(_txtS(restApply(action.side, attackerActiveIdx)), { healHead: true });
     }
     if(moveNameKey === 'sleep talk'){
       if(getStatusOf(action.side, attackerActiveIdx) !== 'Asleep') return _failS(attacker.name + ' não está dormindo');
@@ -4819,7 +4829,7 @@ function executeAction(action, ordered, actionIdx){
     }
     if(WEATHER_HEAL_MOVES.has(moveNameKey)){   // Moonlight / Synthesis / Morning Sun / Shore Up
       const _h = weatherHealApply(action.side, attackerActiveIdx, moveNameKey);
-      return _h.fail ? _failS(_h.fail) : _txtS(_h.text);
+      return _h.fail ? _failS(_h.fail) : Object.assign(_txtS(_h.text), { healHead: true });
     }
     if(moveNameKey === 'gravity'){
       if(gravityOn()) return _failS('a Gravity já está ativa');
@@ -4862,7 +4872,7 @@ function executeAction(action, ordered, actionIdx){
       if(moveNameKey === 'strength sap'){
         if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
         const _ss = strengthSapApply(action.side, attackerActiveIdx, defSide, _dIdx);
-        return _ss.fail ? _failS(_ss.fail) : _txtS(_ss.text);
+        return _ss.fail ? _failS(_ss.fail) : Object.assign(_txtS(_ss.text), { healHead: true });
       }
       if(moveNameKey === 'telekinesis'){
         if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
@@ -5279,7 +5289,7 @@ function executeAction(action, ordered, actionIdx){
     useItem(defSide, s.activePokeIdx); refreshBattlePrepared(); hitNote += ` O Air Balloon de ${defender.name} estourou!`;
   }
   const _midSnap = snapView();
-  let drainHeal = 0, drainApplicable = false, drainPct = 0, drainHpBefore = 0, drainHpAfter = 0, _oozeKO = false;
+  let drainHeal = 0, drainApplicable = false, drainPct = 0, drainHpBefore = 0, drainHpAfter = 0, _oozeKO = false, _loKO = false;
   const _isDrain = dealt > 0 && attackerSideState.hp[attackerActiveIdx] > 0 && (DRAIN_MOVES_50.has(moveNameKey) || DRAIN_MOVES_75.has(moveNameKey));
   const _oz = _isDrain ? liquidOozeHit(attacker, defender, action.side, attackerActiveIdx, drainAmount(action.side, attackerActiveIdx, dealt, DRAIN_MOVES_75.has(moveNameKey) ? 0.75 : 0.5)) : null;
   if(_oz){ hitNote += ' ' + _oz.text; _oozeKO = attackerSideState.hp[attackerActiveIdx] <= 0; }   // Liquid Ooze: o usuário perde o que drenaria
@@ -5358,7 +5368,8 @@ function executeAction(action, ordered, actionIdx){
   if(moveNameKey === 'knock off' && dealt > 0 && !subbed) knockOffLines(action.side, attackerActiveIdx, defSide, s.activePokeIdx, _helmetKO).forEach(t => { hitNote += ' ' + t; });
   if(ITEM_STEAL_MOVES.has(moveNameKey) && dealt > 0 && !subbed) thiefLines(action.side, attackerActiveIdx, defSide, s.activePokeIdx, action.move.moveName).forEach(t => { hitNote += ' ' + t; });
   if(dealt > 0 && !subbed) magicianLines(action.side, attackerActiveIdx, [{ sd: defSide, idx: s.activePokeIdx }]).forEach(t => { hitNote += ' ' + t; });   // Magician
-  { const _sb = shellBellHeal(action.side, attackerActiveIdx, dealt, moveInfo); if(_sb) hitNote += ' ' + _sb; }   // Shell Bell (depois de drenagem, recuo, Rough Skin, Thief, Magician)
+  { const _lo = lifeOrbRecoil(action.side, attackerActiveIdx, dealt, moveInfo); if(_lo){ hitNote += ' ' + _lo; if(attackerSideState.hp[attackerActiveIdx] <= 0){ attackerFainted = true; _loKO = true; } } }   // Life Orb
+  { const _sb = shellBellHeal(action.side, attackerActiveIdx, dealt, moveInfo); if(_sb) hitNote += ' ' + _sb; }   // Shell Bell (depois de drenagem, recuo, Rough Skin, Thief, Magician, Life Orb)
   if(moveNameKey === 'plasma fists' && dealt > 0 && !subbed && battle.plasmaTurn !== battle.turn){ battle.plasmaTurn = battle.turn; refreshBattlePrepared(); hitNote += ' ' + LF.plasma(); }
   // Eelevate: nocauteou com golpe de dano => +1 no maior stat (não ativa se o nocaute encerra a batalha)
   if(!subbed && s.hp[s.activePokeIdx] <= 0 && attackerSideState.hp[attackerActiveIdx] > 0 && normKey(attacker.ability || '') === 'eelevate'
@@ -5437,7 +5448,7 @@ function executeAction(action, ordered, actionIdx){
     rollIdx, causesRecharge, hits, multiStrike: nHits > 1 || !!tripleBP, missAt,
     isCrit, focusSashConsumed, endureHeld, thawedDefender,
     drainHeal, drainApplicable, drainPct, drainHpBefore, drainHpAfter, drainDealt: dealt, attackerMaxHp: attacker.hpMax,
-    hitNote, recoil: recoilDmg, recoilBlockedBy, attackerFainted, contactKO: _contactKO || _oozeKO, fgFaint: moveNameKey === 'final gambit' && selfKO, selfKO, isStruggle: isStruggleMove,
+    hitNote, recoil: recoilDmg, recoilBlockedBy, attackerFainted, contactKO: _contactKO || _oozeKO || _loKO, fgFaint: moveNameKey === 'final gambit' && selfKO, selfKO, isStruggle: isStruggleMove,
     _midSnap: (drainHeal > 0 || recoilDmg > 0) ? _midSnap : undefined,
     subHit: subbed, subAbsorbed, subBroken, subRemain: s.sub || 0, pivot, eject: ejectSide,
     doubleKO: attackerFainted && s.hp[s.activePokeIdx] <= 0,
@@ -6801,7 +6812,11 @@ const LF = {
   effectSpore: (holder, att, st) => `Effect Spore de <b>${holder}</b>: <b>${att}</b> agora está <b>${st}</b>!`,
   powderImmune: (n, why) => `${n} não é afetado por pó/esporos (${why})`,
   harvest: (n, berry) => `<b>${n}</b> colheu outra <b>${berry}</b> (Harvest)!`,
-  healMove: (n, h, hpA, max) => `<b>${n}</b> recuperou <span style="color:var(--mint);">${h} HP</span>! (${hpA}/${max})`,
+  // Cura por golpe: primeiro a porcentagem (ou o HP, com 📏 Dano HP), depois o HP atual. O "X usou Y!" aparece durante a animação.
+  healAmt: (h, max) => battleShowDamageAsPercent ? `+${max > 0 ? Math.round(h / max * 100) : 0}%` : `+${h} HP`,
+  healMove: (n, h, hpA, max) => `<b>${n}</b> recuperou <span style="color:var(--mint);">${LF.healAmt(h, max)}</span>. ${hpA}/${max} HP.`,
+  moveHead: (n, mv) => `<b>${n}</b> usou <b>${mv}</b>!`,
+  lifeOrb: (n, d, hpA, max) => `<b>${n}</b> perdeu <span class="dmg">${d} HP</span> pelo Life Orb (${hpA}/${max})!${hpA <= 0 ? ` <b>${n}</b> foi nocauteado!` : ''}`,
   confuseGain: n => `<b>${n}</b> ficou confuso!`,
   mega: (from, to, ab) => `${MEGA_ICON} <b>${from}</b> Mega Evoluiu para <b>${to}</b>!${ab ? ' (habilidade: ' + ab + ')' : ''}`,
   megaRevert: (from, to) => `↩️ <b>${from}</b> voltou à forma normal (<b>${to}</b>).`,
@@ -6879,6 +6894,7 @@ function battleLogHtml(){
     const lines = dblLinesHtml(t) + (t.actions || []).filter(a => !a._dblCalc).map(a => {
       if(a._headOnly && a.type === 'status-sub') return `<div class="action-line"><b>${a.attackerName}</b> usou <b>${a.moveName}</b>!</div>`;
       if(a._headOnly && a.type === 'status-curse') return `<div class="action-line"><b>${a.attackerName}</b> usou <b>${a.moveName}</b>!</div>`;
+      if(a._headOnly && a.type === 'move-text' && a.healHead) return `<div class="action-line">${LF.moveHead(a.attackerName, a.moveName)}</div>`;   // cura: cabeçalho durante a animação
       if(a._headOnly && a.type !== 'move' && a.type !== 'move-absorb' && !(a.type === 'status-damage' && a.label === 'maldição')) return '';
       if(a.type === 'move-absorb') return `<div class="action-line"><b>${a.attackerName}</b> usou <b>${a.moveName}</b>!${a._headOnly ? '' : ' ' + a.text}</div>`;
       if(a.type === 'switch') return `<div class="action-line">${LF.switchMsg(a.side, a.fromName, a.toName, a.viaMove)}</div>`;
@@ -7355,8 +7371,8 @@ function battleSideCardInner(side){
 
   const _selStyle = 'font-family:var(--font-mono);font-size:11px;max-width:140px;';
   const abilityItemHtml = `<div class="battle-meta-info">
-    ${battleManual.ability ? `<select data-manual-field="ability" data-idx="${s.activePokeIdx}" style="${_selStyle}">${getAllAbilitiesList(active.ability).map(x => `<option value="${x}"${x === active.ability ? ' selected' : ''}>${x}</option>`).join('')}</select>` : (active.ability || '—')} &nbsp;·&nbsp;
-    ${battleManual.item ? `<select data-manual-field="item" data-idx="${s.activePokeIdx}" style="${_selStyle}">${getAllItemsList(active.item).map(x => `<option value="${x}"${x === active.item ? ' selected' : ''}>${x}</option>`).join('')}</select>` : (active.item || '—')}
+    ${battleManual.item ? `<select data-manual-field="item" data-idx="${s.activePokeIdx}" style="${_selStyle}">${getAllItemsList(active.item).map(x => `<option value="${x}"${x === active.item ? ' selected' : ''}>${x}</option>`).join('')}</select>` : (active.item || '—')} &nbsp;·&nbsp;
+    ${battleManual.ability ? `<select data-manual-field="ability" data-idx="${s.activePokeIdx}" style="${_selStyle}">${getAllAbilitiesList(active.ability).map(x => `<option value="${x}"${x === active.ability ? ' selected' : ''}>${x}</option>`).join('')}</select>` : (active.ability || '—')}
   </div>`;
 
   const oppSide = side === 'A' ? 'B' : 'A';
@@ -10239,7 +10255,8 @@ function dMoveAct(a, order){
   if(mk === 'final gambit' && fgHit && S.hp[idx] > 0){ S.hp[idx] = 0; battle._oozeFirst = { side: sd, turn: battle.turn }; dLog(LF.finalGambitFaint(att.name)); }   // o usuário cai antes do alvo
   { const byS = hitMons.slice().sort((p, q) => dSpeed(q.sd, q.idx) - dSpeed(p.sd, p.idx));   // o mais rápido primeiro
     magicianLines(sd, idx, byS.filter(x => dS(x.sd).active.includes(x.idx))).forEach(t => dLog(t));   // Magician
-    const sb = shellBellHeal(sd, idx, totalAll, info); if(sb) dLog(sb);   // Shell Bell: dano total do golpe (todos os alvos), depois do recuo e do Magician
+    const lo = lifeOrbRecoil(sd, idx, totalAll, info); if(lo){ dLog(lo); if(S.hp[idx] <= 0) battle._oozeFirst = { side: sd, turn: battle.turn }; }   // Life Orb (o usuário cai antes)
+    const sb = shellBellHeal(sd, idx, totalAll, info); if(sb) dLog(sb);   // Shell Bell: dano total do golpe (todos os alvos), depois do recuo, do Magician e do Life Orb
     if(info && info.Contact && !PIVOT_DAMAGE_MOVES.has(mk)) pickpocketLines(sd, idx, byS.filter(x => !x.dragged && dS(x.sd).active.includes(x.idx))).forEach(t => dLog(t)); }   // Pickpocket
   // Mudanças de stage do usuário (Close Combat, Draco Meteor...)
   if(total > 0 && S.hp[idx] > 0 && SELF_STAT_CHANGES[mk]){
@@ -10507,7 +10524,7 @@ function dStatusAct(a){
   if(mk === 'rest'){
     if(a.viaSleepTalk) return fail('não funciona pelo Sleep Talk');
     const rf = restFail(sd, idx); if(rf) return fail(rf);
-    dLog(LF.moveText(att.name, m.Name, restApply(sd, idx))); return null;
+    dLog(LF.moveText(att.name, m.Name, restApply(sd, idx)), LF.moveHead(att.name, m.Name)); return null;
   }
   if(mk === 'sleep talk'){
     if(getStatusOf(sd, idx) !== 'Asleep') return fail(att.name + ' não está dormindo');
@@ -10519,7 +10536,7 @@ function dStatusAct(a){
   }
   if(WEATHER_HEAL_MOVES.has(mk)){   // Moonlight / Synthesis / Morning Sun / Shore Up
     const h = weatherHealApply(sd, idx, mk); if(h.fail) return fail(h.fail);
-    dLog(LF.moveText(att.name, m.Name, h.text)); return null;
+    dLog(LF.moveText(att.name, m.Name, h.text), LF.moveHead(att.name, m.Name)); return null;
   }
   if(mk === 'gravity'){
     if(gravityOn()) return fail('a Gravity já está ativa');
@@ -10573,7 +10590,7 @@ function dStatusAct(a){
       const acc = battleMoveAccuracy(mk, m, t.sd, tIdx);
       if(battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name })); return null; }
       const ss = strengthSapApply(sd, idx, t.sd, tIdx); if(ss.fail) return fail(ss.fail);
-      dLog(LF.moveText(att.name, m.Name, ss.text)); return null;
+      dLog(LF.moveText(att.name, m.Name, ss.text), LF.moveHead(att.name, m.Name)); return null;
     }
     if(mk === 'telekinesis'){
       if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
