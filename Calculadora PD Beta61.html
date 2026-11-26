@@ -710,7 +710,7 @@ Adamant Nature
   <option value="Choice Band"><option value="Choice Specs"><option value="Choice Scarf">
   <option value="Life Orb"><option value="Assault Vest"><option value="Leftovers">
   <option value="Focus Sash"><option value="Safety Goggles"><option value="Heavy-Duty Boots"><option value="Power Herb"><option value="Light Clay"><option value="Shell Bell"><option value="Big Root"><option value="Rocky Helmet"><option value="Lum Berry">
-  <option value="Throat Spray"><option value="Scope Lens"><option value="Razor Claw"><option value="Leek"><option value="Lansat Berry"><option value="Ring Target"><option value="Air Balloon"><option value="Eject Button"><option value="Red Card"><option value="White Herb"><option value="Sitrus Berry">
+  <option value="Throat Spray"><option value="Binding Band"><option value="Grip Claw"><option value="Scope Lens"><option value="Razor Claw"><option value="Leek"><option value="Lansat Berry"><option value="Ring Target"><option value="Air Balloon"><option value="Eject Button"><option value="Red Card"><option value="White Herb"><option value="Sitrus Berry">
   <option value="Grassy Seed"><option value="Electric Seed"><option value="Psychic Seed"><option value="Misty Seed">
   <option value="Eviolite"><option value="Weakness Policy"><option value="Expert Belt">
   <option value="Wise Glasses"><option value="Muscle Band"><option value="Normal Gem">
@@ -718,7 +718,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 60; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 61; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 const GAME_GEN = 9;      // Pokémon Champions = 9ª geração (regra 17): mecânicas que mudaram entre gerações seguem a Gen 9
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
@@ -854,7 +854,7 @@ const TERRAIN_ABILITY_MAP = {'Electric Surge':'electric','Grassy Surge':'grassy'
 const STATUS_OPTIONS = ['Healthy','Poisoned','Badly Poisoned','Burned','Paralyzed','Asleep','Frozen'];
 
 // Golpes de proteção acrescentados só para a BATALHA: não entram na contagem mostrada na aba Calculadora ("N golpes de status").
-const BATTLE_ONLY_STATUS = new Set(['baneful bunker','burning bulwark',"king's shield",'obstruct','silk trap','spiky shield','crafty shield','mat block','quick guard','wide guard','endure','heal order','soft-boiled']);   // fora da contagem da Calculadora
+const BATTLE_ONLY_STATUS = new Set(['baneful bunker','burning bulwark',"king's shield",'obstruct','silk trap','spiky shield','crafty shield','mat block','quick guard','wide guard','endure','heal order','soft-boiled','floral healing']);   // fora da contagem da Calculadora
 const HARDCODED_STATUS_MOVES = {
   'baneful bunker': { Name:'Baneful Bunker', Type:'Poison', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
   'burning bulwark': { Name:'Burning Bulwark', Type:'Fire', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
@@ -886,6 +886,7 @@ const HARDCODED_STATUS_MOVES = {
   'shore up': { Name:'Shore Up', Type:'Ground', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
   'heal order': { Name:'Heal Order', Type:'Bug', Category:'Status', Accuracy:101, PP:8, IsStatus:true },      // fora da planilha: igual ao Recover (PP como o Recover da planilha)
   'soft-boiled': { Name:'Soft-Boiled', Type:'Normal', Category:'Status', Accuracy:101, PP:8, IsStatus:true },
+  'floral healing': { Name:'Floral Healing', Type:'Fairy', Category:'Status', Accuracy:101, PP:12, IsStatus:true },   // fora da planilha (PP: 10 do Showdown → 12, como os demais)
   'electric terrain': { Name:'Electric Terrain', Type:'Electric', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
   'grassy terrain': { Name:'Grassy Terrain', Type:'Grass', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
   'misty terrain': { Name:'Misty Terrain', Type:'Fairy', Category:'Status', Accuracy:101, PP:10, IsStatus:true },
@@ -2523,7 +2524,7 @@ const ROCK_HEAD_NO_BLOCK = new Set(['steelbeam','mindblown']);
 const OHKO_MOVES = new Set(['fissure','sheer cold','guillotine','horn drill']);
 const GROUNDING_HIT_MOVES = new Set(['smack down','thousand arrows']);
 const FORCE_SWITCH_STATUS = new Set(['roar','whirlwind']);
-const VOL_TARGET_STATUS = new Set(['roar','whirlwind','telekinesis','gastro acid','trick','switcheroo','confuse ray','sweet kiss','swagger','flatter','yawn','entrainment','electrify','memento','after you','strength sap']);   // golpes de status com alvo (no Doubles o alvo é escolhido)
+const VOL_TARGET_STATUS = new Set(['mean look','block','spider web','octolock','floral healing','roar','whirlwind','telekinesis','gastro acid','trick','switcheroo','confuse ray','sweet kiss','swagger','flatter','yawn','entrainment','electrify','memento','after you','strength sap']);   // golpes de status com alvo (no Doubles o alvo é escolhido)
 function telekinesisImmune(p){ const n = normKey((p && p.name) || ''); return n === 'gengar-mega' || n === 'mega gengar' || /^(diglett|dugtrio)(-|$)/.test(n) || n === 'sandygast' || n === 'palossand'; }
 function isMegaGengar(p){ const n = normKey(spName(p)); return n === 'gengar-mega' || n === 'mega gengar'; }
 function volOf(side, idx){ const S = battle.sides[side]; if(!S.vol) S.vol = {}; return S.vol[idx] || (S.vol[idx] = {}); }
@@ -2661,6 +2662,9 @@ function volOnEnter(side, oldIdx, newIdx, batonPass){
     if(old.confused > 0) nv.confused = old.confused;
     if(old.pumped){ nv.pumped = old.pumped; nv.pumpedSrc = old.pumpedSrc; }   // Focus Energy / Dragon Cheer passam
     if(old.perish > 0) nv.perish = old.perish;   // Perish Song: a contagem passa (mesmo para quem tem Soundproof)
+    if(old.trapped) nv.trapped = old.trapped;   // Can't Escape passa pelo Baton Pass (texto do usuário)
+    if(old.bound) nv.bound = old.bound;         // amarrar e Octolock passam (Showdown: não são noCopy)
+    if(old.octolock) nv.octolock = old.octolock;
   }
   const changed = !!(old.ingrain || old.magnetRise > 0 || old.tele > 0 || old.smacked || old.gastro || old.traced || old.abil || old.types || old.addType) || Object.keys(S.vol[newIdx] || {}).length > 0 || Object.keys(nv).length > 0;
   if(oldIdx != null && oldIdx !== newIdx) delete S.vol[oldIdx];
@@ -2839,19 +2843,26 @@ function ingrainHealAmount(side, idx){
   if(normKey(p.item || '') === 'big root') h = pokeRound(h * 5324 / 4096);
   return Math.min(h, p.hpMax - S.hp[idx]);
 }
-// Ingrain impede a troca voluntária (Ghost, Shed Shell e Smoke Ball ainda trocam; pivôs e Baton Pass sempre trocam).
+// Ingrain impede a troca voluntária (Ghost e Shed Shell ainda trocam; pivôs e Baton Pass sempre trocam).
 function ingrainTraps(side, idx){
   const p = battle.sharedPrepared[idx];
   if(!p || !volPeek(side, idx).ingrain) return false;
   if(hasTypeP(p, 'Ghost')) return false;
-  const it = normKey(p.item || '');
-  return it !== 'shed shell' && it !== 'smoke ball';
+  return normKey(p.item || '') !== 'shed shell';   // Smoke Ball só serve para fugir de batalha selvagem, não para trocar
 }
 // Bloqueio de troca voluntária: Arena Trap do oponente ou Ingrain. Devolve o texto do motivo ou null.
 function switchLockText(side, idx){
+  const p = battle.sharedPrepared[idx]; if(!p) return null;
+  if(heldItem(side, idx) === 'shed shell' || trapImmune(side, idx) || abOf(side, idx) === 'run away') return null;   // escapam de qualquer prisão
   const t = arenaTrapHolder(side, idx); if(t) return `Preso por Arena Trap de ${t.name}`;
+  { const ft = foeAbilityTrap(side, idx); if(ft) return ft; }   // Shadow Tag / Magnet Pull
   if(ingrainTraps(side, idx)) return 'Enraizado (Ingrain): não pode trocar';
   if(noRetreatTraps(side, idx)) return 'No Retreat: não pode trocar';
+  const v = volPeek(side, idx);
+  if(v.trapped && trapSourceOn(v.trapped)) return `Não pode fugir (${v.trapped.move} de ${battle.sharedPrepared[v.trapped.idx].name})`;
+  if(v.bound && trapSourceOn(v.bound)) return `Preso pelo ${v.bound.move} de ${battle.sharedPrepared[v.bound.idx].name}`;
+  if(v.octolock && trapSourceOn(v.octolock)) return 'Preso pelo Octolock';
+  if(battle.fairyLock === battle.turn) return 'Fairy Lock: ninguém pode trocar neste turno';
   return null;
 }
 // Golpes que fixam o alvo no chão (Smack Down / Thousand Arrows): tiram Magnet Rise e Telekinesis. Devolve o texto do log ('' se nada mudou).
@@ -3511,6 +3522,10 @@ function condList(side, idx){
   add(v.confused > 0, '💫', 'Confuso', '1/3 de chance de se ferir em vez de agir; some ao sair de campo');
   add(v.yawn > 0, '😪', 'Sonolento (Yawn)', 'adormece no fim do próximo turno');
   add(v.perish > 0, '🎵', 'Perish Song', 'a contagem cai 1 no fim de cada turno; em 0 é nocauteado. Sair de campo remove a contagem (Baton Pass transfere)', v.perish > 0 ? String(v.perish) : '');
+  add(v.trapped && trapSourceOn(v.trapped), '🔒', "Can't Escape", v.trapped ? `${v.trapped.move}: não pode trocar enquanto ${battle.sharedPrepared[v.trapped.idx] ? battle.sharedPrepared[v.trapped.idx].name : 'quem prendeu'} estiver em campo` : '');
+  add(v.bound && trapSourceOn(v.bound), '🌀', 'Preso (' + (v.bound ? v.bound.move : 'amarrar') + ')', v.bound ? `perde 1/${v.bound.div} do HP no fim do turno e não pode trocar` : '', v.bound ? (v.bound.turns - 1) + 't' : '');
+  add(v.octolock && trapSourceOn(v.octolock), '🐙', 'Octolock', 'não pode trocar; Def −1 e SpD −1 no fim de cada turno');
+  add(battle.fairyLock === battle.turn, '🧚', 'Fairy Lock', 'ninguém pode trocar neste turno');
   add(v.noRetreat, '⛓️', 'No Retreat', 'não pode trocar por escolha (Shed Shell solta; Ghost troca); não usa No Retreat de novo');
   add(v.hangry, '😠', 'Hangry Mode (Hunger Switch)', 'Aura Wheel vira Dark; alterna no fim de cada turno');
   add(v.wideOpen, '🎯', 'Wide Open (Glaive Rush)', 'golpes contra ele causam dano ×2 e sempre acertam; some na próxima ação dele ou ao sair de campo');
@@ -3547,7 +3562,17 @@ function condBadgesHtml(side, idx){
   return { head, panel: open ? `<div class="cond-panel">${rows}</div>` : '' };
 }
 // À esquerda do nome do Pokémon: status não volátil — queimado, paralisado, envenenado, turnos dormindo / congelado e turnos de veneno grave (com os próximos danos ao segurar/passar o mouse).
+// Junto do status (à esquerda do nome): tipo adicionado por Forest's Curse (🌿 Grass) ou Trick-or-Treat (🎃 Ghost).
 function statusTurnBadgeHtml(side, idx){
+  if(!battle || idx == null) return '';
+  const add = volPeek(side, idx).addType, p = battle.sharedPrepared[idx];
+  const esc = t => String(t).replace(/"/g, '&quot;');
+  const tb = (icon, info) => `<span class="hz-badge status-turns" data-cond-info="${esc(info)}" title="${esc(info)}" style="margin-right:6px;font-size:13px;vertical-align:middle;">${icon}</span>`;
+  const extra = !p || !add ? '' : add === 'Grass' ? tb('🌿', `Forest's Curse: ${p.name} ganhou o tipo Grass (some ao sair de campo).`)
+    : add === 'Ghost' ? tb('🎃', `Trick-or-Treat: ${p.name} ganhou o tipo Ghost (some ao sair de campo).`) : tb('➕', `${p.name} ganhou o tipo ${add}.`);
+  return _statusTurnBadgeHtml(side, idx) + extra;
+}
+function _statusTurnBadgeHtml(side, idx){
   if(!battle || idx == null) return '';
   const S = battle.sides[side], p = battle.sharedPrepared[idx], st = getStatusOf(side, idx); if(!p) return '';
   const esc = t => String(t).replace(/"/g, '&quot;');
@@ -4366,6 +4391,104 @@ function noRetreatTraps(side, idx){
   if(!p || !volPeek(side, idx).noRetreat || hasTypeP(p, 'Ghost')) return false;
   return heldItem(side, idx) !== 'shed shell';
 }
+// ===== PRISÃO / ESCAPE PREVENTION (Singles e Doubles) =====
+//  Fontes: texto do usuário (Bulbapedia "Escape prevention") + Showdown (conditions.ts trapped / partiallytrapped; moves.ts
+//  meanlook, block, spiritshackle, jawlock, octolock, fairylock, rapidspin; abilities.ts shadowtag, magnetpull, arenatrap).
+//  Quem está preso não pode TROCAR POR ESCOLHA (switchLockText). Escapam de qualquer prisão: Shed Shell, tipo Ghost (Gen 6+, inclui o
+//  Ghost do Trick-or-Treat) e Run Away (regra do Champions). Continuam trocando: U-turn, Volt Switch, Flip Turn, Parting Shot,
+//  Baton Pass, Roar, Whirlwind, Dragon Tail, Circle Throw, Eject Button e Red Card (essas trocas não passam por switchLockText).
+//  · Can't Escape (vol.trapped = { sd, idx, move } de quem prendeu): Mean Look, Block, Spider Web (status; Protect NÃO bloqueia,
+//    substituto bloqueia, Ghost é imune), Spirit Shackle / Anchor Shot (efeito secundário 100%), Jaw Lock (os dois ficam presos).
+//    Acaba quando quem prendeu sai de campo. O Baton Pass passa o estado (texto do usuário; no Showdown não passa).
+//  · Bound (vol.bound): golpes de amarrar (BINDING_MOVES) que causam dano ao Pokémon. Dura 4 ou 5 turnos — Showdown:
+//    durationCallback random(5, 7) = 5 ou 6 (50% cada), e a duração cai 1 em cada fim de turno ANTES do dano, então são 4 ou 5
+//    danos (contando o turno em que prendeu); Grip Claw do usuário = 8 → 7 turnos. Dano no fim do turno (Showdown onResidualOrder 13):
+//    1/8 do HP máx. (1/6 com Binding Band do usuário); Magic Guard impede. Um amarrar por vez. Acaba se quem prendeu sair de campo;
+//    Rapid Spin / Mortal Spin do preso o soltam. Ghost continua levando o dano, mas pode trocar.
+//  · Octolock (vol.octolock): prende e, no fim de cada turno (onResidualOrder 14), Def −1 e SpD −1 no alvo enquanto o usuário estiver em campo.
+//  · Fairy Lock: ninguém troca no turno SEGUINTE (battle.fairyLock = número desse turno). Falha se já estiver ativo.
+//  · Habilidades: Arena Trap (já existia), Shadow Tag (prende os oponentes, menos quem também tem Shadow Tag) e Magnet Pull (prende
+//    oponentes Steel). No turno em que o portador acabou de entrar, ainda não prendem.
+const CANT_ESCAPE_MOVES = new Set(['mean look', 'block', 'spider web']);
+const BINDING_MOVES = new Set(['bind', 'clamp', 'fire spin', 'infestation', 'magma storm', 'sand tomb', 'snap trap', 'thunder cage', 'whirlpool', 'wrap']);
+function trapSourceOn(src){ return !!src && !!battle.sides[src.sd] && fieldMons(src.sd).includes(src.idx); }
+function trapImmune(sd, idx){ const p = battle.sharedPrepared[idx]; return !p || hasTypeP(p, 'Ghost'); }   // Showdown runTrappingImmunity (Gen 6+)
+function trappedNow(sd, idx){ const v = volPeek(sd, idx); return (!!v.trapped && trapSourceOn(v.trapped)) || (!!v.octolock && trapSourceOn(v.octolock)); }
+function foeAbilityTrap(side, idx){
+  const p = battle.sharedPrepared[idx]; if(!p) return null;
+  const opp = side === 'A' ? 'B' : 'A', O = battle.sides[opp];
+  for(const j of fieldMons(opp)){
+    const q = battle.sharedPrepared[j], ab = abOf(opp, j); if(!q) continue;
+    const entry = battle.format === 'doubles' ? (O.entry ? O.entry[j] : 0) : (O.currentEntryTurn || 0);
+    if(entry === battle.turn) continue;   // acabou de entrar neste turno: ainda não prende
+    if(ab === 'shadow tag' && abOf(side, idx) !== 'shadow tag') return `Preso por Shadow Tag de ${q.name}`;
+    if(ab === 'magnet pull' && hasTypeP(p, 'Steel')) return `Preso por Magnet Pull de ${q.name}`;
+  }
+  return null;
+}
+// Aplica "Can't Escape" (Mean Look / Block / Spider Web / Spirit Shackle / Anchor Shot). Devolve { text } ou { fail }.
+function cantEscapeApply(aSd, aIdx, tSd, tIdx, mvName){
+  const tp = battle.sharedPrepared[tIdx];
+  if(trapImmune(tSd, tIdx)) return { fail: 'não afeta ' + tp.name + ' (Ghost)' };
+  if(trappedNow(tSd, tIdx)) return { fail: tp.name + ' já não pode fugir' };
+  volOf(tSd, tIdx).trapped = { sd: aSd, idx: aIdx, move: mvName };
+  return { text: LF.cantEscape(tp.name) };
+}
+function jawLockLines(aSd, aIdx, tSd, tIdx){
+  if(trapImmune(aSd, aIdx) || trapImmune(tSd, tIdx) || trappedNow(aSd, aIdx) || trappedNow(tSd, tIdx)) return [];
+  if(!(battle.sides[aSd].hp[aIdx] > 0) || !(battle.sides[tSd].hp[tIdx] > 0)) return [];
+  volOf(aSd, aIdx).trapped = { sd: tSd, idx: tIdx, move: 'Jaw Lock' }; volOf(tSd, tIdx).trapped = { sd: aSd, idx: aIdx, move: 'Jaw Lock' };
+  return [LF.jawLock(battle.sharedPrepared[aIdx].name, battle.sharedPrepared[tIdx].name)];
+}
+function bindApply(aSd, aIdx, tSd, tIdx, mvName){
+  const v = volOf(tSd, tIdx); if(v.bound && trapSourceOn(v.bound)) return '';
+  const it = heldItem(aSd, aIdx);
+  v.bound = { sd: aSd, idx: aIdx, move: mvName, turns: it === 'grip claw' ? 8 : (battleRandom() < 0.5 ? 5 : 6), div: it === 'binding band' ? 6 : 8 };
+  return LF.bound(battle.sharedPrepared[tIdx].name, mvName, battle.sharedPrepared[aIdx].name);
+}
+function octolockApply(aSd, aIdx, tSd, tIdx){
+  const tp = battle.sharedPrepared[tIdx], v = volOf(tSd, tIdx);
+  if(trapImmune(tSd, tIdx)) return { fail: 'não afeta ' + tp.name + ' (Ghost)' };
+  if(v.octolock && trapSourceOn(v.octolock)) return { fail: tp.name + ' já está preso pelo Octolock' };
+  v.octolock = { sd: aSd, idx: aIdx };
+  return { text: LF.octolock(tp.name) };
+}
+function fairyLockApply(){
+  if(battle.fairyLock && battle.fairyLock >= battle.turn) return { fail: 'o Fairy Lock já está ativo' };
+  battle.fairyLock = battle.turn + 1;
+  return { text: LF.fairyLock() };
+}
+// Fim do turno de UM Pokémon: amarrar (ordem 13) e Octolock (ordem 14). emit(texto) logo depois de cada mudança.
+function bindOctoTick(sd, idx, emit){
+  const S = battle.sides[sd], p = battle.sharedPrepared[idx], v = volPeek(sd, idx);
+  if(!p || !(S.hp[idx] > 0)) return;
+  if(v.bound){
+    const b = v.bound;
+    if(!trapSourceOn(b)) delete v.bound;   // quem prendeu saiu de campo: solta em silêncio
+    else if(--b.turns <= 0){ delete v.bound; emit(LF.boundEnd(p.name, b.move)); }
+    else if(abOf(sd, idx) !== 'magic guard'){
+      const d = Math.min(S.hp[idx], Math.max(1, Math.floor(p.hpMax / b.div))); S.hp[idx] -= d;
+      emit(LF.boundDamage(p.name, b.move, d, S.hp[idx], p.hpMax) + (S.hp[idx] <= 0 ? ' ' + LF.faint(p.name) : ''));
+    }
+  }
+  if(S.hp[idx] > 0 && v.octolock){
+    if(!trapSourceOn(v.octolock)) delete v.octolock;
+    else { const src = battle.sharedPrepared[v.octolock.idx]; const t = withMon(sd, idx, () => applyStageList(sd, [['Def', -1], ['SpD', -1]], { ignoreAbility: attackerIgnoresAbility(src), byFoe: true })); emit(LF.octolockTick(p.name, t)); }
+  }
+}
+function rapidSpinFree(sd, idx){ const v = volPeek(sd, idx); if(!v.bound) return ''; const b = v.bound; delete v.bound; return LF.boundEnd(battle.sharedPrepared[idx].name, b.move); }
+// Floral Healing (Showdown data/moves.ts floralhealing): cura ⌈HP máx / 2⌉ do alvo (no Grassy Terrain: HP máx × 0,667 pelo
+//  battle.modify). Sempre acerta (menos semi-invulnerável); Protect bloqueia; substituto bloqueia; Heal Block impede; HP cheio = falha.
+function floralHealApply(tSd, tIdx){
+  const tp = battle.sharedPrepared[tIdx], T = battle.sides[tSd];
+  if(volPeek(tSd, tIdx).healBlock > 0) return { fail: tp.name + ' está sob Heal Block' };
+  const amt = battle.terrain === 'grassy' ? sdModify(tp.hpMax, 0.667) : Math.ceil(tp.hpMax * 0.5);
+  const h = Math.min(tp.hpMax - T.hp[tIdx], amt);
+  if(!(h > 0)) return { fail: tp.name + ' está com o HP cheio' };
+  T.hp[tIdx] += h;
+  return { text: LF.floralHeal(tp.name, h, T.hp[tIdx], tp.hpMax) };
+}
+const PROTECTABLE_TRAP_STATUS = new Set(['octolock', 'floral healing']);   // Mean Look / Block / Spider Web não são bloqueados por Protect
 // Hunger Switch (Showdown: onResidualOrder 29): no fim de cada turno o Morpeko alterna Full Belly ↔ Hangry (vol.hangry; volta ao
 //  Full Belly ao sair de campo). Aura Wheel: Electric no Full Belly, Dark no Hangry.
 function hungerSwitchLines(){
@@ -5417,6 +5540,7 @@ function applySecondaryEffects(action, attacker, defender, moveInfo){
     if(dS.hp[dIdx] <= 0) return;
     const key = normKey(effect);
     if(key === 'flinch'){ dS.flinched = true; out.push(`${defender.name} hesitou`); return; }
+    if(key === 'traps'){ if(aS.hp[aS.activePokeIdx] > 0){ const _ce = cantEscapeApply(aSide, aS.activePokeIdx, dSide, dIdx, moveInfo.Name); if(_ce.text) out.push(_ce.text); } return; }   // Spirit Shackle / Anchor Shot
     if(key === 'throat chop'){ throatChopApply(dSide, dIdx); return; }   // sem mensagem (como no jogo)
     if(key === 'confusion'){ if(applyConfusion(dSide, dIdx, true).ok) out.push(`${defender.name} ficou confuso`); return; }
     const st = { burn:'Burned', poison:'Poisoned', paralyze:'Paralyzed', freeze:'Frozen', sleep:'Asleep' }[key];
@@ -5502,6 +5626,19 @@ function _executeAction(action, ordered, actionIdx){
     }
     if(moveNameKey === 'destiny bond'){ const _db = destinyBondUse(action.side, attackerActiveIdx); return _db.fail ? _failS(_db.fail) : _txtS(_db.text); }
     if(moveNameKey === 'perish song'){ const _ps = perishSongApply(action.side, attackerActiveIdx); return _ps.fail ? _failS(_ps.fail) : _txtS(_ps.text); }
+    if(CANT_ESCAPE_MOVES.has(moveNameKey) || moveNameKey === 'octolock' || moveNameKey === 'floral healing'){   // golpes de status com alvo: prisão / Floral Healing
+      const _dIdx = defenderSideState.activePokeIdx;
+      if(PROTECTABLE_TRAP_STATUS.has(moveNameKey)){ const _spv = protectionVerdict(moveNameKey, { status: true, foeStatus: true, priority: effMovePriority(attacker, action.move.Name), spread: false, contact: false }, Object.assign({ prot: defenderSideState.protected || null }, defenderSideState.sideProt || {}));
+        if(_spv.blocked) return { side: action.side, type: 'blocked', attackerName: attacker.name, moveName: action.move.Name, defenderName: defender.name, by: _spv.by }; }
+      const _ds = getSemi(defSide);
+      if(_ds && _ds.kind !== 'charge' && normKey(attacker.ability||'') !== 'no guard' && normKey(defender.ability||'') !== 'no guard')
+        return { side: action.side, type: 'move-miss', attackerName: attacker.name, moveName: action.move.Name, semiDodge: defender.name };
+      if(pranksterDarkBlocks(action, defender, true)) return _failS(LF.pranksterDark(defender.name));
+      if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
+      const _r = moveNameKey === 'octolock' ? octolockApply(action.side, attackerActiveIdx, defSide, _dIdx) : moveNameKey === 'floral healing' ? floralHealApply(defSide, _dIdx) : cantEscapeApply(action.side, attackerActiveIdx, defSide, _dIdx, action.move.Name);
+      return _r.fail ? _failS(_r.fail) : Object.assign(_txtS(_r.text), moveNameKey === 'floral healing' ? { healHead: true } : {});
+    }
+    if(moveNameKey === 'fairy lock'){ const _fl = fairyLockApply(); return _fl.fail ? _failS(_fl.fail) : _txtS(_fl.text); }
     if(moveNameKey === 'no retreat'){ const _nr = noRetreatApply(action.side, attackerActiveIdx); return _nr.fail ? _failS(_nr.fail) : _txtS(_nr.text); }
     if(moveNameKey === 'clangorous soul'){ const _cs = clangorousSoulApply(action.side, attackerActiveIdx); return _cs.fail ? _failS(_cs.fail) : _txtS(_cs.text); }
     if(moveNameKey === 'focus energy'){ const _fe = pumpApply(action.side, attackerActiveIdx, 2, 'Focus Energy'); return _fe.fail ? _failS(_fe.fail) : _txtS(_fe.text); }
@@ -5631,7 +5768,7 @@ function _executeAction(action, ordered, actionIdx){
       { const _db = dragHitBlock(attacker, defSide, _dIdx); if(_db) return _failS(_db === 'Ingrain' ? defender.name + ' está enraizado (Ingrain)' : defender.name + ' não sai (' + _db + ')'); }   // Ingrain / Suction Cups / Guard Dog
       const _d = singlesDragOut(defSide);
       if(!_d) return _failS('sem Pokémon para entrar');
-      return Object.assign(_txtS(_d.text), { weatherChanges: _d.entries, _snap: _d.snap });
+      return Object.assign(_txtS(_d.text), { weatherChanges: _d.entries, _snap: _d.snap, _slowSwap: true });
     }
     if(moveNameKey === 'substitute' || moveNameKey === 'shed tail'){
       const isShed = moveNameKey === 'shed tail';
@@ -6019,7 +6156,10 @@ function _executeAction(action, ordered, actionIdx){
     useItem(defSide, s.activePokeIdx); refreshBattlePrepared(); hitNote += ` O Air Balloon de ${defender.name} estourou!`;
   }
   if(hpDamageDone > 0 && !subbed){ const _ie = illusionEnd(s.activePokeIdx); if(_ie) hitNote += ' ' + _ie; }   // Illusion: dano de golpe de dano quebra a ilusão
-  if(moveNameKey === 'steel roller' && lastRes && lastRes.typeEff > 0){ const _sr = steelRollerClear(); if(_sr) hitNote += ' ' + _sr; }   // Steel Roller: destrói o terreno
+  if((moveNameKey === 'steel roller' || moveNameKey === 'ice spinner') && lastRes && lastRes.typeEff > 0){ const _sr = steelRollerClear(); if(_sr) hitNote += ' ' + _sr; }   // Steel Roller / Ice Spinner: destroem o terreno (Ice Spinner: mesmo se o usuário cair)
+  if(BINDING_MOVES.has(moveNameKey) && hpDamageDone > 0 && !subbed && s.hp[s.activePokeIdx] > 0){ const _bd = bindApply(action.side, attackerActiveIdx, defSide, s.activePokeIdx, baseMoveNameFromKey(action.move.moveKey)); if(_bd) hitNote += ' ' + _bd; }   // golpes de amarrar
+  if(moveNameKey === 'jaw lock' && hpDamageDone > 0 && !subbed) jawLockLines(action.side, attackerActiveIdx, defSide, s.activePokeIdx).forEach(t => { hitNote += ' ' + t; });
+  if(HAZARD_CLEAR_USER.has(moveNameKey) && dealt > 0 && attackerSideState.hp[attackerActiveIdx] > 0 && !sheerForceOn(attacker, moveInfo)){ const _rf = rapidSpinFree(action.side, attackerActiveIdx); if(_rf) hitNote += ' ' + _rf; }   // Rapid Spin / Mortal Spin soltam o usuário
   const _midSnap = snapView();
   // Passos depois do dano no alvo: cada um vira uma linha própria do log, com a sua animação de HP (LF.drain / recoil / selfKO / lifeOrb / faint)
   const _after = [], _aft = t => _after.push({ side: action.side, type: 'note', text: t, _snap: snapView() });
@@ -6204,9 +6344,9 @@ function _executeAction(action, ordered, actionIdx){
     subHit: subbed, subAbsorbed, subBroken, subRemain: s.sub || 0, pivot, eject: ejectSide,
     doubleKO: attackerFainted && s.hp[s.activePokeIdx] <= 0,
     ...(dragHit ? (() => { const _d = singlesDragOut(defSide);   // Dragon Tail / Circle Throw
-      return _d ? { weatherChanges: [{ side: defSide, type: 'note', text: _d.text, _snap: _d.snap }].concat(_d.entries) } : {}; })() : {}),
+      return _d ? { weatherChanges: [{ side: defSide, type: 'note', text: _d.text, _snap: _d.snap, _slowSwap: true }].concat(_d.entries) } : {}; })() : {}),
     ...(redCard ? (() => { const _rs = redCard.pre, _d = singlesDragOut(action.side);
-      return { _snap: _rs, weatherChanges: [{ side: defSide, type: 'note', text: redCard.note, _snap: _rs }, { side: action.side, type: 'note', text: _d.text, _snap: _d.snap }].concat(_d.entries) }; })() : {}),
+      return { _snap: _rs, weatherChanges: [{ side: defSide, type: 'note', text: redCard.note, _snap: _rs }, { side: action.side, type: 'note', text: _d.text, _snap: _d.snap, _slowSwap: true }].concat(_d.entries) }; })() : {}),
     ...(_after.length ? { _snap: _midSnap } : {}),   // a linha do dano mostra só o HP do alvo caindo; o resto anima nas linhas seguintes
   };
 }
@@ -6929,6 +7069,7 @@ function runTurn(ctx, startIdx){
   applyEndOfTurnStatusDamage(turnLog);
   orbLines().forEach(o => { turnLog.actions.push({ side: o.sd, type: 'note', text: o.text }); if(window._stSnap && window._stSnap[o.sd]) window._stSnap[o.sd][o.idx] = o.st; });   // Flame / Toxic Orb
   applyEndOfTurnCurse(turnLog);
+  ['A','B'].forEach(sd => bindOctoTick(sd, battle.sides[sd].activePokeIdx, t => turnLog.actions.push({ side: sd, type: 'note', text: t, _snap: snapView() })));   // amarrar / Octolock
   applyEndOfTurnAbilities(turnLog);
   yawnTickLines().forEach(y => { turnLog.actions.push({ side: y.sd, type: 'note', text: y.text }); if(window._stSnap && window._stSnap[y.sd]) window._stSnap[y.sd][y.idx] = 'Asleep'; });
   perishTick((sd, idx, text) => turnLog.actions.push({ side: sd, type: 'note', text, _snap: snapView() }));   // Perish Song
@@ -7594,6 +7735,15 @@ const LF = {
   pumped: (n, k, src) => `<b>${n}</b> está animado (${src}): estágio de crítico +${k}!`,
   psychUp: (n, t) => `<b>${n}</b> copiou as mudanças de stats de <b>${t}</b>!`,
   crash: (n, d, hpA, max) => `<b>${n}</b> continuou e se chocou! <span class="dmg">${LF.dmgAmt(d, max)}</span>. ${hpA}/${max} HP.`,
+  cantEscape: n => `<b>${n}</b> não pode mais fugir!`,
+  jawLock: (a, t) => `Nem <b>${a}</b> nem <b>${t}</b> podem fugir (Jaw Lock)!`,
+  bound: (n, mv, a) => `<b>${n}</b> ficou preso pelo <b>${mv}</b> de <b>${a}</b>!`,
+  boundDamage: (n, mv, d, hp, max) => `<b>${n}</b> sofreu ${d} de dano do <b>${mv}</b> (${hp}/${max}).`,
+  boundEnd: (n, mv) => `<b>${n}</b> se livrou do <b>${mv}</b>!`,
+  octolock: n => `<b>${n}</b> ficou preso pelo Octolock!`,
+  octolockTick: (n, t) => `Octolock: <b>${n}</b> ${t}.`,
+  fairyLock: () => `Ninguém poderá fugir durante o próximo turno (Fairy Lock)!`,
+  floralHeal: (n, h, hp, max) => `<b>${n}</b> recuperou ${h} HP (${hp}/${max}).`,
   terrainRemoved: t => `O terreno <b>${terrainLabel(t)}</b> foi destruído!`,
   poltergeist: (n, it) => `<b>${n}</b> está prestes a ser atacado pelo seu <b>${it}</b>!`,
   poisonTouch: (n, a) => `<b>${n}</b> foi envenenado pelo Poison Touch de <b>${a}</b>!`,
@@ -8295,6 +8445,9 @@ function renderSetup(){
     return;
   }
   if(avail.length === 0){ battleSetup.randomA = true; battleSetup.randomB = true; }
+  // Pokémon sorteados de uma batalha anterior (equipe aleatória) não estão na lista: tira do time para não travar a escolha
+  ['A','B'].forEach(sd => { battleSetup[sd] = battleSetup[sd].filter(i => avail.includes(i)); });
+  ['leadA','leadA2','leadB','leadB2'].forEach(k => { if(battleSetup[k] != null && !avail.includes(battleSetup[k])) battleSetup[k] = null; });
 
   if(battleSetup.A.length === 0 && battleSetup.B.length === 0){
     battleSetup.A = avail.slice(0, Math.min(6, avail.length));
@@ -8560,7 +8713,7 @@ function envSelectHtml(kind){
   return `<select data-manual-env="${kind}" style="font-family:var(--font-mono);font-size:11px;">${opts.map(([v, l]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${l}</option>`).join('')}</select><span style="font-family:var(--font-mono);font-size:11px;color:var(--text-dim);">${(kind === 'weather' ? battle.weather : battle.terrain) !== 'none' ? envTurnsText(kind === 'weather' ? battle.weatherInfo : battle.terrainInfo).replace(' · ', '') : ''}</span>`;
 }
 function getAllItemsList(cur){
-  const set = new Set([...RANDOM_ITEMS_POOL, ...MEGA_STONE_NAMES, 'Eject Button', 'Red Card', 'Throat Spray', 'Scope Lens', 'Razor Claw', 'Leek', 'Lansat Berry', 'Ring Target', 'Light Clay', 'Shell Bell', 'Big Root', 'Rocky Helmet', 'Lum Berry', 'Focus Sash','Life Orb','Leftovers','Sitrus Berry','Choice Band','Choice Specs','Choice Scarf','Assault Vest','White Herb','Safety Goggles', ...currentPokemons.map(p => p && p.item).filter(Boolean), cur].filter(Boolean));
+  const set = new Set([...RANDOM_ITEMS_POOL, ...MEGA_STONE_NAMES, 'Eject Button', 'Red Card', 'Binding Band', 'Grip Claw', 'Throat Spray', 'Scope Lens', 'Razor Claw', 'Leek', 'Lansat Berry', 'Ring Target', 'Light Clay', 'Shell Bell', 'Big Root', 'Rocky Helmet', 'Lum Berry', 'Focus Sash','Life Orb','Leftovers','Sitrus Berry','Choice Band','Choice Specs','Choice Scarf','Assault Vest','White Herb','Safety Goggles', ...currentPokemons.map(p => p && p.item).filter(Boolean), cur].filter(Boolean));
   return [...set].sort();
 }
 function getAllAbilitiesList(cur){
@@ -8913,8 +9066,8 @@ function presStep(token){
       a.hits.forEach((h, i) => { if(h.snap) q.push({ view: h.snap }); q.push({ hit: i + 1 }); });
     }
     if(a._midSnap) q.push({ view: a._midSnap });
-    q.push({ view: a._snap || pres.view });
-    q.push({ text: true });
+    if(a._slowSwap){ q.push({ text: true }); q.push({ view: a._snap || pres.view, slow: true }); }   // arrasto: primeiro a linha do log, depois o Pokémon novo
+    else { q.push({ view: a._snap || pres.view }); q.push({ text: true }); }
     pres.queue = q; pres.cur = a;   // cabeçalho do log aparece junto com a animação de HP
   }
   const st = pres.queue.shift();
@@ -8936,7 +9089,8 @@ function presStep(token){
     if(_swap && pres.queue.length && pres.queue[0].text){
       pres.queue.shift(); pres.cur = null; pres.hitsShown = 0; pres.shown++;
       renderBattle(); delay = 700;
-    } else if(JSON.stringify(v0) !== JSON.stringify(st.view)){
+    } else if(st.slow){ renderBattle(); delay = 700; }
+    else if(JSON.stringify(v0) !== JSON.stringify(st.view)){
       renderBattle();
       delay = hpAnimDur(presHpDelta(v0, st.view)) + 300;
     }
@@ -10622,7 +10776,7 @@ function dLog(html, head){
 }
 // Linha de entrada em campo (troca / envio). O dEnter logo em seguida faz essa linha já mostrar quem entrou, com o HP
 // de ANTES das armadilhas — assim a barra anima o dano de cada hazard na linha seguinte.
-function dLogEntry(html){ dLog(html); battle._entryMark = battle._tl.lines.length - 1; }
+function dLogEntry(html, slow){ dLog(html); battle._entryMark = battle._tl.lines.length - 1; if(slow) (battle._tl.slow || (battle._tl.slow = {}))[battle._entryMark] = true; }   // slow: arrasto — o Pokémon novo aparece um pouco depois da linha
 function dNewTL(turn){ return { turn, lines: [], heads: [], snaps: [], atts: [], actions: [], hp0: dViewSnap() }; }
 function dViewSnap(){
   const o = {};
@@ -10679,6 +10833,10 @@ function dPresStep(token){
   const p = dpres; if(!p || p.token !== token || !battle) return;
   if(uiBusy()){ p.timer = setTimeout(() => dPresStep(token), 150); return; }
   const tl = p.log; let delay = 0;
+  if(p.phase === 'swap'){   // arrasto (Roar, Dragon Tail...): a linha já apareceu; agora o Pokémon novo entra no card
+    p.view = p.next; p.next = null; p.phase = 'hp'; dblPresScrollReq = p.swapReq || null; p.swapReq = null; renderBattle();
+    p.timer = setTimeout(() => dPresStep(token), 700); return;
+  }
   if(p.shown >= tl.lines.length){ tl._shown = tl.lines.length; dpres = null; renderBattle(); presFlushDeferred(); return; }
   if(p.phase === 'hp'){
     const nv = tl.snaps[p.shown] || p.view;
@@ -10691,9 +10849,14 @@ function dPresStep(token){
       const att = (tl.atts && tl.atts[p.shown]) || null, reqs = [];
       if(att) reqs.push(att);
       if(hit.length === 1) reqs.push(hit[0]);
+      // Nocauteado nesta linha e Pokémon que entrou em campo: o card desliza até ele (por último, então vale sobre os outros pedidos da fileira)
+      ['A','B'].forEach(k => (nv[k].a || []).forEach((i, slot) => { if(i == null) return; const x = p.view[k].hp[i], y = nv[k].hp[i]; if(x > 0 && y !== undefined && y <= 0) reqs.push({ sd: k, slot }); }));
+      ['A','B'].forEach(k => (nv[k].a || []).forEach((i, slot) => { if(i != null && ((p.view[k] || {}).a || [])[slot] !== i) reqs.push({ sd: k, slot }); }));
       if(reqs.length) dblPresScrollReq = reqs; }
     // Entrou outro Pokémon em campo: o card troca e a linha do log aparece NO MESMO instante.
     const swap = ['A','B'].some(k => JSON.stringify((p.view[k] || {}).a || []) !== JSON.stringify((nv[k] || {}).a || []));
+    const slow = swap && d === 0 && tl.slow && tl.slow[p.shown];
+    if(slow){ p.next = nv; p.swapReq = dblPresScrollReq; dblPresScrollReq = null; p.shown++; p.phase = 'swap'; renderBattle(); p.timer = setTimeout(() => dPresStep(token), 700); return; }   // arrasto: primeiro a linha do log, depois o Pokémon novo
     p.view = nv; p.phase = 'text';
     if(changed && swap && d === 0){ p.shown++; p.phase = 'hp'; renderBattle(); delay = 700; }
     else if(changed){ renderBattle(); delay = d > 0 ? hpAnimDur(d) + 300 : 250; }
@@ -11116,7 +11279,7 @@ function _dMoveAct(a, order){
     total += r.dealt || 0; totalAll += r.dealtAll || 0; if(r.hit) anyHit = true; if(r.hit && r.eff > 0) fgHit = true;
     if(r.hit && r.sd && r.sd !== sd && !(dS(r.sd).hp[r.idx] > 0)) foeKO = true;
     if(mk === 'glaive rush' && r.hit && r.eff > 0) volOf(sd, idx).wideOpen = true;   // Glaive Rush acertou: usuário fica Wide Open
-    if(mk === 'steel roller' && r.hit && r.eff > 0){ const sr = steelRollerClear(); if(sr) dLog(sr); }   // Steel Roller: destrói o terreno
+    if((mk === 'steel roller' || mk === 'ice spinner') && r.hit && r.eff > 0){ const sr = steelRollerClear(); if(sr) dLog(sr); }   // Steel Roller / Ice Spinner: destroem o terreno (Ice Spinner: mesmo se o usuário cair)
     if(r.hitMon && r.idx !== idx) hitMons.push({ sd: r.sd, idx: r.idx, dragged: !!r.dragged });
   }
   // Golpe em área: o HP de todos os alvos cai AO MESMO TEMPO (a 1ª linha "↳" já anima todas as barras).
@@ -11173,7 +11336,7 @@ function _dMoveAct(a, order){
     else if(rc && S.hp[idx] > 0 && S.active[a.slot] === idx && dBench(sd).length){
       useItem(rc.sd, rc.idx); dLog(`<b>${dP(rc.idx).name}</b> mostrou o Red Card para <b>${att.name}</b>!`);
       const bench = dBench(sd), to = bench[Math.floor(battleRandom() * bench.length)];
-      dLogEntry(LF.dragged(att.name, dP(to).name)); dEnter(sd, a.slot, to, false); carded = true;
+      dLogEntry(LF.dragged(att.name, dP(to).name), true); dEnter(sd, a.slot, to, false); carded = true;
     }
     const ej = its.find(x => x.it === 'eject button');
     if(ej && dAlive(ej.sd, ej.idx) && dBench(ej.sd).length){
@@ -11220,6 +11383,7 @@ function dSec(sd, idx, tSd, tIdx, info, mk){
     if(T.hp[tIdx] <= 0) return;
     const key = normKey(effect);
     if(key === 'flinch'){ T.flinch[tIdx] = true; return; }
+    if(key === 'traps'){ if(dS(sd).hp[idx] > 0){ const ce = cantEscapeApply(sd, idx, tSd, tIdx, info.Name); if(ce.text) dLog(ce.text); } return; }   // Spirit Shackle / Anchor Shot
     if(key === 'throat chop'){ throatChopApply(tSd, tIdx); return; }   // sem mensagem (como no jogo)
     if(key === 'confusion'){ const c = applyConfusion(tSd, tIdx, true); if(c.ok) dLog(c.text); return; }
     const st = { burn:'Burned', poison:'Poisoned', paralyze:'Paralyzed', freeze:'Frozen', sleep:'Asleep' }[key];
@@ -11373,6 +11537,9 @@ function dHit(a, tSd, tIdx, o){
   if(debrisLayers) dLog(`Toxic Debris de <b>${def.name}</b> espalhou Toxic Spikes no campo de <b>${sideTitle(sd)}</b> (camada ${hazardsOf(sd).tspikes}/2).`);
   if(HAZARD_ON_HIT[mk] && S.hp[idx] > 0 && setHazard(tSd, HAZARD_ON_HIT[mk])) dLog(hazardSetText(tSd, HAZARD_ON_HIT[mk]));
   if(HAZARD_CLEAR_USER.has(mk) && dealt > 0 && clearHazards(sd)) dLog(`As armadilhas do campo de <b>${sideTitle(sd)}</b> foram removidas!`);
+  if(HAZARD_CLEAR_USER.has(mk) && dealt > 0 && S.hp[idx] > 0 && !sheerForceOn(att, info)){ const rf = rapidSpinFree(sd, idx); if(rf) dLog(rf); }   // Rapid Spin / Mortal Spin soltam o usuário
+  if(BINDING_MOVES.has(mk) && hpDone > 0 && !subbed && T.hp[tIdx] > 0){ const bd = bindApply(sd, idx, tSd, tIdx, baseMoveNameFromKey(m.moveKey)); if(bd) dLog(bd); }   // golpes de amarrar
+  if(mk === 'jaw lock' && hpDone > 0 && !subbed) jawLockLines(sd, idx, tSd, tIdx).forEach(t => dLog(t));
   if(dealt > 0 && !subbed){ T.rageN[tIdx] = (T.rageN[tIdx] || 0) + Math.max(1, hitsDone); }
   // Smack Down / Thousand Arrows: o alvo fica no chão (perde Magnet Rise e Telekinesis)
   if((hpDone > 0 || subAbs > 0) && heldItem(tSd, tIdx) === 'air balloon'){ useItem(tSd, tIdx); refreshBattlePrepared(); dLog(`O Air Balloon de ${dn} estourou!`); }
@@ -11427,7 +11594,7 @@ function dHit(a, tSd, tIdx, o){
   if(T.hp[tIdx] <= 0){ T.subs[tIdx] = 0; }   // "foi nocauteado!" já vem na linha de dano (fmtDamageHtml), igual ao Singles
   if(dragHit && T.hp[tIdx] > 0 && T.active.includes(tIdx)){   // Dragon Tail / Circle Throw: arrasta um aleatório do banco
     const bench = dBench(tSd);
-    if(bench.length){ const to = bench[Math.floor(battleRandom() * bench.length)]; dLogEntry(LF.dragged(def.name, dP(to).name)); dEnter(tSd, T.active.indexOf(tIdx), to, false); res.dragged = true; }
+    if(bench.length){ const to = bench[Math.floor(battleRandom() * bench.length)]; dLogEntry(LF.dragged(def.name, dP(to).name), true); dEnter(tSd, T.active.indexOf(tIdx), to, false); res.dragged = true; }
   }
   return res;
 }
@@ -11443,6 +11610,25 @@ function dStatusAct(a){
   const fail = r => { dLog(LF.moveFail(att.name, m.Name, r)); return null; };
   if(mk === 'destiny bond'){ const db = destinyBondUse(sd, idx); if(db.fail) return fail(db.fail); dLog(LF.moveText(att.name, m.Name, db.text)); return null; }
   if(mk === 'perish song'){ const ps = perishSongApply(sd, idx); if(ps.fail) return fail(ps.fail); dLog(LF.moveText(att.name, m.Name, ps.text)); return null; }
+  if(CANT_ESCAPE_MOVES.has(mk) || mk === 'octolock' || mk === 'floral healing'){   // golpes de status com alvo: prisão / Floral Healing (aliado ou oponente)
+    const foes = dActives(o);
+    let t = (a.tgt && !(a.tgt.sd === sd && S.active[a.tgt.slot] === idx)) ? a.tgt : null;
+    let tIdx = t ? dS(t.sd).active[t.slot] : null;
+    if(tIdx == null || !dAlive(t.sd, tIdx)){ t = null; tIdx = null; if(foes[0]){ t = { sd: o, slot: foes[0].slot }; tIdx = foes[0].idx; } }
+    if(!t) return fail('sem alvo');
+    if(t.sd === o){ const rd = dRedirFor(o, sd, idx); if(rd != null && dAlive(o, rd)){ tIdx = rd; t = { sd: o, slot: dS(o).active.indexOf(rd) }; } }
+    const T = dS(t.sd), tp = dP(tIdx);
+    if(PROTECTABLE_TRAP_STATUS.has(mk)){ const spv = protectionVerdict(mk, { status: true, foeStatus: t.sd !== sd, priority: effMovePriority(att, m.Name), spread: false, contact: false }, { prot: T.prot[tIdx] || null, wide: T.wide, quick: T.quick, crafty: T.crafty, mat: T.mat });
+      if(spv.blocked){ dLog(LF.blocked({ attackerName: att.name, moveName: m.Name, defenderName: tp.name, by: spv.by })); return null; } }
+    const tsm = T.semis[tIdx];
+    if(tsm && tsm.kind !== 'charge' && normKey(att.ability || '') !== 'no guard' && normKey(tp.ability || '') !== 'no guard'){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name, semiDodge: tp.name })); return null; }
+    if(pranksterDarkBlocks(a, tp, t.sd !== sd)) return fail(LF.pranksterDark(tp.name));
+    if((T.subs[tIdx] || 0) > 0) return fail('o substituto de ' + tp.name + ' bloqueou');
+    const r = mk === 'octolock' ? octolockApply(sd, idx, t.sd, tIdx) : mk === 'floral healing' ? floralHealApply(t.sd, tIdx) : cantEscapeApply(sd, idx, t.sd, tIdx, m.Name);
+    if(r.fail) return fail(r.fail);
+    dLog(LF.moveText(att.name, m.Name, r.text), mk === 'floral healing' ? LF.moveHead(att.name, m.Name) : undefined); return null;
+  }
+  if(mk === 'fairy lock'){ const fl = fairyLockApply(); if(fl.fail) return fail(fl.fail); dLog(LF.moveText(att.name, m.Name, fl.text)); return null; }
   if(mk === 'no retreat'){ const nr = noRetreatApply(sd, idx); if(nr.fail) return fail(nr.fail); dLog(LF.moveText(att.name, m.Name, nr.text)); return null; }
   if(mk === 'clangorous soul'){ const cs = clangorousSoulApply(sd, idx); if(cs.fail) return fail(cs.fail); dLog(LF.moveText(att.name, m.Name, cs.text)); return null; }
   if(mk === 'focus energy'){ const fe = pumpApply(sd, idx, 2, 'Focus Energy'); if(fe.fail) return fail(fe.fail); dLog(LF.moveText(att.name, m.Name, fe.text)); return null; }
@@ -11601,7 +11787,7 @@ function dStatusAct(a){
     const bench = dBench(t.sd);
     if(!bench.length) return fail('sem Pokémon para entrar');
     const to = bench[Math.floor(battleRandom() * bench.length)];
-    dLogEntry(LF.moveText(att.name, m.Name, LF.dragged(tp.name, dP(to).name)));
+    dLogEntry(LF.moveText(att.name, m.Name, LF.dragged(tp.name, dP(to).name)), true);
     dEnter(t.sd, T.active.indexOf(tIdx), to, false);
     return null;
   }
@@ -11789,6 +11975,7 @@ function dEndTurn(){
     if(heal > 0 && S.hp[idx] < max){ const b = S.hp[idx]; S.hp[idx] = Math.min(max, b + heal); dLog(`${dNm(sd, idx)} recuperou ${S.hp[idx] - b} HP (${label}).`); }
     orbLines(sd, idx).forEach(o => dLog(o.text));   // Flame / Toxic Orb (depois do dano de status)
     if(S.hp[idx] > 0 && isCursed(S, idx) && !mg){ const cd = curseTick(p); S.hp[idx] = Math.max(0, S.hp[idx] - cd); const _ct = `${dNm(sd, idx)} sofreu ${cd} de maldição (${S.hp[idx]}/${max})${S.hp[idx] <= 0 ? ' — nocauteado!' : ''}`; dLog(_ct, _ct); }
+    if(S.hp[idx] > 0) bindOctoTick(sd, idx, t => dLog(t));   // amarrar / Octolock (depois da maldição; Showdown onResidualOrder 13 e 14)
     if(S.hp[idx] <= 0) return;
     const ab = normKey(p.ability || '');
     { const hv = harvestLine(sd, idx); if(hv) dLog(hv); }   // Harvest
