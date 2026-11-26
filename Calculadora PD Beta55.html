@@ -707,7 +707,7 @@ Adamant Nature
   <option value="Choice Band"><option value="Choice Specs"><option value="Choice Scarf">
   <option value="Life Orb"><option value="Assault Vest"><option value="Leftovers">
   <option value="Focus Sash"><option value="Safety Goggles"><option value="Heavy-Duty Boots"><option value="Power Herb"><option value="Light Clay"><option value="Shell Bell"><option value="Big Root"><option value="Rocky Helmet"><option value="Lum Berry">
-  <option value="Air Balloon"><option value="Eject Button"><option value="Red Card"><option value="White Herb"><option value="Sitrus Berry">
+  <option value="Throat Spray"><option value="Air Balloon"><option value="Eject Button"><option value="Red Card"><option value="White Herb"><option value="Sitrus Berry">
   <option value="Grassy Seed"><option value="Electric Seed"><option value="Psychic Seed"><option value="Misty Seed">
   <option value="Eviolite"><option value="Weakness Policy"><option value="Expert Belt">
   <option value="Wise Glasses"><option value="Muscle Band"><option value="Normal Gem">
@@ -715,7 +715,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 54; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 55; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
 const ICON_TRASH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
@@ -1898,7 +1898,7 @@ function calcularTime(pokemons, opts){
         moveType = ABILITY_TYPE_CHANGE[abilityDano];
         bpModifiers.push(1.2); bpModifierLabels.push(`${abilityDano} (→${moveType}, ×1.2)`);
       }
-      if(abilityDano === LIQUID_VOICE_ABILITY && SOUND_BASED_MOVES.has(moveNameKey)){
+      if(abilityDano === LIQUID_VOICE_ABILITY && (__inBattlePrep ? SOUND_MOVES : SOUND_BASED_MOVES).has(moveNameKey)){   // batalha: lista de golpes sonoros do usuário
         if(moveType !== 'Water'){ moveType = 'Water'; bpModifierLabels.push('Liquid Voice (→Water)'); }
       }
       // Só na batalha: Electrify (todo golpe do alvo vira Electric no turno) e Plasma Fists (Normal → Electric no resto do turno).
@@ -2670,7 +2670,8 @@ function typesOverrideFor(pokeIdx){
   if(!v.types && !v.addType) return null;
   return { types: v.types || null, add: v.addType || '' };
 }
-let __battleStabTypes = null;   // tipos efetivos do Pokémon sendo preparado na batalha (STAB); null fora da batalha
+let __battleStabTypes = null;
+let __inBattlePrep = false;   // true enquanto prepareBattleSide calcula (a Calculadora continua com a própria lista)   // tipos efetivos do Pokémon sendo preparado na batalha (STAB); null fora da batalha
 // ===== Burn Up / Forest's Curse / Trick-or-Treat / Reflect Type (Singles e Doubles; Showdown data/moves.ts + sim/pokemon.ts) =====
 //  Tipos base atuais (sem o adicionado) = getTypes(true) do Showdown.
 function baseTypesNow(p){ return p ? [p.type1, p.type2].filter(Boolean) : []; }
@@ -3097,6 +3098,7 @@ const ELECTRIC_ABSORB = { 'volt absorb': 'Volt Absorb', 'motor drive': 'Motor Dr
 function statusKeyFor(m){ const k = normKey((m && m.Name) || ''); return SAP_FOE_STATUS.has(k) ? k : ''; }
 function statusMoveTypeFor(m, aIdx){
   let t = (m && m.Type) || '';
+  { const _ap = battle.sharedPrepared[aIdx]; if(_ap && normKey(_ap.ability || '') === 'liquid voice' && isSoundMove((m && m.Name) || '')) t = 'Water'; }   // Liquid Voice
   if(battle.electrify && battle.electrify[aIdx] === battle.turn) t = 'Electric';
   else if(battle.plasmaTurn === battle.turn && t === 'Normal') t = 'Electric';
   return t;
@@ -3114,6 +3116,10 @@ const STATUS_ABSORB_BY_TYPE = {
 };
 function electricStatusAbsorb(aSd, aIdx, tSd, tIdx, m){
   const _ty = statusMoveTypeFor(m, aIdx);
+  if(aIdx !== tIdx && isSoundMove((m && m.Name) || '')){   // Soundproof: imune a golpes de status sonoros dos outros (Mold Breaker ignora)
+    const _tp = battle.sharedPrepared[tIdx], _ap = battle.sharedPrepared[aIdx];
+    if(_tp && normKey(_tp.ability || '') === 'soundproof' && !attackerIgnoresAbility(_ap)) return LF.statusAbsorbImmune(_tp.name, 'Soundproof');
+  }
   if(aIdx === tIdx || !STATUS_ABSORB_BY_TYPE[_ty]) return null;
   const ap = battle.sharedPrepared[aIdx], tp = battle.sharedPrepared[tIdx], T = battle.sides[tSd]; if(!tp) return null;
   const ab = STATUS_ABSORB_BY_TYPE[_ty][normKey(tp.ability || '')]; if(!ab || attackerIgnoresAbility(ap)) return null;
@@ -3383,7 +3389,8 @@ function sandVeilAcc(acc, att, tSd, tIdx){
 // Golpes de STATUS que miram um oponente com tipo absorvível (Showdown, data/moves.ts: target normal / allAdjacentFoes):
 //  a habilidade do alvo (Sap Sipper, Water Absorb, Storm Drain, Dry Skin, Flash Fire, Well-Baked Body, Earth Eater, Volt Absorb...) absorve antes.
 const SAP_FOE_STATUS = new Set(['cotton spore','forest\'s curse','grass whistle','leech seed','sleep powder','spicy extract','spore','strength sap','stun spore','worry seed',
-  'soak','will-o-wisp','sand attack','thunder wave','eerie impulse','electrify']);
+  'soak','will-o-wisp','sand attack','thunder wave','eerie impulse','electrify',
+  'growl','roar','sing','supersonic','screech','metal sound','noble roar','confide','parting shot']);   // sonoros: Soundproof
 const POWDER_MOVES = new Set(['cotton spore','magic powder','poison powder','powder','rage powder','sleep powder','spore','stun spore']);
 function powderImmune(p, sd, idx){
   if(!p) return null;
@@ -3401,7 +3408,7 @@ function effectSporeRoll(aSd, aIdx){
   const st = r < 11 ? 'Asleep' : r < 21 ? 'Paralyzed' : r < 30 ? 'Poisoned' : null;
   if(!st || leafGuardBlocks(aSd, aIdx)) return null;
   const T = typesOfP(p), ab = normKey(p.ability || '');
-  if(st === 'Asleep' && ['insomnia','vital spirit','sweet veil','comatose'].includes(ab)) return null;
+  if(st === 'Asleep' && (['insomnia','vital spirit','sweet veil','comatose'].includes(ab) || uproarActive())) return null;   // Uproar: ninguém dorme
   if(st === 'Paralyzed' && (T.includes('Electric') || ['limber','comatose'].includes(ab))) return null;
   if(st === 'Poisoned' && (T.includes('Poison') || T.includes('Steel') || ['immunity','pastel veil','comatose'].includes(ab))) return null;
   S.status[aIdx] = st; if(st === 'Asleep'){ S.sleepCounter[aIdx] = 0; if(S.restSleep) delete S.restSleep[aIdx]; } S.toxicCounter[aIdx] = 0;
@@ -3613,8 +3620,8 @@ function fakeOutBlocks(side, idx, name){
   return battle.turn !== ent + 1;
 }
 // Golpe que não pode ser escolhido agora (item Choice ou Fake Out fora do 1º turno).
-function moveLockBlocks(side, idx, name){ return choiceBlocks(side, idx, name) || fakeOutBlocks(side, idx, name); }
-function moveBlockTitle(side, idx, name){ return gravityBlocks(name) ? 'Bloqueado pela Gravity' : (fakeOutBlocks(side, idx, name) ? 'Fake Out só pode ser usado no primeiro turno em campo' : 'Preso no golpe do item Choice'); }
+function moveLockBlocks(side, idx, name){ return choiceBlocks(side, idx, name) || fakeOutBlocks(side, idx, name) || throatChopBlocks(side, idx, name); }
+function moveBlockTitle(side, idx, name){ return gravityBlocks(name) ? 'Bloqueado pela Gravity' : throatChopBlocks(side, idx, name) ? 'Throat Chop: golpes sonoros bloqueados' : (fakeOutBlocks(side, idx, name) ? 'Fake Out só pode ser usado no primeiro turno em campo' : 'Preso no golpe do item Choice'); }
 function choiceLockSet(side, idx, name){ if(CHOICE_ITEMS.has(heldItem(side, idx)) && !volPeek(side, idx).choice) volOf(side, idx).choice = normKey(baseMoveNameFromKey(name || '')); }
 // ===== Rest / Sleep Talk / Yawn =====
 // Rest: HP cheio e dorme exatamente 2 turnos (Early Bird: 1). Cura outros status não voláteis. side.restSleep[idx] = turnos.
@@ -3626,6 +3633,7 @@ function restFail(sd, idx){
   if(leafGuardBlocks(sd, idx)) return 'Leaf Guard no sol';
   if(['electric','misty'].includes(battle.terrain) && battleGroundedIdx(sd, idx)) return 'o terreno impede o sono';
   if(fieldMons(sd).some(i => abOf(sd, i) === 'sweet veil')) return 'Sweet Veil';
+  if(uproarActive()) return 'há um alvoroço (Uproar)';
   return null;
 }
 function restApply(sd, idx){
@@ -3667,7 +3675,7 @@ function yawnTickLines(){
     v.yawn--; if(v.yawn > 0) return;
     delete v.yawn;
     const S = battle.sides[sd], p = battle.sharedPrepared[i], ab = abOf(sd, i);
-    if(getStatusOf(sd, i) !== 'Healthy' || ab === 'insomnia' || ab === 'vital spirit' || leafGuardBlocks(sd, i)) return;
+    if(getStatusOf(sd, i) !== 'Healthy' || ab === 'insomnia' || ab === 'vital spirit' || leafGuardBlocks(sd, i) || uproarActive()) return;   // Uproar: o sonolento não dorme
     S.status[i] = 'Asleep'; S.sleepCounter[i] = 0; if(S.restSleep) delete S.restSleep[i];
     out.push({ sd, idx: i, text: `<b>${p.name}</b> adormeceu por causa do Yawn!` });
   }));
@@ -4063,7 +4071,7 @@ function prepareBattleSide(pokeIdx, env){
     __battleStabTypes = _effTypes;
     { const _nf = __battleInitPrep || !battle, _fs = _nf ? null : fieldSideOf(pokeIdx);
       __battleGroundFn = (dex, ab, it) => groundedRule(_effTypes ? { type1: _effTypes[0], type2: _effTypes[1] || '', type3: _effTypes[2] || '', ability: ab, item: it } : { type1: dex.Type1, type2: dex.Type2, ability: ab, item: it }, _fs, pokeIdx, _nf); }
-    let teamResults; try{ ({ teamResults } = calcularTime([poke], opts)); } finally { __seedsDisabled = false; __auraDynamic = false; __battleGroundFn = null; __battleStabTypes = null; }
+    let teamResults; try{ __inBattlePrep = true; ({ teamResults } = calcularTime([poke], opts)); } finally { __seedsDisabled = false; __auraDynamic = false; __battleGroundFn = null; __battleStabTypes = null; __inBattlePrep = false; }
     if(!teamResults[0]) return null;
     const pr = teamResults[0];
     const dex = findDexEntry(pr.pokeName);
@@ -4163,6 +4171,7 @@ function attackerIgnoresAbility(attacker){ return ['mold breaker','teravolt','tu
 function abilityTypeImmunity(attacker, defender, moveType, moveKey){
   if(attackerIgnoresAbility(attacker)) return null;
   const ab = normKey(defender.ability || '');
+  if(ab === 'soundproof' && isSoundMove(moveKey) && attacker !== defender && attacker.pokeIdx !== defender.pokeIdx) return 'Soundproof';   // não é imune aos próprios golpes sonoros
   if(moveType === 'Ground' && (ab === 'levitate' || ab === 'eelevate') && normKey(baseMoveNameFromKey(moveKey)) !== 'thousand arrows'){
     // Gravity / Iron Ball / Ingrain / Smack Down tiram a imunidade (o Pokémon fica no chão)
     const _loc = defLocOf(defender);
@@ -4361,7 +4370,7 @@ function refreshBattlePrepared(){
 // Sem nenhum golpe usável (sem PP ou bloqueado pela Gravity): só resta Struggle.
 function sideHasNoPP(side){
   const s = battle.sides[side];
-  if(!battlePPEnabled && !gravityOn() && !choiceLockOf(side, s.activePokeIdx)) return false;
+  if(!battlePPEnabled && !gravityOn() && !choiceLockOf(side, s.activePokeIdx) && !throatChopped(side, s.activePokeIdx)) return false;
   const pool = s.pp[s.activePokeIdx] || {};
   const keys = Object.keys(pool);
   if(keys.length === 0) return false;
@@ -4583,7 +4592,53 @@ function semiDoubleMult(defender, moveResult){
 const SELF_KO_MOVES = new Set(['explosion','misty explosion','self-destruct']);
 const EXPLOSIVE_MOVES = new Set(['explosion','misty explosion','self-destruct','mind blown']);
 const PIVOT_DAMAGE_MOVES = new Set(['u-turn','flip turn','volt switch']);
-const SUB_BYPASS_MOVES = new Set(['hyper voice','boomburst','bug buzz','snarl','round','echoed voice','overdrive','uproar','relic song','clanging scales','disarming voice','sparkling aria','torch song','alluring voice','psychic noise','snore','chatter']);
+// ===== Golpes SONOROS (lista do usuário; Singles e Doubles): atravessam o substituto; Soundproof é imune (exceto aos próprios);
+//  Throat Chop impede; Throat Spray ativa; Liquid Voice os torna Water. =====
+const SOUND_MOVES = new Set(['growl','roar','sing','supersonic','screech','snore','perish song','heal bell','uproar','hyper voice','metal sound','grass whistle',
+  'howl','bug buzz','chatter','round','echoed voice','relic song','snarl','noble roar','disarming voice','parting shot','boomburst','confide','sparkling aria',
+  'clanging scales','clangorous soulblaze','clangorous soul','overdrive','eerie spell','torch song','dragon cheer','alluring voice','psychic noise']);
+function isSoundMove(name){ return SOUND_MOVES.has(normKey(baseMoveNameFromKey(name || ''))); }
+// Throat Chop: 2 turnos (o do golpe e o seguinte) sem golpes sonoros; não renova; não passa por Baton Pass (volátil).
+function throatChopped(sd, idx){ return volPeek(sd, idx).throatChop > 0; }
+function throatChopApply(sd, idx){ const v = volOf(sd, idx); if(!(v.throatChop > 0)) v.throatChop = 2; }
+function throatChopBlocks(sd, idx, name){ return !!battle && throatChopped(sd, idx) && isSoundMove(name); }
+// Uproar: 3 usos seguidos (preso no golpe, sem gastar PP nos seguintes); ao começar acorda todos; ninguém dorme enquanto durar.
+function uproarActive(){ return !!battle && ['A','B'].some(sd => fieldMons(sd).some(i => volPeek(sd, i).uproar > 0)); }
+function uproarLockOf(sd, idx){ const v = volPeek(sd, idx); return v.uproar > 0 ? { name: 'Uproar', moveKey: v.uproarKey, kind: 'uproar' } : null; }
+// Depois do golpe Uproar: começa (acordando quem dorme) ou, se falhou, o usuário se acalma. Devolve linhas de log.
+function uproarAfter(sd, idx, ok, key){
+  const out = [], v = volOf(sd, idx), p = battle.sharedPrepared[idx];
+  if(!ok){ if(v.uproar > 0){ delete v.uproar; delete v.uproarKey; out.push(LF.uproarEnd(p.name)); } return out; }
+  if(!(v.uproar > 0) && battle.sides[sd].hp[idx] > 0){
+    v.uproar = 3; v.uproarKey = key; out.push(LF.uproarStart(p.name));
+    ['A','B'].forEach(s2 => fieldMons(s2).forEach(i => { const S = battle.sides[s2]; if(S.status[i] === 'Asleep'){ S.status[i] = 'Healthy'; S.sleepCounter[i] = 0; if(S.restSleep) delete S.restSleep[i]; out.push(LF.wake(battle.sharedPrepared[i].name));
+      if(battle.format !== 'doubles' && window._stSnap && window._stSnap[s2]) window._stSnap[s2][i] = 'Healthy'; } }));   // já disse que acordou
+  }
+  return out;
+}
+// Fim do turno: Uproar (acaba antes se o usuário levou Throat Chop) e contagem do Throat Chop.
+function uproarThroatTickLines(){
+  const out = [];
+  ['A','B'].forEach(sd => fieldMons(sd).forEach(i => {
+    const v = volPeek(sd, i), p = battle.sharedPrepared[i];
+    if(v.uproar > 0){
+      if(v.throatChop > 0){ delete v.uproar; delete v.uproarKey; out.push(LF.uproarEnd(p.name)); }
+      else { v.uproar--; if(v.uproar <= 0){ delete v.uproar; delete v.uproarKey; out.push(LF.uproarEnd(p.name)); } else out.push(LF.uproarUpkeep(p.name)); }
+    }
+    if(v.throatChop > 0){ v.throatChop--; if(v.throatChop <= 0) delete v.throatChop; }
+  }));
+  return out;
+}
+// Throat Spray: depois de usar um golpe sonoro com sucesso, consome o item e SpA +1.
+function throatSprayLine(sd, idx, name){
+  if(!isSoundMove(name) || !(battle.sides[sd].hp[idx] > 0) || heldItem(sd, idx) !== 'throat spray') return '';
+  let txt = ''; withMon(sd, idx, () => { if(canChangeStage(sd, 'SpA', 1)){ useItem(sd, idx); txt = LF.throatSpray(battle.sharedPrepared[idx].name, fmtStageChange(changeStage(sd, 'SpA', 1))); } });
+  if(txt) refreshBattlePrepared();
+  return txt;
+}
+// Falhou? (para Throat Spray em golpes de status: linhas de falha / proteção / imunidade)
+const MOVE_FAIL_RX = /mas falhou|errou|se protegeu|foi protegid|não é afetado|absorveu o golpe|está invulnerável|não havia alvo|tentou usar|refletiu/;
+const SUB_BYPASS_MOVES = new Set(['hyper voice','boomburst','bug buzz','snarl','round','echoed voice','overdrive','uproar','relic song','clanging scales','disarming voice','sparkling aria','torch song','alluring voice','psychic noise','snore','chatter', ...SOUND_MOVES]);
 function matchupScore(myPoke, myHp, myMax, oppPoke, oppHp, oppMax, myStages, oppStages, oppMovesList){
   let myBestDmg = 0;
   for(const m of myPoke.moveResults){
@@ -4841,7 +4896,7 @@ function statusMovePlan(m){
   };
   return null;
 }
-const SOUND_STAT_MOVES = new Set(['screech','growl','metal sound','noble roar','confide','sing','supersonic']);
+const SOUND_STAT_MOVES = new Set(['screech','growl','metal sound','noble roar','confide','sing','supersonic', ...SOUND_MOVES]);   // sonoros atravessam o substituto
 // Aplica o plano e devolve o texto do log. Cada "who" = { side, name, wrap } (wrap permite o Doubles trocar o contexto de stages).
 function applyStatusPlan(plan, c){
   const parts = [];
@@ -4919,9 +4974,10 @@ function applySecondaryEffects(action, attacker, defender, moveInfo){
     if(dS.hp[dIdx] <= 0) return;
     const key = normKey(effect);
     if(key === 'flinch'){ dS.flinched = true; out.push(`${defender.name} hesitou`); return; }
+    if(key === 'throat chop'){ throatChopApply(dSide, dIdx); return; }   // sem mensagem (como no jogo)
     if(key === 'confusion'){ if(applyConfusion(dSide, dIdx, true).ok) out.push(`${defender.name} ficou confuso`); return; }
     const st = { burn:'Burned', poison:'Poisoned', paralyze:'Paralyzed', freeze:'Frozen', sleep:'Asleep' }[key];
-    if(!st || getStatusOf(dSide, dIdx) !== 'Healthy' || IMM[st]() || leafGuardBlocks(dSide, dIdx)) return;
+    if(!st || getStatusOf(dSide, dIdx) !== 'Healthy' || IMM[st]() || leafGuardBlocks(dSide, dIdx) || (st === 'Asleep' && uproarActive())) return;
     dS.status[dIdx] = st; if(st === 'Asleep'){ dS.sleepCounter[dIdx] = 0; if(dS.restSleep) delete dS.restSleep[dIdx]; }
   });
   return out;
@@ -4931,6 +4987,8 @@ function executeAction(action, ordered, actionIdx){
     battle.sides[action.side].flinched = false;
     return { side: action.side, type: 'move-fail', attackerName: getSidePrepared(action.side).name, moveName: action.move.moveName || action.move.Name, reason: 'hesitou' };
   }
+  if((action.type === 'move' || action.type === 'status-move') && throatChopBlocks(action.side, battle.sides[action.side].activePokeIdx, action.move.moveKey || action.move.Name))
+    return { side: action.side, type: 'note', text: LF.throatChopBlock(getSidePrepared(action.side).name) };   // Throat Chop: golpe sonoro falha (sem gastar PP)
   if(action.type === 'switch'){
     const s = battle.sides[action.side];
     const fromName = getSidePrepared(action.side).name;
@@ -5383,7 +5441,10 @@ function executeAction(action, ordered, actionIdx){
   const hpBefore = s.hp[s.activePokeIdx];
   const subBefore = s.sub || 0;
   const subBypass = SUB_BYPASS_MOVES.has(moveNameKey) || normKey(attacker.ability || '') === 'infiltrator';
-  const hasFocusSash = normKey(defender.item) === normKey('focus sash');
+  const hasFocusSash = heldItem(defSide, s.activePokeIdx) === 'focus sash';
+  // Sturdy: com HP cheio antes do hit, um golpe de OUTRO Pokémon que derrubaria deixa 1 HP (antes do Focus Sash). Mold Breaker ignora.
+  const _sturdy = normKey(defender.ability || '') === 'sturdy' && !attackerIgnoresAbility(attacker);
+  let sturdyHeld = false;
   const declaredHits = (action.move.detail && action.move.detail.multiHits) || 1;
   const tripleBP = (action.move.detail && action.move.detail.tripleHitsBP) || null;   // Triple Axel / Triple Kick
   const skillLink = normKey(attacker.ability || '') === 'skill link';
@@ -5413,7 +5474,8 @@ function executeAction(action, ordered, actionIdx){
       toSub = Math.min(curSub, r.damage); s.sub = curSub - toSub; subAbsorbed += toSub; if(s.sub <= 0) subBroken = true;
     } else {
       let nh = hpPre - r.damage;
-      if(nh <= 0 && hasFocusSash && !focusSashConsumed && hpPre === defender.hpMax && hpPre === hpBefore){ nh = 1; focusSashConsumed = true; }
+      if(nh <= 0 && _sturdy && hpPre === defender.hpMax){ nh = 1; sturdyHeld = true; }   // Sturdy (multistrike: só nos hits com HP cheio)
+      else if(nh <= 0 && hasFocusSash && !focusSashConsumed && hpPre === defender.hpMax && hpPre === hpBefore){ nh = 1; focusSashConsumed = true; useItem(defSide, s.activePokeIdx); }   // Focus Sash é consumido
       else if(nh <= 0 && s.endure){ nh = 1; endureHeld = true; }
       else if(nh <= 0 && hpPre > 0 && focusBandSaves(defSide, s.activePokeIdx)){ nh = 1; focusBandHits++; }   // Focus Band: 10% a cada hit
       nh = Math.max(0, nh);
@@ -5650,7 +5712,7 @@ function executeAction(action, ordered, actionIdx){
     defenderAfter: s.hp[s.activePokeIdx], defenderMax: defender.hpMax,
     fainted: s.hp[s.activePokeIdx] <= 0,
     rollIdx, causesRecharge, hits, multiStrike: nHits > 1 || !!tripleBP, missAt,
-    isCrit, focusSashConsumed, endureHeld, thawedDefender,
+    isCrit, focusSashConsumed, sturdyHeld, endureHeld, thawedDefender,
     drainHeal, drainApplicable, drainPct, drainHpBefore, drainHpAfter, drainDealt: dealt, attackerMaxHp: attacker.hpMax,
     hitNote, recoil: recoilDmg, recoilBlockedBy, attackerFainted, contactKO: _contactKO || _oozeKO || _loKO, fgFaint: moveNameKey === 'final gambit' && selfKO, selfKO, isStruggle: isStruggleMove,
     _split: true, _after, _faintLater: selfKO && _defKO(),   // _after: linhas de dreno / recuo / autodestruição / Life Orb / Shell Bell (runTurn)
@@ -6200,10 +6262,12 @@ function resolveBattleTurn(){
   const actions = [];
 
   const _semiA = getSemi('A'), _semiB = getSemi('B');
-  const _forcedA = _semiA ? buildAction('A', 'move', _semiA.moveKey) : null;
-  const _forcedB = _semiB ? buildAction('B', 'move', _semiB.moveKey) : null;
-  if(_forcedA) _forcedA.semiAttack = true;
-  if(_forcedB) _forcedB.semiAttack = true;
+  // Uproar: preso no golpe (sem escolher, sem trocar; não gasta PP)
+  const _upF = sd => { const S = battle.sides[sd], u = uproarLockOf(sd, S.activePokeIdx); if(!u || S.recharge) return null; const x = buildAction(sd, 'move', u.moveKey); if(x) x.noPP = true; return x; };
+  const _forcedA = _semiA ? buildAction('A', 'move', _semiA.moveKey) : _upF('A');
+  const _forcedB = _semiB ? buildAction('B', 'move', _semiB.moveKey) : _upF('B');
+  if(_forcedA && _semiA) _forcedA.semiAttack = true;
+  if(_forcedB && _semiB) _forcedB.semiAttack = true;
   if(sA.recharge){
     actions.push({ side: 'A', type: 'recharge', priority: 0, speed: getEffectiveSpeed('A', sA.activePokeIdx) });
   } else if(_forcedA){
@@ -6334,6 +6398,13 @@ function runTurn(ctx, startIdx){
     if(res && res._sleepTalkLine) turnLog.actions.push({ side: action.side, type: 'note', text: res._sleepTalkLine, _snap: _preSnap });
     turnLog.actions.push(res);
     if(res && res._after) res._after.forEach(e => turnLog.actions.push(e));   // dreno / recuo / autodestruição / Life Orb / Shell Bell: depois do dano no alvo
+    if(res && (action.type === 'move' || action.type === 'status-move')){   // Uproar (começa / acalma) e Throat Spray
+      const _mn = action.type === 'move' ? action.move.moveKey : action.move.Name, _ai = battle.sides[action.side].activePokeIdx;
+      const _ok = action.type === 'move' ? (res.type === 'move' && res.typeEff > 0)
+        : (!['move-fail','move-miss','blocked','move-nop','note','skip'].includes(res.type) && !(res.text && MOVE_FAIL_RX.test(res.text)));
+      if(normKey(baseMoveNameFromKey(_mn)) === 'uproar') uproarAfter(action.side, _ai, _ok, _mn).forEach(t => turnLog.actions.push({ side: action.side, type: 'note', text: t }));
+      if(_ok){ const _ts = throatSprayLine(action.side, _ai, _mn); if(_ts) turnLog.actions.push({ side: action.side, type: 'note', text: _ts }); }
+    }
     trackFaints();
     diffStatus(turnLog);
     applySeedActivations().forEach(c => turnLog.actions.push(c));
@@ -6366,6 +6437,7 @@ function runTurn(ctx, startIdx){
   applyEndOfTurnCurse(turnLog);
   applyEndOfTurnAbilities(turnLog);
   yawnTickLines().forEach(y => { turnLog.actions.push({ side: y.sd, type: 'note', text: y.text }); if(window._stSnap && window._stSnap[y.sd]) window._stSnap[y.sd][y.idx] = 'Asleep'; });
+  uproarThroatTickLines().forEach(t => turnLog.actions.push({ type: 'note', text: t }));   // Uproar / Throat Chop
   tickEnvironment(turnLog);
   trackFaints();
   postStepEffects(turnLog);
@@ -7020,6 +7092,12 @@ const LF = {
   burnUpType: (n, types) => `<b>${n}</b> perdeu o tipo Fire (Burn Up): agora é <b>${types}</b>!`,
   typeAdd: (n, type, src) => `<b>${n}</b> ganhou o tipo <b>${type}</b> (${src})!`,
   reflectType: (n, t, types) => `<b>${n}</b> copiou o tipo de <b>${t}</b>: agora é <b>${types}</b>!`,
+  sturdy: n => `<b>${n}</b> aguentou o golpe com Sturdy!`,
+  throatChopBlock: n => `Os efeitos do Throat Chop impedem <b>${n}</b> de usar certos golpes!`,
+  throatSpray: (n, txt) => `<b>${n}</b> usou o Throat Spray: ${txt}.`,
+  uproarStart: n => `<b>${n}</b> começou um alvoroço (Uproar)!`,
+  uproarUpkeep: n => `<b>${n}</b> continua fazendo alvoroço!`,
+  uproarEnd: n => `<b>${n}</b> se acalmou.`,
   illusionEnd: (disg, real) => `A ilusão de <b>${disg}</b> acabou: era <b>${real}</b>!`,
   flashFireAbsorb: (n, had) => `<b>${n}</b> absorveu o golpe com Flash Fire!${had ? ' (boost já ativo)' : ' Seus golpes de Fire ficam ×1,5.'}`,
   thief: (n, t, item, mv) => `<b>${n}</b> roubou o item <b>${item}</b> de <b>${t}</b> (${mv})!`,
@@ -7094,7 +7172,7 @@ function fmtDamageHtml(a, opt){
       const rechargeTag = a.causesRecharge ? ' 🔋' : '';
       const critStr = (!_multi && a.isCrit) ? ' CRIT!' : '';
       const multiStr = _multi ? ` <span style="color:var(--amber);">(${a.hits.length} hits: ${a.hits.map(h => (battleShowDamageAsPercent ? (a.defenderMax > 0 ? Math.round(h.damage / a.defenderMax * 100) + '%' : '0%') : h.damage) + (h.isCrit ? ' CRIT' : '') + (battleShowRolls ? ' R' + (h.rollIdx + 1) : '')).join(' + ')})</span>` : '';
-      const focusSashStr = (a.focusSashConsumed ? ` ${a.defenderName} sobreviveu com Focus Sash!` : '') + (a.endureHeld ? ` ${a.defenderName} resistiu com Endure!` : '');
+      const focusSashStr = (a.sturdyHeld ? ' ' + LF.sturdy(a.defenderName) : '') + (a.focusSashConsumed ? ` ${a.defenderName} sobreviveu com Focus Sash!` : '') + (a.endureHeld ? ` ${a.defenderName} resistiu com Endure!` : '');
       const thawStr = a.thawedDefender ? ` ${a.defenderName} descongelou!` : '';
       let recoilStr = '';
       if(a.recoil && a.recoil > 0 && a._split){ /* recuo em linha própria (LF.recoil) */ }
@@ -7350,7 +7428,7 @@ function topCardMovesHtml(side, c){
     const sel = [active.struggle].concat(active.moveResults).find(x => x && x.moveKey === cpuPreviewMove[side]);
     if(sel && battleShowEstimate) prev = battlePreviewForAction(side, { move: sel }, oppSwitchTgt);
   }
-  const label = `${isCpu ? '🤖 Golpes da CPU' : '⚔️ Golpes do Player 2'}${isRecharging ? ' — 🔋 recarregando' : ''}${isSemi ? ' — ⏳ ' + (getSemi(side) || {}).name + ' (automático)' : ''}${noDmgPP && canAct ? ' — sem PP: Struggle ou trocar' : ''}`;
+  const label = `${isCpu ? '🤖 Golpes da CPU' : '⚔️ Golpes do Player 2'}${isRecharging ? ' — 🔋 recarregando' : ''}${isSemi ? ' — ⏳ ' + (getSemi(side) || uproarLockOf(side, s.activePokeIdx) || {}).name + ' (automático)' : ''}${noDmgPP && canAct ? ' — sem PP: Struggle ou trocar' : ''}`;
   return `<div class="battle-actions-group">
     <div class="battle-actions-label">${label}</div>
     ${prev}
@@ -7376,7 +7454,7 @@ function battleSideCardInner(side){
   const isPlayer = side === 'A' || battle.mode === 'pvp';
   const action = battle.pendingAction[side];
   const isRecharging = s.recharge;
-  const isSemi = !!getSemi(side) && !isRecharging;
+  const isSemi = (!!getSemi(side) || !!uproarLockOf(side, s.activePokeIdx)) && !isRecharging;   // Uproar: golpe automático
   const isAwaiting = battle.awaitingReplacement && battle.awaitingReplacement[side];
   const _dc = DBL_CUR;
   const dblLock = !!(_dc && _dc.lock && isPlayer);
@@ -7447,7 +7525,7 @@ function battleSideCardInner(side){
     // REGRA 12: o card de cima é UM componente só para CPU e Player 2 (topCardMovesHtml). Não crie um layout separado.
     movesHtml = topCardMovesHtml(side, { s, active, ppPool, action, isRecharging, isSemi });
   } else if(isSemi){
-    const _sm = getSemi(side);
+    const _sm = getSemi(side) || uproarLockOf(side, s.activePokeIdx);
     movesHtml = `<div class="battle-recharge-msg">⏳ ${_sm.name} — executa o ataque automaticamente neste turno</div>`;
   } else if(isRecharging){
     movesHtml = `<div class="battle-recharge-msg">🔋 Recarregando — não pode agir neste turno (sem atacar, sem trocar)</div>`;
@@ -7968,7 +8046,7 @@ function envSelectHtml(kind){
   return `<select data-manual-env="${kind}" style="font-family:var(--font-mono);font-size:11px;">${opts.map(([v, l]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${l}</option>`).join('')}</select><span style="font-family:var(--font-mono);font-size:11px;color:var(--text-dim);">${(kind === 'weather' ? battle.weather : battle.terrain) !== 'none' ? envTurnsText(kind === 'weather' ? battle.weatherInfo : battle.terrainInfo).replace(' · ', '') : ''}</span>`;
 }
 function getAllItemsList(cur){
-  const set = new Set([...RANDOM_ITEMS_POOL, ...MEGA_STONE_NAMES, 'Eject Button', 'Red Card', 'Light Clay', 'Shell Bell', 'Big Root', 'Rocky Helmet', 'Lum Berry', 'Focus Sash','Life Orb','Leftovers','Sitrus Berry','Choice Band','Choice Specs','Choice Scarf','Assault Vest','White Herb','Safety Goggles', ...currentPokemons.map(p => p && p.item).filter(Boolean), cur].filter(Boolean));
+  const set = new Set([...RANDOM_ITEMS_POOL, ...MEGA_STONE_NAMES, 'Eject Button', 'Red Card', 'Throat Spray', 'Light Clay', 'Shell Bell', 'Big Root', 'Rocky Helmet', 'Lum Berry', 'Focus Sash','Life Orb','Leftovers','Sitrus Berry','Choice Band','Choice Specs','Choice Scarf','Assault Vest','White Herb','Safety Goggles', ...currentPokemons.map(p => p && p.item).filter(Boolean), cur].filter(Boolean));
   return [...set].sort();
 }
 function getAllAbilitiesList(cur){
@@ -10334,7 +10412,7 @@ function dChosenCount(){
   ['A','B'].forEach(sd => { if(!dHuman(sd)) return; dS(sd).active.forEach((idx, slot) => { if(!dNeedsInput(sd, slot)) return; need++; if(battle.dp[sd][slot]) have++; }); });
   return { need, have };
 }
-function dNeedsInput(sd, slot){ const S = dS(sd), idx = S.active[slot]; return idx != null && S.hp[idx] > 0 && !S.rech[idx] && !S.semis[idx]; }
+function dNeedsInput(sd, slot){ const S = dS(sd), idx = S.active[slot]; return idx != null && S.hp[idx] > 0 && !S.rech[idx] && !S.semis[idx] && !(volPeek(sd, idx).uproar > 0); }
 function dRunTurn(){
   if(battle.finished || battle.need || battle.await) return;
   const c = dChosenCount(); if(c.have < c.need) return;
@@ -10345,6 +10423,10 @@ function dRunTurn(){
     const S = dS(sd); let a = null;
     if(S.rech[idx]) a = { side: sd, slot, idx, type: 'recharge', priority: 0, speed: dSpeed(sd, idx) };
     else if(S.semis[idx]){ const sm = S.semis[idx], m = getBattleMoveByKey(dP(idx), sm.moveKey); a = m ? { side: sd, slot, idx, type: 'move', priority: getMovePriority(m.moveKey), speed: dSpeed(sd, idx), move: m, tgt: sm.tgt, semiAttack: true } : null; }
+    else if(volPeek(sd, idx).uproar > 0){   // Uproar: preso no golpe, alvo aleatório, sem gastar PP
+      const m = getBattleMoveByKey(dP(idx), volPeek(sd, idx).uproarKey), fo = dActives(dOpp(sd)), f = fo.length ? fo[Math.floor(battleRandom() * fo.length)] : null;
+      a = m ? { side: sd, slot, idx, type: 'move', priority: effMovePriority(dP(idx), m.moveKey), speed: dSpeed(sd, idx), move: m, tgt: f ? { sd: dOpp(sd), slot: f.slot } : null, noPP: true } : null;
+    }
     else a = dMkAct(sd, slot, dHuman(sd) ? battle.dp[sd][slot] : dCpuChoose(sd, slot));
     if(a) acts.push(a);
   }));
@@ -10407,6 +10489,8 @@ function dExec(a, order){
   if(a.type === 'recharge'){ S.rech[idx] = false; dLog(LF.recharge(dP(idx).name)); return null; }
   const _sp = () => { if(a.type === 'move' && !a.semiAttack) solarPrevented(sd, idx, a.move); };
   if(S.flinch[idx]){ S.flinch[idx] = false; S.semis[idx] = null; _sp(); dLog(LF.flinch(dP(idx).name)); return null; }
+  if((a.type === 'move' || a.type === 'status-move') && throatChopBlocks(sd, idx, a.type === 'move' ? a.move.moveKey : a.move.Name)){   // Throat Chop
+    dLog(LF.throatChopBlock(dP(idx).name)); if(a.type === 'move' && normKey(baseMoveNameFromKey(a.move.moveKey)) === 'uproar') uproarAfter(sd, idx, false).forEach(t => dLog(t)); return null; }
   const st = getStatusOf(sd, idx);
   if(st === 'Asleep'){
     S.sleepCounter[idx] = (S.sleepCounter[idx] || 0) + 1;
@@ -10425,8 +10509,17 @@ function dExec(a, order){
     else if(cc && cc.confused) dLog(LF.confused(dP(idx).name));
     else if(cc && cc.hit){ battle._curAtt = { sd, slot: a.slot }; battle._tl.actions.push(Object.assign({ _dblCalc: true }, cc.hit)); dLog(LF.confusionHit(cc.hit)); battle._curAtt = null; S.semis[idx] = null; _sp(); return null; } }
   battle._curAtt = { sd, slot: a.slot };
-  try { return a.type === 'status-move' ? dStatusAct(a) : dMoveAct(a, order); }
+  const _L0 = battle._tl ? battle._tl.lines.length : 0; battle._upDone = false; battle._mvOk = false;
+  let _r;
+  try { _r = a.type === 'status-move' ? dStatusAct(a) : dMoveAct(a, order); }
   finally { battle._curAtt = null; }
+  { // Uproar (falhou antes de atacar => se acalma) e Throat Spray
+    const mn = a.type === 'move' ? a.move.moveKey : a.move.Name, nl = battle._tl ? battle._tl.lines.slice(_L0) : [];
+    const ok = a.type === 'move' ? !!battle._mvOk : (nl.length > 0 && !nl.some(l => MOVE_FAIL_RX.test(l)));
+    if(a.type === 'move' && normKey(baseMoveNameFromKey(mn)) === 'uproar' && !battle._upDone) uproarAfter(sd, idx, false).forEach(t => dLog(t));
+    if(ok && dS(sd).active.includes(idx)){ const ts = throatSprayLine(sd, idx, mn); if(ts) dLog(ts); }
+  }
+  return _r;
 }
 
 /* ---------- golpes de dano ---------- */
@@ -10466,6 +10559,7 @@ function dMoveAct(a, order){
     if(damp){ dLog(LF.moveFail(att.name, mn, 'Damp de ' + dP(damp.idx).name + ' impede explosões')); return null; }
   }
   if(mk === 'fake out' && battle.turn !== (S.entry[idx] || 0) + 1){ dLog(LF.moveFail(att.name, 'Fake Out', 'não é o primeiro turno em campo')); return null; }
+  if(mk === 'uproar' && !a.noPP){ const fo = dActives(dOpp(sd)); if(fo.length){ const f = fo[Math.floor(battleRandom() * fo.length)]; a.tgt = { sd: dOpp(sd), slot: f.slot }; } }   // Uproar: oponente aleatório
   const tg = dResolveTargets(a, m, mk);
   if(!tg.list.length){ dLog(`${nm} usou <b>${mn}</b>, mas não havia alvo!`); return null; }
   // Armor Tail / Queenly Majesty: um portador em campo protege a si e ao aliado de golpes de prioridade.
@@ -10526,6 +10620,8 @@ function dMoveAct(a, order){
     (ho.lateFaints || []).forEach(n => dLog(LF.faint(n)));
   }
   if(mk === 'burn up' && anyHit && fgHit){ const bu = burnUpLose(sd, idx); if(bu) dLog(bu); }   // Burn Up: perde o tipo Fire depois de acertar
+  battle._mvOk = fgHit;
+  if(mk === 'uproar'){ battle._upDone = true; uproarAfter(sd, idx, fgHit, m.moveKey).forEach(t => dLog(t)); }   // Uproar: começa (acorda todos) ou se acalma
   { const byS = hitMons.slice().sort((p, q) => dSpeed(q.sd, q.idx) - dSpeed(p.sd, p.idx));   // o mais rápido primeiro
     magicianLines(sd, idx, byS.filter(x => dS(x.sd).active.includes(x.idx))).forEach(t => dLog(t));   // Magician
     const lo = lifeOrbRecoil(sd, idx, totalAll, info); if(lo){ dLog(lo); if(S.hp[idx] <= 0){ dLog(LF.faint(att.name)); faintFirst(foeKO ? dOpp(sd) : sd); } }   // Life Orb: depois do dano (e do nocaute) do alvo
@@ -10588,9 +10684,10 @@ function dSec(sd, idx, tSd, tIdx, info, mk){
     if(T.hp[tIdx] <= 0) return;
     const key = normKey(effect);
     if(key === 'flinch'){ T.flinch[tIdx] = true; return; }
+    if(key === 'throat chop'){ throatChopApply(tSd, tIdx); return; }   // sem mensagem (como no jogo)
     if(key === 'confusion'){ const c = applyConfusion(tSd, tIdx, true); if(c.ok) dLog(c.text); return; }
     const st = { burn:'Burned', poison:'Poisoned', paralyze:'Paralyzed', freeze:'Frozen', sleep:'Asleep' }[key];
-    if(!st || getStatusOf(tSd, tIdx) !== 'Healthy' || IMM[st]() || leafGuardBlocks(tSd, tIdx)) return;
+    if(!st || getStatusOf(tSd, tIdx) !== 'Healthy' || IMM[st]() || leafGuardBlocks(tSd, tIdx) || (st === 'Asleep' && uproarActive())) return;
     dSetStatus(tSd, tIdx, st);
   });
 }
@@ -10650,7 +10747,9 @@ function dHit(a, tSd, tIdx, o){
     }
     return res;
   }
-  const hasSash = normKey(def.item || '') === normKey('focus sash');
+  const hasSash = heldItem(tSd, tIdx) === 'focus sash';
+  const _sturdy = normKey(def.ability || '') === 'sturdy' && !attackerIgnoresAbility(att) && tIdx !== idx;   // Sturdy: golpe de OUTRO Pokémon
+  let sturdyHeld = false;
   const subBypass = SUB_BYPASS_MOVES.has(mk) || normKey(att.ability || '') === 'infiltrator';
   const declared = (m.detail && m.detail.multiHits) || 1;
   const tripleBP = (m.detail && m.detail.tripleHitsBP) || null;   // Triple Axel / Triple Kick
@@ -10677,7 +10776,8 @@ function dHit(a, tSd, tIdx, o){
     else if(curSub > 0 && !subBypass){ const toSub = Math.min(curSub, r.damage); T.subs[tIdx] = curSub - toSub; subAbs += toSub; hitSub = true; }
     else {
       const pre = T.hp[tIdx]; let nh = pre - r.damage;
-      if(nh <= 0 && hasSash && !sash && pre === def.hpMax && pre === hpBefore){ nh = 1; sash = true; }
+      if(nh <= 0 && _sturdy && pre === def.hpMax){ nh = 1; sturdyHeld = true; }   // Sturdy antes do Focus Sash (multistrike: só com HP cheio)
+      else if(nh <= 0 && hasSash && !sash && pre === def.hpMax && pre === hpBefore){ nh = 1; sash = true; useItem(tSd, tIdx); }   // Focus Sash é consumido
       else if(nh <= 0 && T.endure && T.endure[tIdx]){ nh = 1; endured = true; }
       else if(nh <= 0 && pre > 0 && focusBandSaves(tSd, tIdx)){ nh = 1; fband++; }   // Focus Band: 10% a cada hit
       nh = Math.max(0, nh); hpDone += pre - nh; T.hp[tIdx] = nh;
@@ -10716,7 +10816,7 @@ function dHit(a, tSd, tIdx, o){
   const eff = lastRes.typeEff;
   const _rec = { attackerName: att.name, defenderName: def.name, moveName: m.moveName, defenderMax: def.hpMax, damage: dealt, typeEff: eff,
     rollIdx: hitRecs[hitRecs.length - 1].rollIdx, isCrit: crit, defenderAfter: T.hp[tIdx], subHit: subbed, subAbsorbed: subAbs,
-    subBroken: (T.subs[tIdx] || 0) <= 0, subRemain: T.subs[tIdx] || 0, fainted: T.hp[tIdx] <= 0 && !subbed, focusSashConsumed: sash, endureHeld: endured,
+    subBroken: (T.subs[tIdx] || 0) <= 0, subRemain: T.subs[tIdx] || 0, fainted: T.hp[tIdx] <= 0 && !subbed, focusSashConsumed: sash, sturdyHeld, endureHeld: endured,
     hitNote: (!sp && !o.headDone) ? (o.noteTxt || '') : '' };
   // Autodestruição (Self-Destruct, Explosion... / Final Gambit que acertou): o nocaute do alvo vem depois do nocaute do usuário
   if(_rec.fainted && S.hp[idx] > 0 && (SELF_KO_MOVES.has(mk) || (mk === 'final gambit' && eff > 0))){ _rec._faintLater = true; (o.lateFaints || (o.lateFaints = [])).push(def.name); }
@@ -11122,6 +11222,7 @@ function dEndTurn(){
     }
   }));
   yawnTickLines().forEach(y => dLog(y.text));
+  uproarThroatTickLines().forEach(t => dLog(t));   // Uproar / Throat Chop
   dTickEnv();
   postStepEffects();
   if(battle.trickRoom > 0){ battle.trickRoom--; if(battle.trickRoom === 0) dLog('A distorção de Trick Room terminou.'); }
