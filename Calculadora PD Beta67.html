@@ -124,7 +124,8 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   .remove-poke-x:hover{ color: var(--coral); background: var(--panel-2); }
   .pk-ico{ display:inline-block; width:40px; height:30px; flex:0 0 40px; vertical-align:middle; image-rendering:pixelated; background:transparent url(https://play.pokemonshowdown.com/sprites/pokemonicons-sheet.png) no-repeat; }
   .pk-ico.sm{ margin:-6px 0 -4px -4px; }
-  .pk-ico.lg{ zoom:1.25; }   /* um pouco maior: nome do Pokémon na Calculadora e Pokémon em campo na batalha (não no banco) */
+  .pk-ico.lg{ zoom:1.6; }   /* nome do Pokémon na Calculadora */
+  .pk-ico.xl{ zoom:2; }     /* Pokémon em campo na batalha (não no banco) */   /* um pouco maior: nome do Pokémon na Calculadora e Pokémon em campo na batalha (não no banco) */
   .battle-poke-name-center .pk-ico{ margin:-6px 2px -4px 0; }
   .battle-action-title .pk-ico, .battle-replacement-btn .pk-ico{ margin:-7px 0 -6px -4px; }
   .poke-name-row{ display:flex; align-items:center; gap:8px; margin-bottom: 8px; }
@@ -509,20 +510,21 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   .battle-action-btn.typed:hover{ border-color: var(--tc); background: color-mix(in srgb, var(--tc) 30%, var(--panel)); }
   .battle-action-btn.typed.selected{ border-color: var(--mint); background: color-mix(in srgb, var(--tc) 42%, var(--panel)); box-shadow: 0 0 0 2px var(--mint) inset; }
   /* Cabeçalho do card de batalha (Beta65): barra de HP compacta com o HP à direita; nome embaixo */
-  .bt-head-grid{ display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:8px; }
+  /* Cabeçalho do card (Beta67): [condições] [SPRITE centralizado] [Spe] · nome embaixo do sprite · barra de HP embaixo do nome,
+     com "HP / HPmáx (%)" na ponta DIREITA dentro da própria barra */
+  .bt-head-grid{ display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:8px; min-height:30px; }
   .bt-hg-l{ justify-self:start; position:relative; z-index:1; min-width:0; }
-  .bt-hg-r{ justify-self:end; }
-  .bt-hp-row{ display:flex; align-items:center; justify-content:center; gap:8px; min-width:0; }
-  .bt-hp-bar{ width:150px; min-width:60px; flex:0 1 150px; }
-  .bt-hp-bar > div{ height:6px !important; }
-  .bt-hp-row .battle-hp-display{ margin:0; font-size:12px; white-space:nowrap; gap:4px; }
-  .bt-hp-row + .bt-head-grid{ margin-top:4px; }
-  .bt-head-grid .battle-poke-name-center{ min-width:0; }
-  .bt-hg-r{ white-space:nowrap; }
-  @media (max-width:520px){   /* celular: o nome não invade o Spe (a coluna do meio encolhe) */
-    .bt-head-grid{ grid-template-columns:auto minmax(0,1fr) auto; }
-    .bt-head-grid .battle-poke-name-center{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  }
+  .bt-hg-r{ justify-self:end; white-space:nowrap; }
+  .bt-sprite{ display:flex; justify-content:center; align-items:center; min-height:30px; }
+  .bt-sprite .pk-ico{ margin:-8px 0 -3px; }
+  .bt-name{ text-align:center; margin-top:4px; }
+  .bt-hp-row{ display:flex; justify-content:center; margin-top:6px; min-width:0; }
+  .bt-hp-bar{ position:relative; width:230px; max-width:100%; }
+  .bt-hp-bar > div:not(.battle-hp-display){ height:16px !important; }
+  .bt-hp-bar .battle-hp-display{ position:absolute; top:0; bottom:0; right:7px; margin:0; display:flex; align-items:center; gap:4px; font-size:11px; line-height:1; white-space:nowrap; pointer-events:none; text-shadow:0 0 3px rgba(0,0,0,.95), 0 0 2px rgba(0,0,0,.95); }
+  .bt-hp-bar .battle-hp-display .hp-num-big, .bt-hp-bar .battle-hp-display .hp-pct-big{ color:#fff !important; }
+  /* Status não volátil sem edição: sem a seta e do tamanho do texto */
+  .battle-status-row select:disabled{ -webkit-appearance:none; -moz-appearance:none; appearance:none; background-image:none; padding:3px 6px; width:auto; }
   .status-ability-row:has(.bt-meta-col){ flex-wrap:nowrap; }
   .status-ability-row .bt-meta-col{ display:flex; flex-direction:column; align-items:flex-end; gap:4px; margin-left:auto; min-width:0; }
   .bt-meta-col .battle-meta-info{ text-align:right; }
@@ -600,14 +602,26 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   .battle-dbl-layout.log-right .battle-log-scroll.compact{flex:0 1 auto;max-height:200px;}
   /* LOG NO MEIO (Doubles): os cards mantêm a MESMA largura do modo "log à direita" (não esticam). */
   .battle-dbl-layout.log-mid:not(.is-singles){align-items:center;}
-  .battle-dbl-layout.log-mid:not(.is-singles)>*{width:100%;max-width:min(820px, calc(100% - 352px));}
+  .battle-dbl-layout.log-mid:not(.is-singles)>*{width:100%;max-width:min(740px, calc(100% - 352px));}
   /* Doubles (Beta65): cards um pouco mais estreitos e com largura FIXA — o log (no meio ou à direita) nunca estica os cards */
-  .battle-dbl-layout.log-right:not(.is-singles){grid-template-columns:minmax(0,820px) 340px;justify-content:center;}
+  .battle-dbl-layout.log-right:not(.is-singles){grid-template-columns:minmax(0,740px) 340px;justify-content:center;}
   .battle-dbl-layout:not(.is-singles) .dbl-log{min-width:0;overflow:hidden;}
   .battle-dbl-layout:not(.is-singles) .battle-log{overflow-wrap:anywhere;overflow-x:auto;}
   /* Log reduzido à direita: centralizado na altura dos cards e bem maior */
   .battle-dbl-layout.log-right:not(.is-singles) .battle-log-col:has(.battle-log-scroll.compact){justify-content:center;}
   .battle-dbl-layout.log-right:not(.is-singles) .battle-log-scroll.compact{min-height:340px;max-height:460px;}
+  /* Doubles desktop (Beta67): cards mais estreitos SEM distorcer — grades sempre em 2 colunas, fontes um pouco menores e sem quebra de linha */
+  .battle-dbl-layout:not(.is-singles) .battle-actions-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .battle-dbl-layout:not(.is-singles) .battle-actions-grid.moves-grid > *{flex:0 0 calc(50% - 3px);}
+  .battle-dbl-layout:not(.is-singles) .battle-action-title{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .battle-dbl-layout:not(.is-singles) .battle-action-sub{font-size:10px;white-space:nowrap;}
+  .battle-dbl-layout:not(.is-singles) .battle-meta-info{font-size:10px;white-space:nowrap;}
+  .battle-dbl-layout:not(.is-singles) .bt-meta-col .battle-res-display{font-size:12px;gap:10px;}
+  .battle-dbl-layout:not(.is-singles) .battle-status-row{gap:4px;}
+  .battle-dbl-layout:not(.is-singles) .battle-status-row label{font-size:9px;}
+  .battle-dbl-layout:not(.is-singles) .battle-status-row select{font-size:10px;padding:2px 4px;}
+  .battle-dbl-layout:not(.is-singles) button.primary.battle-lutar-inline{font-size:13px;white-space:nowrap;}
+  .battle-dbl-layout:not(.is-singles) .bt-hp-bar{width:200px;}
 }
 /* Botão Lutar (e Confirmar / Continuar / Pular) sempre centralizado */
 button.primary.battle-lutar-inline{display:block;margin-left:auto;margin-right:auto;}
@@ -751,7 +765,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 66; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 67; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 const GAME_GEN = 9;      // Pokémon Champions = 9ª geração (regra 17): mecânicas que mudaram entre gerações seguem a Gen 9
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
@@ -1098,6 +1112,8 @@ function seedDefBonus(poke){ if(__seedsDisabled) return 0; const k = normKey(pok
 function seedSpDBonus(poke){ if(__seedsDisabled) return 0; const k = normKey(poke.item||''), t = seedTerrainOf(poke); return ((k==='psychic seed' && t==='psychic') || (k==='misty seed' && t==='misty')) ? 1 : 0; }
 
 let DEX = {}, MOVES = {}, STATUS_MOVES = {}, currentPokemons = [];
+// Recarregar / fechar sem querer: o navegador pede confirmação quando há planilha carregada ou batalha em andamento
+window.addEventListener('beforeunload', e => { try { if(Object.keys(DEX).length || (typeof battle !== 'undefined' && battle)){ e.preventDefault(); e.returnValue = ''; return ''; } } catch(err){} });
 let critState={}, weatherState={}, terrainState={}, glaiveRushState={}, burnState={}, multiHitState={}, helpingHandState={}, bpCustomMultState={}, otherMultState={}, auroraVeilState={}, multiscaleState={}, friendGuardState={}, filterState={}, fluffyState={}, auraGuardState={}, flashFireAtivadoState={}, defesaCustomState={}, auraState={}, fallenState={}, chargeAtivadoState={}, steelySpiritState={}, acrobaticsNoItemState={}, knockOffItemState={}, lowKickState={}, lowKickTargetState={}, effectivenessState={}, stageState={}, hpState={}, hpPercentState={}, hpMaxOverrideState={}, hpUnlockedState={}, evUnlockedState={}, hpResBonusState={}, rageFistState={}, foulPlayBaseState={}, foulPlayNatureState={}, foulPlayFinalState={}, foulPlayTargetNameState={}, foulPlaySPState={}, hsBpIdx={}, hsUserPokeName={}, hsTargetPokeName={}, hsUserWeightOverride={}, hsTargetWeightOverride={}, flingBPState={}, risingVoltageTargetGroundedState={};
 let openHPPanels = new Set(), deleteMode = false, deletedMoveKeys = {};
 let displayMode = 'dr', resRankFiltro = 'all', rankFiltro = 'all', openEVPanels = new Set();
@@ -8279,6 +8295,8 @@ function oppDamageLineHtml(side, m){
 /* ===== Cores de tipo nos golpes (⚙️ → 🎨 Cores → "Cores Moves"; ligado por padrão) =====
    Struggle e golpes sem tipo (Typeless) NÃO recebem cor. */
 const TYPE_COLORS = { Normal:'#A8A77A', Fire:'#EE8130', Water:'#6390F0', Electric:'#F7D02C', Grass:'#7AC74C', Ice:'#96D9D6', Fighting:'#C22E28', Poison:'#A33EA1', Ground:'#E2BF65', Flying:'#A98FF3', Psychic:'#F95587', Bug:'#A6B91A', Rock:'#B6A136', Ghost:'#735797', Dragon:'#6F35FC', Dark:'#705746', Steel:'#B7B7CE', Fairy:'#D685AD' };
+let battleResColors = (() => { try{ return localStorage.getItem('pd_resColors') === '1'; }catch(e){ return false; } })();   // RES Fís azul / RES Esp rosa (desligado por padrão)
+function resColor(k){ return battleResColors ? (k === 'Def' ? '#2A52BE' : '#FF5CAD') : 'var(--text)'; }
 let battleTypeColors = (() => { try{ return localStorage.getItem('pd_typeColors') !== '0'; }catch(e){ return true; } })();
 function moveTypeOf(m){ if(!m || m.isStruggle) return ''; return (m.detail && m.detail.moveType) || m.Type || ''; }
 function typeClsOf(type){ return (battleTypeColors && TYPE_COLORS[type]) ? ' typed' : ''; }
@@ -8369,9 +8387,9 @@ function topCardMovesHtml(side, c){
     const sel = [active.struggle].concat(active.moveResults).find(x => x && x.moveKey === cpuPreviewMove[side]);
     if(sel && battleShowEstimate) prev = battlePreviewForAction(side, { move: sel }, oppSwitchTgt);
   }
-  const label = `${isCpu ? '🤖 Golpes da CPU' : '⚔️ Golpes do Player 2'}${isRecharging ? ' — 🔋 recarregando' : ''}${isSemi ? ' — ⏳ ' + (getSemi(side) || uproarLockOf(side, s.activePokeIdx) || {}).name + ' (automático)' : ''}${noDmgPP && canAct ? ' — sem PP: Struggle ou trocar' : ''}`;
+  const label = `${isRecharging ? ' — 🔋 recarregando' : ''}${isSemi ? ' — ⏳ ' + (getSemi(side) || uproarLockOf(side, s.activePokeIdx) || {}).name + ' (automático)' : ''}${noDmgPP && canAct ? ' — sem PP: Struggle ou trocar' : ''}`;
   return `<div class="battle-actions-group">
-    <div class="battle-actions-label">${label}</div>
+    ${label ? `<div class="battle-actions-label">${label.replace(/^ — /, '')}</div>` : ''}
     ${prev}
     <div class="battle-actions-grid moves-grid">${(dmgBtns.join('') + stBtns.join('') + hidden) || '<div style="color:var(--text-dim);font-size:11px;">Sem golpes</div>'}</div>
     ${battleMoveEditAreaHtml(side)}
@@ -8529,7 +8547,7 @@ function battleSideCardInner(side){
     });
     const previewHtml = (action && action.type === 'switch') ? benchInfoHtml(action.targetIdx) : (!battleShowEstimate ? '' : ((action && action.type === 'move' && !action.noTgt) ? battlePreviewForAction(side, action) : (action && action.type === 'status-move') ? '' : `<div class="battle-preview-box"><div>Dano estimado:</div><div style="opacity:.6;">${action && action.noTgt ? 'escolha o alvo' : '—'}</div></div>`));
     movesHtml = `<div class="battle-actions-group">
-      <div class="battle-actions-label">⚔️ Golpes${forcedStruggle ? ' — sem PP: Struggle ou trocar' : ''}</div>
+      ${forcedStruggle ? '<div class="battle-actions-label">sem PP: Struggle ou trocar</div>' : ''}
       <div class="battle-actions-grid moves-grid">${allMoveBtns.join('') || '<div style="color:var(--text-dim);font-size:11px;font-family:var(--font-mono);">Sem golpes</div>'}</div>
       ${battleMoveEditAreaHtml(side)}
     </div>
@@ -8624,8 +8642,8 @@ function battleSideCardInner(side){
   const _resAttr = (stat) => battleResCurrentHP ? `data-res-side="${skey(side)}" data-res-k="${stageVal(stat === 'Def' ? active.defFinal : active.spdFinal, s.stages[stat] || 0) / 100}" data-res-ms="${['multiscale','shadow shield'].includes(normKey(active.ability || '')) ? 1 : 0}" data-res-max="${active.hpMax}"` : '';
   const resDisplayHtml = battleShowPDRes
     ? `<div class="battle-res-display">
-        <div class="res-item"><span class="label">RES Fís</span><b style="color:#2A52BE;cursor:pointer;" data-res-click title="Clique: RES com HP ${battleResCurrentHP ? 'atual (mudar para máximo)' : 'máximo (mudar para atual)'}" ${_resAttr('Def')}>${fmt2(resFisica)}</b></div>
-        <div class="res-item"><span class="label">RES Esp</span><b style="color:#FF5CAD;cursor:pointer;" data-res-click title="Clique: RES com HP ${battleResCurrentHP ? 'atual (mudar para máximo)' : 'máximo (mudar para atual)'}" ${_resAttr('SpD')}>${fmt2(resEspecial)}</b></div>
+        <div class="res-item"><span class="label">RES Fís</span><b style="color:${resColor('Def')};cursor:pointer;" data-res-click title="Clique: RES com HP ${battleResCurrentHP ? 'atual (mudar para máximo)' : 'máximo (mudar para atual)'}" ${_resAttr('Def')}>${fmt2(resFisica)}</b></div>
+        <div class="res-item"><span class="label">RES Esp</span><b style="color:${resColor('SpD')};cursor:pointer;" data-res-click title="Clique: RES com HP ${battleResCurrentHP ? 'atual (mudar para máximo)' : 'máximo (mudar para atual)'}" ${_resAttr('SpD')}>${fmt2(resEspecial)}</b></div>
       </div>`
     : '';
 
@@ -8673,13 +8691,14 @@ function battleSideCardInner(side){
     <span class="hp-pct-big" style="color:${_corOf(_pctOf(_hf))};">(${_pctOf(_hf)}%)</span>
   </div>`;
   const _cond = condBadgesHtml(side, s.activePokeIdx);
-  // Cabeçalho do card: [condições] [barra de HP · HP/HPmáx (%)] [Spe] e, embaixo, o nome do Pokémon
-  const nameHpHtml = `<div class="bt-hp-row" data-hp-anim="${_hf},${hp},${active.hpMax}" data-hp-side="${skey(side)}"><div class="bt-hp-bar">${battleHpBarHtml(_hf, active.hpMax)}</div>${hpText}</div>
-  <div class="bt-head-grid">
+  // Cabeçalho do card: [condições] [SPRITE] [Spe] · nome embaixo do sprite · barra de HP embaixo do nome (HP e % na ponta direita da barra)
+  const nameHpHtml = `<div class="bt-head-grid">
     <div class="bt-hg-l">${_cond.head}</div>
-    <div class="battle-poke-name-center">${statusTurnBadgeHtml(side, s.activePokeIdx)}${pkIcon(active.name, 'lg')}${active.name}</div>
+    <div class="bt-sprite">${pkIcon(active.name, 'xl')}</div>
     <div class="bt-hg-r" style="${speedInfoStyle}">${speedInfoHtml}</div>
-  </div>${(s.sub || 0) > 0 ? `<div style="text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--amber);margin-top:4px;">🧸 Substituto: ${s.sub} HP</div>` : ''}${isCursed(s, s.activePokeIdx) ? `<div style="text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--violet,#A855F7);margin-top:4px;">👻 Amaldiçoado (−¼ HP por turno)</div>` : ''}`;
+  </div>
+  <div class="battle-poke-name-center bt-name">${statusTurnBadgeHtml(side, s.activePokeIdx)}${active.name}</div>
+  <div class="bt-hp-row" data-hp-anim="${_hf},${hp},${active.hpMax}" data-hp-side="${skey(side)}"><div class="bt-hp-bar">${battleHpBarHtml(_hf, active.hpMax)}${hpText}</div></div>${(s.sub || 0) > 0 ? `<div style="text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--amber);margin-top:4px;">🧸 Substituto: ${s.sub} HP</div>` : ''}${isCursed(s, s.activePokeIdx) ? `<div style="text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--violet,#A855F7);margin-top:4px;">👻 Amaldiçoado (−¼ HP por turno)</div>` : ''}`;
 
   let contentHtml;
   if (side === 'A') {
@@ -9097,6 +9116,11 @@ function benchInfoHtml(idx){
     <div>${p.ability || '—'} · ${p.item || '—'} · ${p.nature || '—'}</div>
     <div>Atk ${b(p.atkFinalClean)} Def ${b(p.defFinal)} SpA ${b(p.spaFinalClean)} SpD ${b(p.spdFinal)} Spe ${b(p.speFinal)}</div>
     <div>SP: ${EV_ORDER.map(k => `${k} ${b((p.evs || {})[k] || 0)}`).join(' · ')}</div>
+    ${battleShowPDRes ? (() => {   // RES do banco: atual (HP atual) ou máxima, igual à opção do card; clicar alterna
+      const hp = S.hp[idx], ms = ['multiscale','shadow shield'].includes(normKey(p.ability || '')) && hp >= p.hpMax ? 2 : 1;
+      const rf = battleResCurrentHP ? Math.max(0, hp) * ms * p.defFinal / 100 : p.resFisica, re = battleResCurrentHP ? Math.max(0, hp) * ms * p.spdFinal / 100 : p.resEspecial;
+      const t = `Clique: RES com HP ${battleResCurrentHP ? 'atual (mudar para máximo)' : 'máximo (mudar para atual)'}`;
+      return `<div>RES ${battleResCurrentHP ? 'atual' : 'máx.'}: Fís <b style="color:${resColor('Def')};cursor:pointer;" data-res-click title="${t}">${fmt2(rf)}</b> · Esp <b style="color:${resColor('SpD')};cursor:pointer;" data-res-click title="${t}">${fmt2(re)}</b></div>`; })() : ''}
     <div>${moves.join(', ')}</div>
   </div>`;
 }
@@ -9411,7 +9435,7 @@ function renderBattleInner(){
     <button type="button" class="battle-toolbar-btn" id="battleSecToggle" style="${battleSecEffects?'border-color:var(--mint);color:var(--mint);':''}" title="Efeitos secundários dos golpes">Efeitos 2º ${battleSecEffects?'ON':'OFF'}</button>
     <button type="button" class="battle-toolbar-btn" id="battleUndoRerollBtn" style="${battleUndoReroll?'border-color:var(--mint);color:var(--mint);':''}" title="Ao voltar o turno (Undo), gera novos valores aleatórios (rolls, crit, precisão, efeitos)">🎲 Undo novo RNG ${battleUndoReroll?'ON':'OFF'}</button>
     <button type="button" class="battle-toolbar-btn" id="battleGearBtn" style="${battleGearOpen?'border-color:var(--mint);color:var(--mint);':''}" title="Opções avançadas">⚙️</button>
-    ${battleGearOpen ? `<div class="battle-gear-panel"><div class="battle-gear-tabs"><button type="button" class="battle-toolbar-btn" data-gear-sub="geral" style="${battleGearSub==='geral'?'border-color:var(--mint);color:var(--mint);':''}">Geral ${battleGearSub==='geral'?'▾':'▸'}</button><button type="button" class="battle-toolbar-btn" data-gear-sub="arceus" style="${battleGearSub==='arceus'?'border-color:var(--amber);color:var(--amber);':''}">🔱 Arceus ${battleGearSub==='arceus'?'▾':'▸'}</button><button type="button" class="battle-toolbar-btn" data-gear-sub="cores" style="${battleGearSub==='cores'?'border-color:var(--mint);color:var(--mint);':''}">🎨 Cores ${battleGearSub==='cores'?'▾':'▸'}</button></div>${battleGearSub==='cores' ? `<div class="battle-gear-group"><div class="battle-gear-btns"><button type="button" class="battle-toolbar-btn" id="battleTypeColorToggle" style="${battleTypeColors?'border-color:var(--mint);color:var(--mint);':''}" title="Colorir os golpes com a cor do tipo (Struggle e golpes sem tipo não têm cor)">🎨 Cores Moves ${battleTypeColors?'ON':'OFF'}</button></div></div>` : ''}${battleGearSub==='geral' ? `<div class="battle-gear-group"><div class="battle-gear-btns"><button type="button" class="battle-toolbar-btn" id="battleSecAlwaysBtn" style="${battleSecAlways?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: todo efeito secundário dos golpes ativa (101%). Imunidades (Shield Dust, Covert Cloak, tipo/habilidade) continuam valendo.">🎲 Efeito 2º sempre (101%) ${battleSecAlways?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleSwapPDBtn" title="Ordem dos valores de PD nos golpes">${battleSwapPD ? 'PD crescente' : 'PD decrescente'}</button>${battle.mode === 'pvc' ? `<button type="button" class="battle-toolbar-btn" id="battleHideMyBtn" style="${battleHideMyMoves?'border-color:var(--mint);color:var(--mint);':''}" title="A CPU só considera os meus golpes que ela já viu">🙈 Ocultar meus moves ${battleHideMyMoves?'ON':'OFF'}</button>
+    ${battleGearOpen ? `<div class="battle-gear-panel"><div class="battle-gear-tabs"><button type="button" class="battle-toolbar-btn" data-gear-sub="geral" style="${battleGearSub==='geral'?'border-color:var(--mint);color:var(--mint);':''}">Geral ${battleGearSub==='geral'?'▾':'▸'}</button><button type="button" class="battle-toolbar-btn" data-gear-sub="arceus" style="${battleGearSub==='arceus'?'border-color:var(--amber);color:var(--amber);':''}">🔱 Arceus ${battleGearSub==='arceus'?'▾':'▸'}</button><button type="button" class="battle-toolbar-btn" data-gear-sub="cores" style="${battleGearSub==='cores'?'border-color:var(--mint);color:var(--mint);':''}">🎨 Cores ${battleGearSub==='cores'?'▾':'▸'}</button></div>${battleGearSub==='cores' ? `<div class="battle-gear-group"><div class="battle-gear-btns"><button type="button" class="battle-toolbar-btn" id="battleTypeColorToggle" style="${battleTypeColors?'border-color:var(--mint);color:var(--mint);':''}" title="Colorir os golpes com a cor do tipo (Struggle e golpes sem tipo não têm cor)">🎨 Cores Moves ${battleTypeColors?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleResColorToggle" style="${battleResColors?'border-color:var(--mint);color:var(--mint);':''}" title="Colorir a RES (Fís azul / Esp rosa)">🛡 Cores RES ${battleResColors?'ON':'OFF'}</button></div></div>` : ''}${battleGearSub==='geral' ? `<div class="battle-gear-group"><div class="battle-gear-btns"><button type="button" class="battle-toolbar-btn" id="battleSecAlwaysBtn" style="${battleSecAlways?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: todo efeito secundário dos golpes ativa (101%). Imunidades (Shield Dust, Covert Cloak, tipo/habilidade) continuam valendo.">🎲 Efeito 2º sempre (101%) ${battleSecAlways?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleSwapPDBtn" title="Ordem dos valores de PD nos golpes">${battleSwapPD ? 'PD crescente' : 'PD decrescente'}</button>${battle.mode === 'pvc' ? `<button type="button" class="battle-toolbar-btn" id="battleHideMyBtn" style="${battleHideMyMoves?'border-color:var(--mint);color:var(--mint);':''}" title="A CPU só considera os meus golpes que ela já viu">🙈 Ocultar meus moves ${battleHideMyMoves?'ON':'OFF'}</button>
     <button type="button" class="battle-toolbar-btn" id="battleHideCpuBtn" style="${battleHideCpuMoves?'border-color:var(--mint);color:var(--mint);':''}" title="Os golpes da CPU só aparecem depois de usados">🕵️ Ocultar moves da CPU ${battleHideCpuMoves?'ON':'OFF'}</button>` : ''}${battle.mode === 'pvc' ? `<button type="button" class="battle-toolbar-btn" id="battleCpuKnowsBtn" style="${!battleSetup.hideMyLead?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: ao escolher o próximo Pokémon, a CPU escolhe DEPOIS de mim e vê a minha escolha. Desligado: ela escolhe sem saber qual será o meu. (Não funciona junto com a opção ao lado.)">🧠 CPU sabe minha escolha ${!battleSetup.hideMyLead?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleIKnowBtn" style="${!battleSetup.hideCpuLead?'border-color:var(--mint);color:var(--mint);':''}" title="Ligado: a CPU escolhe ANTES e eu vejo o Pokémon dela antes de escolher o meu. Desligado: ela só entra depois que eu escolher. (Não funciona junto com a opção ao lado.)">👁 Eu sei a escolha da CPU ${!battleSetup.hideCpuLead?'ON':'OFF'}</button>` : ''}</div></div>` : ''}${battleGearSub==='arceus' ? `<div class="battle-gear-group"><div class="battle-gear-btns">${[['weather','Clima manual'],['terrain','Terreno manual'],['item','Item manual'],['ability','Habilidade manual'],['build','Build manual'],['status','Status manual'],['mega','Mega ilimitada'],['conds','🔎 Condições sempre visíveis']].map(([k,l]) => `<button type="button" class="battle-toolbar-btn" data-manual="${k}" style="${battleManual[k]?'border-color:var(--mint);color:var(--mint);':''}">${l} ${battleManual[k]?'ON':'OFF'}</button>`).join('')}<button type="button" class="battle-toolbar-btn" id="battleEditMovesBtn" style="${battleEditMoves?'border-color:var(--mint);color:var(--mint);':''}" title="Mostra um ✕ em cada golpe para excluir e um + para adicionar golpes">✏️ Editar moves ${battleEditMoves?'ON':'OFF'}</button><button type="button" class="battle-toolbar-btn" id="battleAuraBarBtn" style="${auraBarEnabled?'border-color:var(--mint);color:var(--mint);':''}" title="Mostra a barra de Aura ao lado do terreno mesmo sem Fairy Aura / Dark Aura / Aura Break em campo (ligar o modo Arceus não liga esta opção)">🌟 Barra de Aura ${auraBarEnabled?'ON':'OFF'}</button></div></div>` : ''}</div>` : ''}
   </div>`;
 
@@ -9559,6 +9583,7 @@ function renderBattleInner(){
     btn.addEventListener('click', e => { if(fired){ e.stopImmediatePropagation(); e.preventDefault(); fired = false; } }, true);
     btn.addEventListener('contextmenu', e => e.preventDefault());
   });
+  document.getElementById('battleResColorToggle')?.addEventListener('click', () => { battleResColors = !battleResColors; try{ localStorage.setItem('pd_resColors', battleResColors ? '1' : '0'); }catch(e){} renderBattle(); });
   document.getElementById('battleTypeColorToggle')?.addEventListener('click', () => { battleTypeColors = !battleTypeColors; try{ localStorage.setItem('pd_typeColors', battleTypeColors ? '1' : '0'); }catch(e){} renderBattle(); });
   document.getElementById('battleSecToggle')?.addEventListener('click', () => { battleSecEffects = !battleSecEffects; renderBattle(); });
   document.getElementById('battleSecAlwaysBtn')?.addEventListener('click', () => { battleSecAlways = !battleSecAlways; renderBattle(); });
