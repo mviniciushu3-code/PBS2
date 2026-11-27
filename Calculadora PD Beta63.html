@@ -718,7 +718,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 62; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 63; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 const GAME_GEN = 9;      // Pokémon Champions = 9ª geração (regra 17): mecânicas que mudaram entre gerações seguem a Gen 9
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
@@ -1054,6 +1054,7 @@ function getBaseFormName(name){
   return base.trim();
 }
 function isSitrus(poke){ return normKey((poke.item||'')) === normKey('Sitrus Berry'); }
+let __battleDynBoost = false; // true dentro de prepareBattleSide: Flash Fire (Fire Boost) e Charge (Electric Boost) são aplicados ao vivo na batalha
 let __seedsDisabled = false; // batalha: seeds são ativadas dinamicamente (consumo do item + stage), não embutidas no stat preparado
 function seedTerrainOf(poke){
   const el = (typeof document !== 'undefined') ? document.getElementById('terrainSelect') : null;
@@ -1347,6 +1348,7 @@ document.getElementById('fileInput').addEventListener('change', async (e)=>{
         SecondaryEffect:typeof sec==='string' && normKey(sec)==='x', SecEffects: secEffects,
         Accuracy:Number(getCell(movesSheet,J,r))||100,
         PP:Number(getCell(movesSheet,K,r))||20,
+        Past:normKey(String(getCell(movesSheet,P,r) ?? ''))==='x',   // coluna P "Past": golpe ainda fora do jogo => não entra na batalha (a Calculadora continua mostrando)
       };
     }
     if(statusSheet){
@@ -1947,9 +1949,9 @@ function calcularTime(pokemons, opts){
       const steelyDef = (abilityDano===STEELY_SPIRIT_ABILITY);
       const steelyActive = (steelySpiritState[wsKey] !== undefined) ? steelySpiritState[wsKey] : steelyDef;
       if(moveType==='Steel' && steelyActive){ bpModifiers.push(1.5); bpModifierLabels.push('Steely Spirit (×1.5)'); }
-      if(moveType==='Fire' && flashFireDisponivel && flashFireAtivadoState[wsKey]){ bpModifiers.push(1.5); bpModifierLabels.push('Flash Fire (×1.5)'); }
+      if(moveType==='Fire' && flashFireDisponivel && flashFireAtivadoState[wsKey] && !__battleDynBoost){ bpModifiers.push(1.5); bpModifierLabels.push('Flash Fire (×1.5)'); }
       const chargeDef = (abilityDano==='Electromorphosis' && moveType==='Electric');
-      const chargeActive = (chargeAtivadoState[wsKey] !== undefined) ? chargeAtivadoState[wsKey] : chargeDef;
+      const chargeActive = __battleDynBoost ? false : ((chargeAtivadoState[wsKey] !== undefined) ? chargeAtivadoState[wsKey] : chargeDef);   // batalha: Electric Boost ao vivo
       if(moveType==='Electric' && chargeActive){ bpModifiers.push(2); bpModifierLabels.push('Charge (×2)'); }
       if(poke.item && normKey(poke.item)==='wise glasses' && !isPhysical){ bpModifiers.push(4505/4096); bpModifierLabels.push('Wise Glasses (×1.1)'); }
       if(poke.item && normKey(poke.item)==='muscle band' && isPhysical){ bpModifiers.push(4505/4096); bpModifierLabels.push('Muscle Band (×1.1)'); }
@@ -3164,7 +3166,7 @@ function electricStatusAbsorb(aSd, aIdx, tSd, tIdx, m){
 // Storm Drain faz o mesmo com golpes de status Water (Soak).
 function dLightningRodStatus(sd, idx, m, tSd, tIdx){
   const _t = statusMoveTypeFor(m, idx), rod = _t === 'Electric' ? 'lightning rod' : _t === 'Water' ? 'storm drain' : null;
-  if(!rod || attackerIgnoresAbility(dP(idx))) return null;
+  if(!rod || attackerIgnoresAbility(dP(idx)) || ignoresSubs(dP(idx))) return null;   // Stalwart: não é atraído
   const o = sd === 'A' ? 'B' : 'A'; if(tSd !== o) return null;
   if(normKey(dP(tIdx).ability || '') === rod) return null;
   const f = dActives(o).find(x => x.idx !== tIdx && normKey(dP(x.idx).ability || '') === rod);
@@ -3508,11 +3510,13 @@ function beastBoostStat(p){
 //  Hazards do lado e efeitos como Confusion, Ingrain, Magnet Rise, Telekinesis (os status clássicos Burned…Frozen ficam no seletor
 //  de Status, com o contador de turnos ao lado). Até 3 ícones; a seta mostra todos. Segurar (ou passar o mouse) mostra o texto.
 //  Modo Arceus "🔎 Condições sempre visíveis": a seta aparece sempre e lista TODAS as condições (ativas e inativas).
+// Paralisia total (Champions, Showdown data/mods/champions/conditions.ts: par onBeforeMove randomChance(1, 8)): 1/8 de não agir.
+const PARA_SKIP_CHANCE = 1 / 8;
 const NV_STATUS_INFO = {
   'Burned': ['🔥', 'Queimado', 'perde 1/16 do HP no fim do turno; dano físico ×0,5'],
   'Poisoned': ['🟣', 'Envenenado', 'perde 1/8 do HP no fim do turno'],
   'Badly Poisoned': ['💜', 'Envenenado (grave)', 'perde 1/16, 2/16, 3/16... do HP no fim de cada turno'],
-  'Paralyzed': ['🟡', 'Paralisado', 'Spe ×0,5 e 25% de chance de não agir'],
+  'Paralyzed': ['🟡', 'Paralisado', 'Spe ×0,5 e 1/8 (12,5%) de chance de não agir'],
   'Asleep': ['💤', 'Dormindo', 'não age; 25% de acordar por turno, acorda no máximo no 3º turno'],
   'Frozen': ['🧊', 'Congelado', 'não age; 25% de descongelar por turno, no máximo no 3º turno (golpe de Fire descongela)'],
 };
@@ -3548,6 +3552,8 @@ function condList(side, idx){
   add(cl, '🔒', 'Preso pelo item Choice', cl ? 'só pode usar ' + ((findMoveInfo(cl) || {}).Name || cl) : 'só pode usar o primeiro golpe escolhido');
   { const sc = screensOf(side); Object.keys(SCREEN_INFO).forEach(k => add(sc[k] > 0, SCREEN_INFO[k][1], SCREEN_INFO[k][0], k === 'reflect' ? 'reduz o dano físico recebido' : k === 'lightscreen' ? 'reduz o dano especial recebido' : 'reduz o dano físico e especial recebido', sc[k] > 0 ? sc[k] + 't' : '')); }
   add(v.minimize, '🔹', 'Minimize', 'Flying Press contra ele: dano ×2 e sempre acerta');
+  add(fireBoostOn(side, idx), '♨️', 'Fire Boost (Flash Fire)', 'golpes Fire com poder ×1,5; continua depois da Mega Evolução; some ao sair de campo');
+  add(v.charge, '⚡', 'Electric Boost', 'o próximo golpe Electric tem poder ×2; some quando ele usar (ou tentar usar) um golpe Electric, ou sair de campo');
   add(battle.electrify && battle.electrify[idx] === battle.turn, '🔌', 'Electrify', 'os golpes dele viram Electric neste turno');
   add(battle.iceFace && battle.iceFace[idx] === 'noice', '🧊', 'Noice Face (Ice Face quebrado)', 'volta ao Ice Face quando a neve começa ou ao entrar na neve');
   add(battle.megaOv && battle.megaOv[idx], MEGA_ICON, 'Mega Evoluído', p ? p.name : '');
@@ -3583,7 +3589,7 @@ function _statusTurnBadgeHtml(side, idx){
   const esc = t => String(t).replace(/"/g, '&quot;');
   const badge = (icon, txt, info) => `<span class="hz-badge status-turns" data-cond-info="${esc(info)}" title="${esc(info)}" style="margin-right:6px;font-size:13px;vertical-align:middle;">${icon}${txt ? ' ' + txt : ''}</span>`;
   if(st === 'Burned') return badge('🔥', '', 'Queimado: perde 1/16 do HP no fim do turno; dano físico ×0,5.');
-  if(st === 'Paralyzed') return badge('🟡', '', 'Paralisado: Spe ×0,5 e 25% de chance de não agir.');
+  if(st === 'Paralyzed') return badge('🟡', '', 'Paralisado: Spe ×0,5 e 1/8 (12,5%) de chance de não agir.');
   if(st === 'Poisoned') return badge('🟣', '', 'Envenenado: perde 1/8 do HP no fim do turno.');
   if(st === 'Asleep'){ const n = (S.sleepCounter || {})[idx] || 0, rs = S.restSleep && S.restSleep[idx];
     if(rs) return badge('💤', n + '/' + rs, `Dormindo pelo Rest: ${n} de ${rs} turno(s). Acorda no turno seguinte ao último.`);
@@ -4101,6 +4107,43 @@ function _sortRandomMoves(poke, arr){
   if(!poke || !poke.battleOnly) return arr;
   return arr.slice().sort((a, b) => (b.pd.plus - a.pd.plus) || ((b.dr && b.dr.plus ? b.dr.plus.total : 0) - (a.dr && a.dr.plus ? a.dr.plus.total : 0)));
 }
+// Coluna P "Past" da aba Moves: golpe ainda não disponível no jogo. Fica fora da BATALHA (Singles e Doubles); a Calculadora não muda.
+// Stalwart (Champions): ignora o substituto dos alvos nos golpes do usuário (dano e status) e ignora o que atrai golpes
+//  (Follow Me / Rage Powder / Lightning Rod / Storm Drain). Showdown: tracksTarget (Battle#getTarget) para o redirecionamento.
+function ignoresSubs(p){ return normKey((p && p.ability) || '') === 'stalwart'; }
+function subUp(n, p){ return ignoresSubs(p) ? 0 : (n || 0); }
+// Blaze / Torrent / Overgrow / Swarm (só na batalha): o stat de ataque ×1,5 quando o HP está em 1/3 ou menos
+const PINCH_ABILITIES = { 'blaze': { type: 'Fire', name: 'Blaze' }, 'torrent': { type: 'Water', name: 'Torrent' }, 'overgrow': { type: 'Grass', name: 'Overgrow' }, 'swarm': { type: 'Bug', name: 'Swarm' } };
+// ===== Electric Boost (Charge / Electromorphosis) — Showdown data/moves.ts (charge.condition), Gen 9. Singles e Doubles.
+//  · Charge: SpD +1 e o status Electric Boost (vol.charge). Não acumula (usar de novo só renova).
+//  · Electromorphosis: ao levar golpe de dano (não no substituto), ganha o Electric Boost.
+//  · O próximo golpe Electric tem poder ×2. Golpe que não é Electric não gasta o status.
+//  · O status some depois que o usuário USA um golpe Electric — de dano OU de status (onAfterMove: qualquer move.type Electric,
+//    menos o próprio Charge) — e também quando TENTA usar e é impedido (sono, congelamento, paralisia, flinch, confusão: onMoveAborted).
+//  · Sai ao sair de campo (volátil).
+function fireBoostOn(sd, idx){ const S = battle.sides[sd]; if(!S) return false; return battle.format === 'doubles' ? !!(S.ff && S.ff[idx]) : (S.activePokeIdx === idx && flashFireActive(sd)); }
+function electricBoostOn(sd, idx){ return !!volPeek(sd, idx).charge; }
+function chargeApply(sd, idx){
+  const p = battle.sharedPrepared[idx];
+  const txt = withMon(sd, idx, () => applyStageList(sd, [['SpD', 1]]));
+  volOf(sd, idx).charge = true;
+  return `${p.name}: ${txt}. ${LF.electricBoost(p.name)}`;
+}
+// Depois da ação (ou da tentativa) de golpe: tira o Electric Boost se o golpe era Electric. executed=false => impedido antes de sair
+// (vale o tipo base do golpe); executed=true => tipo efetivo (Pixilate/Normalize/Electrify etc.).
+function chargeAfterAction(sd, idx, action, executed){
+  const S = battle.sides[sd], v = S && S.vol && S.vol[idx]; if(!v || !v.charge || !action) return;
+  let t = '', k = '';
+  if(action.type === 'move' && action.move){
+    k = normKey(baseMoveNameFromKey(action.move.moveKey || '')); const mi = findMoveInfo(baseMoveNameFromKey(action.move.moveKey || ''));
+    t = executed ? ((action.move.detail && action.move.detail.moveType) || (mi && mi.Type) || '') : ((mi && mi.Type) || (action.move.detail && action.move.detail.moveType) || '');
+  } else if(action.type === 'status-move' && action.move){
+    k = normKey(action.move.Name || ''); t = executed ? statusMoveTypeFor(action.move, idx) : (action.move.Type || '');
+  } else return;
+  if(k === 'charge' || t !== 'Electric') return;
+  delete v.charge;
+}
+function isPastMove(moveKeyOrName){ const mi = findMoveInfo(baseMoveNameFromKey(moveKeyOrName || '')); return !!(mi && mi.Past); }
 function prepareBattleSide(pokeIdx, env){
   const poke = currentPokemons[pokeIdx];
   if(!poke) return null;
@@ -4130,13 +4173,13 @@ function prepareBattleSide(pokeIdx, env){
     }
     const opts = { weather: document.getElementById('weatherSelect').value, terrain: document.getElementById('terrainSelect').value };
     if(env){ opts.weather = env.weather; opts.terrain = env.terrain; poke.pokemonWeather = env.weather; poke.pokemonTerrain = env.terrain; }
-    __seedsDisabled = true; __auraDynamic = true;
+    __seedsDisabled = true; __auraDynamic = true; __battleDynBoost = true;
     const _tyOv = typesOverrideFor(pokeIdx), _dex0 = _tyOv ? findDexEntry(poke.name) : null;
     var _effTypes = (_tyOv && _dex0) ? (_tyOv.types || [_dex0.Type1, _dex0.Type2].filter(Boolean)).concat(_tyOv.add ? [_tyOv.add] : []) : null;
     __battleStabTypes = _effTypes;
     { const _nf = __battleInitPrep || !battle, _fs = _nf ? null : fieldSideOf(pokeIdx);
       __battleGroundFn = (dex, ab, it) => groundedRule(_effTypes ? { type1: _effTypes[0], type2: _effTypes[1] || '', type3: _effTypes[2] || '', ability: ab, item: it } : { type1: dex.Type1, type2: dex.Type2, ability: ab, item: it }, _fs, pokeIdx, _nf); }
-    let teamResults; try{ ({ teamResults } = calcularTime([poke], opts)); } finally { __seedsDisabled = false; __auraDynamic = false; __battleGroundFn = null; __battleStabTypes = null; }
+    let teamResults; try{ ({ teamResults } = calcularTime([poke], opts)); } finally { __seedsDisabled = false; __auraDynamic = false; __battleDynBoost = false; __battleGroundFn = null; __battleStabTypes = null; }
     if(!teamResults[0]) return null;
     const pr = teamResults[0];
     const dex = findDexEntry(pr.pokeName);
@@ -4166,6 +4209,7 @@ function prepareBattleSide(pokeIdx, env){
       evs: poke.evs || {}, nature: poke.nature || '',
       ability: poke.abilityUsed || '',
       moveResults: _sortRandomMoves(poke, pr.moveResults.filter(m => m.moveKey && m.pd && !m.moveKey.endsWith('Spr') && !/#RF[1-9]/.test(m.moveKey)
+        && !isPastMove(m.moveKey)   // coluna "Past" da planilha: golpe ainda fora do jogo não entra na batalha
         && !(normKey(baseMoveNameFromKey(m.moveKey)) === 'knock off' && /#noitem/.test(m.moveKey))   // Knock Off: uma versão só (o ×1,5 é decidido na hora)
         && !(WEIGHT_BASED_MOVES.has(normKey(baseMoveNameFromKey(m.moveKey))) && /#w3/.test(m.moveKey)))   // Low Kick / Grass Knot: uma versão só (o BP vem do peso do alvo na hora)
         .concat((poke.moves || []).some(x => normKey(x) === 'final gambit') ? [buildFinalGambitMove(pr)] : [])).map(m => { const _k = normKey(baseMoveNameFromKey(m.moveKey)); return _k === 'last respects' ? Object.assign({}, m, { moveName: 'Last Respects' }) : _k === 'rage fist' ? Object.assign({}, m, { moveName: 'Rage Fist' }) : (WEIGHT_BASED_MOVES.has(_k) || HEAVY_SLAM_MOVES.has(_k)) ? Object.assign({}, m, { moveName: baseMoveNameFromKey(m.moveKey) }) : m; }),
@@ -4604,6 +4648,8 @@ function _computeBattleDamage(attacker, defender, moveResult, roll, isCrit, atkS
       if(isPhysical && aL && flowerGiftOn(aL.side)) mulA(1.5, 'Flower Gift');
       const ap = aL && volPeek(aL.side, aL.idx).proto;
       if(ap && ap.stat === (isPhysical ? 'Atk' : 'SpA')) mulA(5325/4096, 'Protosynthesis');
+      // Blaze / Torrent / Overgrow / Swarm (Gen 5+; Showdown onModifyAtk/onModifySpA chainModify(1.5)): HP <= 1/3 do máximo e golpe do tipo
+      { const _pn = PINCH_ABILITIES[aAb]; if(_pn && aL && d.moveType === _pn.type && battle.sides[aL.side].hp[aL.idx] <= attacker.hpMax / 3) mulA(1.5, _pn.name); }
     }
     if(!isPhysical && dL && flowerGiftOn(dL.side) && !attackerIgnoresAbility(attacker)) mulD(1.5, 'Flower Gift');
     const dp = dL && volPeek(dL.side, dL.idx).proto;
@@ -4646,10 +4692,14 @@ function _computeBattleDamage(attacker, defender, moveResult, roll, isCrit, atkS
   if(_hh){ bpVal = Math.trunc(bpVal * extra.hh); _bpLabels.push('Helping Hand (×1.5)'); }   // Helping Hand (Doubles)
   { const _au = (battle && d) ? auraEffect(d.moveType) : null;   // Aura ao vivo (campo atual)
     if(_au){ bpVal = auraAdjBP(bpVal, d, overrideBP !== undefined || !!_dyn || _hh); if(!_bpLabels.includes(_au.label)) _bpLabels.push(_au.label); } }
-  if(d.moveType === 'Fire' && normKey(attacker.ability || '') === 'flash fire' && !_bpLabels.some(l => /flash fire/i.test(l))){
+  // Fire Boost (Flash Fire): vale com a habilidade Flash Fire e CONTINUA depois da Mega Evolução (Champions), mesmo sem a habilidade
+  if(d.moveType === 'Fire' && (normKey(attacker.ability || '') === 'flash fire' || !!(battle && battle.megaOv && battle.megaOv[attacker.pokeIdx])) && !_bpLabels.some(l => /flash fire/i.test(l))){
     const _asd = battleSideOfPrepared(attacker);
     if(_asd && flashFireActive(_asd)){ bpVal = Math.trunc(bpVal * 1.5); _bpLabels.push('Flash Fire (×1.5)'); }
   }
+  // Electric Boost (Charge / Electromorphosis): golpe Electric com poder ×2 (Showdown: condition charge, onBasePower chainModify(2))
+  { const _aL = (battle && battle.sides) ? locOfPrepared(attacker) : null;
+    if(d.moveType === 'Electric' && _aL && electricBoostOn(_aL.side, _aL.idx) && !_bpLabels.some(l => /electric boost|charge \(/i.test(l))){ bpVal = Math.trunc(bpVal * 2); _bpLabels.push('Electric Boost (×2)'); } }
   if(normKey(baseMoveNameFromKey(moveResult.moveKey || '')) === 'knock off' && battle && battle.sides && !_bpLabels.some(l => /knocked off|knock off/i.test(l))){
     const _L = defLocOf(defender); if(_L && knockOffRemovable(attacker, _L.side, _L.idx)){ bpVal = Math.trunc((bpVal * 6144 + 2047) / 4096); _bpLabels.push('Knock Off: alvo com item (×1,5)'); }
   }
@@ -5015,7 +5065,8 @@ function uproarThroatTickLines(){
 //  +1: golpe de crítico alto, Scope Lens / Razor Claw, Super Luck · +2: Leek (Farfetch'd / Sirfetch'd) · "animado" (não acumula):
 //  Focus Energy / Lansat Berry +2, Dragon Cheer +1 (+2 se o alvo é Dragon). Golpes de crítico garantido: sempre.
 //  Battle Armor / Shell Armor do alvo impedem (Mold Breaker ignora). Golpes de dano direto e confusão nunca são críticos.
-const HIGH_CRIT_MOVES = new Set(['aeroblast','air cutter','aqua cutter','attack order','blaze kick','crabhammer','cross chop','cross poison','dire claw','drill run','esper wing','ivy cudgel','karate chop','leaf blade','night slash','poison tail','psycho cut','razor leaf','razor wind','shadow blade','shadow claw','sky attack','slash','snipe shot','spacial rend','stone edge','triple arrows']);
+// Lista do usuário (Bulbapedia "Moves with a high critical-hit ratio"):
+const HIGH_CRIT_MOVES = new Set(['10,000,000 volt thunderbolt','aeroblast','air cutter','aqua cutter','attack order','blaze kick','crabhammer','cross chop','cross poison','dire claw','dragon claw','drill run','esper wing','ivy cudgel','karate chop','leaf blade','night slash','plasma fists','poison tail','psycho cut','razor leaf','razor wind','shadow blast','shadow claw','sky attack','slash','snipe shot','spacial rend','stone edge','triple arrows'].map(normKey));
 const DIRECT_DAMAGE_MOVES = new Set(['bide','comeuppance','counter','dragon rage','endeavor','final gambit','guardian of alola','metal burst','mirror coat',"nature's madness",'night shade','psywave','ruination','seismic toss','shadow half','sonic boom','super fang']);
 function critStageOf(sd, idx){
   const p = battle && battle.sharedPrepared[idx]; if(!p) return 0;
@@ -5557,7 +5608,11 @@ function setCursed(S, idx, v){ if(!S.curse) S.curse = {}; if(v) S.curse[idx] = t
 function curseCost(p){ return Math.floor(p.hpMax / 2); }
 function curseTick(p){ return Math.max(1, Math.floor(p.hpMax / 4)); }
 
-const SEC_OVERRIDES = { 'triple arrows': [{ chance: 50, effect: 'Def-1' }, { chance: 30, effect: 'Flinch' }] };
+const SEC_OVERRIDES = { 'triple arrows': [{ chance: 50, effect: 'Def-1' }, { chance: 30, effect: 'Flinch' }],
+  // Dire Claw (Showdown data/mods/champions/moves.ts): UM sorteio de 30% e, se sair, sorteia UM entre veneno, paralisia e sono
+  // (this.sample(['psn','par','slp'])) => 10% para cada, nunca dois juntos. Serene Grace dobra os 30%.
+  'dire claw': [{ chance: 30, effect: 'Dire Claw' }] };
+function direClawPick(){ return ['poison', 'paralyze', 'sleep'][Math.min(2, Math.floor(battleRandom() * 3))]; }
 // Efeito "All+N" da planilha (Ancient Power: 10% All+1): UM sorteio só e, se sair, o USUÁRIO ganha +N em Atk, Def, SpA, SpD e Spe
 // (Showdown data/moves.ts: secondary { chance: 10, self: { boosts: { atk, def, spa, spd, spe: 1 } } }). Shield Dust / Covert Cloak do alvo não impedem.
 const SEC_ALL_STATS = ['Atk', 'Def', 'SpA', 'SpD', 'Spe'];
@@ -5633,7 +5688,7 @@ function applySecondaryEffects(action, attacker, defender, moveInfo){
     if(key === 'traps'){ if(aS.hp[aS.activePokeIdx] > 0){ const _ce = cantEscapeApply(aSide, aS.activePokeIdx, dSide, dIdx, moveInfo.Name); if(_ce.text) out.push(_ce.text); } return; }   // Spirit Shackle / Anchor Shot
     if(key === 'throat chop'){ throatChopApply(dSide, dIdx); return; }   // sem mensagem (como no jogo)
     if(key === 'confusion'){ if(applyConfusion(dSide, dIdx, true).ok) out.push(`${defender.name} ficou confuso`); return; }
-    const st = { burn:'Burned', poison:'Poisoned', paralyze:'Paralyzed', freeze:'Frozen', sleep:'Asleep' }[key];
+    const st = { burn:'Burned', poison:'Poisoned', paralyze:'Paralyzed', freeze:'Frozen', sleep:'Asleep' }[key === 'dire claw' ? direClawPick() : key];
     if(!st || getStatusOf(dSide, dIdx) !== 'Healthy' || IMM[st]() || leafGuardBlocks(dSide, dIdx) || (st === 'Asleep' && (uproarActive() || (sweetVeilOn(dSide) && !attackerIgnoresAbility(attacker))))) return;
     dS.status[dIdx] = st; if(st === 'Asleep'){ dS.sleepCounter[dIdx] = 0; if(dS.restSleep) delete dS.restSleep[dIdx]; }
   });
@@ -5742,7 +5797,7 @@ function _executeAction(action, ordered, actionIdx){
       if(_ds && _ds.kind !== 'charge' && normKey(attacker.ability||'') !== 'no guard' && normKey(defender.ability||'') !== 'no guard')
         return { side: action.side, type: 'move-miss', attackerName: attacker.name, moveName: action.move.Name, semiDodge: defender.name };
       if(pranksterDarkBlocks(action, defender, true)) return _failS(LF.pranksterDark(defender.name));
-      if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
+      if(subUp(defenderSideState.sub, attacker) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
       const _r = moveNameKey === 'octolock' ? octolockApply(action.side, attackerActiveIdx, defSide, _dIdx) : moveNameKey === 'floral healing' ? floralHealApply(defSide, _dIdx) : cantEscapeApply(action.side, attackerActiveIdx, defSide, _dIdx, action.move.Name);
       return _r.fail ? _failS(_r.fail) : Object.assign(_txtS(_r.text), moveNameKey === 'floral healing' ? { healHead: true } : {});
     }
@@ -5751,6 +5806,8 @@ function _executeAction(action, ordered, actionIdx){
     if(moveNameKey === 'clangorous soul'){ const _cs = clangorousSoulApply(action.side, attackerActiveIdx); return _cs.fail ? _failS(_cs.fail) : _txtS(_cs.text); }
     if(moveNameKey === 'focus energy'){ const _fe = pumpApply(action.side, attackerActiveIdx, 2, 'Focus Energy'); return _fe.fail ? _failS(_fe.fail) : _txtS(_fe.text); }
     if(moveNameKey === 'dragon cheer') return _failS('não há aliado em campo');   // Singles: só afeta o aliado
+    if(moveNameKey === 'coaching') return _failS('não há aliado em campo');
+    if(moveNameKey === 'charge') return _txtS(chargeApply(action.side, attackerActiveIdx));   // SpD +1 e Electric Boost   // Coaching: só o aliado (Showdown: target adjacentAlly)
     if(moveNameKey === 'rest'){
       if(action.viaSleepTalk) return _failS('não funciona pelo Sleep Talk');
       const _rf = restFail(action.side, attackerActiveIdx); if(_rf) return _failS(_rf);
@@ -5801,35 +5858,35 @@ function _executeAction(action, ordered, actionIdx){
         return _txtS(LF.afterYou(defender.name));   // no Singles o alvo já é o próximo
       }
       if(moveNameKey === 'memento'){
-        if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
+        if(subUp(defenderSideState.sub, attacker) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
         const _mt = applyStageList(defSide, [['Atk',-2],['SpA',-2]], { ignoreAbility: attackerIgnoresAbility(attacker), byFoe: true });
         attackerSideState.hp[attackerActiveIdx] = 0;
         return _txtS(LF.memento(attacker.name, defender.name, _mt));
       }
       if(moveNameKey === 'strength sap'){
-        if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
+        if(subUp(defenderSideState.sub, attacker) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
         const _ss = strengthSapApply(action.side, attackerActiveIdx, defSide, _dIdx);
         return _ss.fail ? _failS(_ss.fail) : Object.assign(_txtS(_ss.text), { healHead: true });
       }
       if(moveNameKey === 'telekinesis'){
-        if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
+        if(subUp(defenderSideState.sub, attacker) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
         const _tf = telekinesisFail(defSide, _dIdx); if(_tf) return _failS(_tf);
         volOf(defSide, _dIdx).tele = TELEKINESIS_TURNS; refreshBattlePrepared();
         return _txtS(`${defender.name} foi erguido no ar! (${TELEKINESIS_TURNS} turnos)${battleGroundedIdx(defSide, _dIdx) ? ' (mas continua no chão)' : ''}`);
       }
       if(moveNameKey === 'yawn'){
-        if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
+        if(subUp(defenderSideState.sub, attacker) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
         const _yf = yawnFail(defSide, _dIdx); if(_yf) return _failS(_yf);
         volOf(defSide, _dIdx).yawn = 2;
         return _txtS(`${defender.name} ficou sonolento!`);
       }
       if(moveNameKey === 'trick' || moveNameKey === 'switcheroo'){
-        if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
+        if(subUp(defenderSideState.sub, attacker) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
         const _t = trickApply(action.side, attackerActiveIdx, defSide, _dIdx);
         return _t.fail ? _failS(_t.fail) : _txtS(_t.text);
       }
       if(moveNameKey in CONFUSE_STATUS){
-        if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
+        if(subUp(defenderSideState.sub, attacker) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
         const _st = CONFUSE_STATUS[moveNameKey], _parts = [];
         if(_st) _parts.push(`${defender.name} ${fmtStageChange(changeStage(defSide, _st[0], _st[1]))}`);
         const _c = applyConfusion(defSide, _dIdx, false);
@@ -5838,29 +5895,29 @@ function _executeAction(action, ordered, actionIdx){
         return _txtS(_parts.join('. '));
       }
       if(moveNameKey === 'gastro acid'){
-        if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
+        if(subUp(defenderSideState.sub, attacker) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
         const _g = gastroAcidApply(action.side, attackerActiveIdx, defSide, _dIdx, attackerIgnoresAbility(attacker));
         return _g.fail ? _failS(_g.fail) : _txtS(_g.text);
       }
       if(moveNameKey === 'electrify'){
-        if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
+        if(subUp(defenderSideState.sub, attacker) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
         const _op = ordered ? ordered.findIndex(a => a.side === defSide) : -1, _oa = _op >= 0 ? ordered[_op] : null;
         if(!_oa || _op < actionIdx || !(_oa.type === 'move' || _oa.type === 'status-move')) return _failS(defender.name + ' já agiu ou não vai usar golpe');
         if(!battle.electrify) battle.electrify = {}; battle.electrify[_dIdx] = battle.turn; refreshBattlePrepared();
         return _txtS(LF.electrify(defender.name));
       }
       if(moveNameKey === "forest's curse" || moveNameKey === 'trick-or-treat'){   // adiciona Grass / Ghost ao alvo
-        if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
+        if(subUp(defenderSideState.sub, attacker) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
         const _ta = typeAddApply(action.side, attackerActiveIdx, defSide, _dIdx, moveNameKey === 'trick-or-treat' ? 'Ghost' : 'Grass', action.move.Name, attackerIgnoresAbility(attacker));
         return _ta.fail ? _failS(_ta.fail) : _txtS(_ta.text);
       }
       if(moveNameKey === 'psych up') return _txtS(psychUpApply(action.side, attackerActiveIdx, defSide, _dIdx));   // ignora o substituto
       if(moveNameKey === 'simple beam'){
-        if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
+        if(subUp(defenderSideState.sub, attacker) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
         const _sb = simpleBeamApply(action.side, attackerActiveIdx, defSide, _dIdx); return _sb.fail ? _failS(_sb.fail) : _txtS(_sb.text);
       }
       if(moveNameKey === 'pain split'){   // substituto bloqueia
-        if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
+        if(subUp(defenderSideState.sub, attacker) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
         return _txtS(painSplitApply(action.side, attackerActiveIdx, defSide, _dIdx));
       }
       if(moveNameKey === 'reflect type'){   // ignora o substituto
@@ -5868,7 +5925,7 @@ function _executeAction(action, ordered, actionIdx){
         return _rt.fail ? _failS(_rt.fail) : _txtS(_rt.text);
       }
       if(moveNameKey === 'entrainment'){
-        if((defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
+        if(subUp(defenderSideState.sub, attacker) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
         const _e = entrainmentApply(action.side, attackerActiveIdx, defSide, _dIdx, attackerIgnoresAbility(attacker));
         return _e.fail ? _failS(_e.fail) : _txtS([_e.text].concat(_e.extra).join(' '));
       }
@@ -5957,7 +6014,7 @@ function _executeAction(action, ordered, actionIdx){
             return { side: action.side, type: 'move-miss', attackerName: attacker.name, moveName: action.move.Name, semiDodge: defender.name };
           { const _ea = electricStatusAbsorb(action.side, attackerActiveIdx, defSide, defenderSideState.activePokeIdx, action.move); if(_ea) return _txtS(_ea); }   // Volt Absorb / Motor Drive / Lightning Rod
           if(pranksterDarkBlocks(action, defender, true)) return { side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.Name, reason: LF.pranksterDark(defender.name) };   // Prankster x Dark
-          if((defenderSideState.sub || 0) > 0 && !SOUND_STAT_MOVES.has(moveNameKey))
+          if(subUp(defenderSideState.sub, attacker) > 0 && !SOUND_STAT_MOVES.has(moveNameKey))
             return { side: action.side, type: 'move-fail', attackerName: attacker.name, moveName: action.move.Name, reason: 'o substituto de ' + defender.name + ' bloqueou' };
         }
         const _wr = fn => fn();
@@ -6002,7 +6059,7 @@ function _executeAction(action, ordered, actionIdx){
       if(pranksterDarkBlocks(action, defender, true)) return _failS(LF.pranksterDark(defender.name));
     }
     if(STATUS_INFLICT_MOVES[moveNameKey]){   // Toxic / Will-O-Wisp / Thunder Wave / Glare / Stun Spore / Hypnosis / Sing / Sleep Powder
-      if(!isSoundMove(moveNameKey) && (defenderSideState.sub || 0) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
+      if(!isSoundMove(moveNameKey) && subUp(defenderSideState.sub, attacker) > 0) return _failS('o substituto de ' + defender.name + ' bloqueou');
       if(pranksterDarkBlocks(action, defender, true)) return _failS(LF.pranksterDark(defender.name));
       const _sl = statusMoveApply(action.side, attackerActiveIdx, defSide, defenderSideState.activePokeIdx, action.move);
       return _sl.fail ? _failS(_sl.fail) : _txtS(_sl.text);
@@ -6162,7 +6219,7 @@ function _executeAction(action, ordered, actionIdx){
   const s = battle.sides[defSide];
   const hpBefore = s.hp[s.activePokeIdx];
   const subBefore = s.sub || 0;
-  const subBypass = SUB_BYPASS_MOVES.has(moveNameKey) || normKey(attacker.ability || '') === 'infiltrator';
+  const subBypass = SUB_BYPASS_MOVES.has(moveNameKey) || normKey(attacker.ability || '') === 'infiltrator' || ignoresSubs(attacker);   // Stalwart
   const hasFocusSash = heldItem(defSide, s.activePokeIdx) === 'focus sash';
   // Sturdy: com HP cheio antes do hit, um golpe de OUTRO Pokémon que derrubaria deixa 1 HP (antes do Focus Sash). Mold Breaker ignora.
   const _sturdy = normKey(defender.ability || '') === 'sturdy' && !attackerIgnoresAbility(attacker);
@@ -6356,6 +6413,7 @@ function _executeAction(action, ordered, actionIdx){
   }
   battle._flinchOK = singlesFlinchOK(ordered, actionIdx, defSide);
   const secEffects = (dealt > 0 && !subbed ? applySecondaryEffects(action, attacker, defender, moveInfo) : []).concat(dealt > 0 ? applySelfStatChanges(action, attacker, moveNameKey) : []);
+  if(dealt > 0 && !subbed && normKey(defender.ability || '') === 'electromorphosis' && s.hp[s.activePokeIdx] > 0){ volOf(defSide, s.activePokeIdx).charge = true; _aft(LF.electricBoost(defender.name, 'Electromorphosis')); }
   if(dealt > 0 && !subbed && normKey(defender.ability || '') === 'stamina' && s.hp[s.activePokeIdx] > 0 && canChangeStage(defSide, 'Def', 1)){
     secEffects.push(`${defender.name} ${fmtStageChange(changeStage(defSide, 'Def', 1))} (Stamina)`);
   }
@@ -6369,7 +6427,7 @@ function _executeAction(action, ordered, actionIdx){
   { const _sb = shellBellHeal(action.side, attackerActiveIdx, dealt, moveInfo); if(_sb) _aft(_sb); }   // Shell Bell: depois do dano (e de drenagem, recuo, Rough Skin, Thief, Magician, Life Orb)
   if(moveNameKey === 'plasma fists' && dealt > 0 && !subbed && battle.plasmaTurn !== battle.turn){ battle.plasmaTurn = battle.turn; refreshBattlePrepared(); hitNote += ' ' + LF.plasma(); }
   // Fell Stinger: nocauteou o alvo => Atk +3
-  if(moveNameKey === 'fell stinger' && !subbed && s.hp[s.activePokeIdx] <= 0 && attackerSideState.hp[attackerActiveIdx] > 0) secEffects.push(`${attacker.name} ${fmtStageChange(changeStage(action.side, 'Atk', 3))} (Fell Stinger)`);
+  if(moveNameKey === 'fell stinger' && !subbed && s.hp[s.activePokeIdx] <= 0 && attackerSideState.hp[attackerActiveIdx] > 0) _aft(LF.fellStinger(attacker.name, fmtStageChange(changeStage(action.side, 'Atk', 3))));   // linha própria, depois do nocaute
   // Eelevate: nocauteou com golpe de dano => +1 no maior stat (não ativa se o nocaute encerra a batalha)
   if(!subbed && s.hp[s.activePokeIdx] <= 0 && attackerSideState.hp[attackerActiveIdx] > 0 && normKey(attacker.ability || '') === 'eelevate'
      && (singlesSideAlive(defSide) || (battle.mode === 'pvc' && Number(battle.infiniteMode) > 0))){
@@ -6379,7 +6437,7 @@ function _executeAction(action, ordered, actionIdx){
   // Moxie: nocauteou com golpe de dano => Atk +1 (depois do Fell Stinger; não ativa se o nocaute encerra a batalha)
   if(!subbed && s.hp[s.activePokeIdx] <= 0 && attackerSideState.hp[attackerActiveIdx] > 0 && normKey(getSidePrepared(action.side).ability || '') === 'moxie'
      && (singlesSideAlive(defSide) || (battle.mode === 'pvc' && Number(battle.infiniteMode) > 0)) && canChangeStage(action.side, 'Atk', 1))
-    secEffects.push(LF.moxie(attacker.name, fmtStageChange(changeStage(action.side, 'Atk', 1))));
+    _aft(LF.moxie(attacker.name, fmtStageChange(changeStage(action.side, 'Atk', 1))));   // linha própria, depois do Fell Stinger
   if(dealt > 0 && !subbed && s.hp[s.activePokeIdx] > 0 && ((action.move.detail && action.move.detail.moveType) || (moveInfo && moveInfo.Type)) === 'Water'){
     const _it = normKey(defender.item || '');
     const _di = s.activePokeIdx;
@@ -7094,7 +7152,8 @@ function runTurn(ctx, startIdx){
           turnLog.actions.push({ side: action.side, type: 'still-asleep', name: activePoke.name });
           s.semi = null;
           // Sleep Talk funciona dormindo: segue para o golpe
-          if(!(action.type === 'status-move' && normKey(action.move.Name) === 'sleep talk') && !(action.type === 'move' && normKey(baseMoveNameFromKey(action.move.moveKey || '')) === 'snore')){   // Sleep Talk e Snore funcionam dormindo
+          if(!(action.type === 'status-move' && normKey(action.move.Name) === 'sleep talk') && !(action.type === 'move' && normKey(baseMoveNameFromKey(action.move.moveKey || '')) === 'snore')){
+            chargeAfterAction(action.side, activeIdx, action, false);   // Electric Boost: tentou usar golpe Electric e não conseguiu   // Sleep Talk e Snore funcionam dormindo
             if(action.type === 'move' && !action.semiAttack) solarPrevented(action.side, activeIdx, action.move);
             continue;
           }
@@ -7118,12 +7177,14 @@ function runTurn(ctx, startIdx){
           if(window._stSnap && window._stSnap[action.side]) window._stSnap[action.side][activeIdx] = 'Healthy';   // "descongelou!" já foi dito
         } else {
           turnLog.actions.push({ side: action.side, type: 'still-frozen', name: activePoke.name });
+          chargeAfterAction(action.side, activeIdx, action, false);
           s.semi = null; if(action.type === 'move' && !action.semiAttack) solarPrevented(action.side, activeIdx, action.move);
           continue;
         }
       } else if (status === 'Paralyzed') {
-        if (battleRandom() < 0.25) {
+        if (battleRandom() < PARA_SKIP_CHANCE) {
           turnLog.actions.push({ side: action.side, type: 'paralyzed-skip', name: activePoke.name });
+          chargeAfterAction(action.side, activeIdx, action, false);
           s.semi = null; if(action.type === 'move' && !action.semiAttack) solarPrevented(action.side, activeIdx, action.move);
           continue;
         }
@@ -7134,6 +7195,7 @@ function runTurn(ctx, startIdx){
       else if(_cc && _cc.confused) turnLog.actions.push({ side: action.side, type: 'note', text: LF.confused(activePoke.name) });
       else if(_cc && _cc.hit){
         turnLog.actions.push(Object.assign({ side: action.side }, _cc.hit));   // não gasta PP; o golpe não sai
+        chargeAfterAction(action.side, activeIdx, action, false);
         s.semi = null; if(action.type === 'move' && !action.semiAttack) solarPrevented(action.side, activeIdx, action.move);
         trackFaints(); postStepEffects(turnLog); continue;
       }
@@ -7146,7 +7208,9 @@ function runTurn(ctx, startIdx){
     }
     const _preSnap = snapView();
     battle._preLines = null;
+    const _chIdx = battle.sides[action.side].activePokeIdx;
     const res = executeAction(action, ordered, actIdx);
+    if(action.type === 'move' || action.type === 'status-move') chargeAfterAction(action.side, _chIdx, action, !(res && res.type === 'move-fail' && res.reason === 'hesitou'));   // Electric Boost: golpe Electric usado (ou impedido pelo flinch)
     if(battle._preLines){ battle._preLines.forEach(t => turnLog.actions.push({ side: action.side, type: 'note', text: t, _snap: _preSnap })); battle._preLines = null; }   // Poltergeist: aviso antes do golpe
     if(res && res._sleepTalkLine) turnLog.actions.push({ side: action.side, type: 'note', text: res._sleepTalkLine, _snap: _preSnap });
     turnLog.actions.push(res);
@@ -7875,6 +7939,9 @@ const LF = {
   hungerSwitch: (n, h) => `<b>${n}</b> mudou para o <b>${h ? 'Hangry Mode' : 'Full Belly Mode'}</b> (Hunger Switch)!`,
   psyTerrainBlock: n => `o Psychic Terrain protegeu ${n}`,
   moxie: (n, t) => `Moxie de <b>${n}</b>: ${t}.`,
+  fellStinger: (n, t) => `Fell Stinger de <b>${n}</b>: ${t}.`,
+  electricBoost: (n, src) => `<b>${n}</b> ficou com Electric Boost${src ? ' (' + src + ')' : ''}! O próximo golpe Electric terá poder ×2.`,
+  fireBoostKeep: n => `O Fire Boost de <b>${n}</b> continua ativo.`,
   perishStart: names => `Todos os Pokémon que ouviram a canção vão desmaiar em três turnos! (contagem ${PERISH_START}: ${names.map(n => '<b>' + n + '</b>').join(', ')})`,
   perishMiss: n => `<b>${n}</b> está invulnerável e não ouviu a canção.`,
   perishCount: (n, c) => `Contagem do Perish Song de <b>${n}</b>: ${c}.`,
@@ -8992,7 +9059,7 @@ function showMoveDetail(side, moveKey){
   // Efeito secundário (planilha, coluna de efeitos; Triple Arrows tem override). Quedas de stage 100% no usuário não são efeito secundário.
   const _secOv = SEC_OVERRIDES[normKey(mbk)];
   const _secList = _secOv || ((mi && mi.SecondaryEffect && mi.SecEffects) ? mi.SecEffects : []);
-  const _secPT = { burn:'Queimar', poison:'Envenenar', paralyze:'Paralisar', freeze:'Congelar', sleep:'Dormir', flinch:'Flinch' };
+  const _secPT = { burn:'Queimar', poison:'Envenenar', paralyze:'Paralisar', freeze:'Congelar', sleep:'Dormir', flinch:'Flinch', 'dire claw':'Envenenar, Paralisar ou Dormir (sorteia 1; 10% cada)' };
   const _secTxt = _secList.length ? _secList.map(e => { const k = normKey(e.effect || ''); const mm = String(e.effect || '').match(/^(atk|def|spa|spd|spe|acc|eva)\s*([+-])\s*(\d+)$/i);
       const _all = secAllBoost(e.effect);
       const lbl = _all ? `${SEC_ALL_STATS.join('/')} +${_all} (usuário)` : mm ? (mm[2] === '+' ? `${mm[1]} +${mm[3]} (usuário)` : `${mm[1]} −${mm[3]} (alvo)`) : (_secPT[k] || e.effect);
@@ -11196,7 +11263,7 @@ function dResolveTargets(a, m, mk){
       const info = findMoveInfo(baseMoveNameFromKey(m.moveKey));
       const mt = (m.detail && m.detail.moveType) || (info && info.Type) || '';
       const want = mt === 'Water' ? 'storm drain' : mt === 'Electric' ? 'lightning rod' : null;
-      if(want && !attackerIgnoresAbility(dP(a.idx))){ const f = foes.find(x => normKey(dP(x.idx).ability || '') === want); if(f) tIdx = f.idx; }
+      if(want && !attackerIgnoresAbility(dP(a.idx)) && !ignoresSubs(dP(a.idx))){ const f = foes.find(x => normKey(dP(x.idx).ability || '') === want); if(f) tIdx = f.idx; }
     }
   }
   return { list: [{ sd: tgt.sd, idx: tIdx }], spread: false };
@@ -11206,6 +11273,7 @@ function dResolveTargets(a, m, mk){
 // Redirecionamento (Follow Me / Rage Powder) para golpes do atacante (aSd, aIdx). Rage Powder não atrai quem é imune a pó.
 function dRedirFor(o, aSd, aIdx){
   const rd = battle.redir && battle.redir[o]; if(rd == null) return null;
+  if(ignoresSubs(dP(aIdx))) return null;   // Stalwart: não é atraído
   if(battle.redirPowder && battle.redirPowder[o] && powderImmune(dP(aIdx), aSd, aIdx)) return null;
   return rd;
 }
@@ -11295,6 +11363,13 @@ function dTrackFaints(){
   }); });
 }
 function dExec(a, order){
+  const S0 = dS(a.side), _try = (a.type === 'move' || a.type === 'status-move') && S0.active[a.slot] === a.idx && S0.hp[a.idx] > 0;
+  battle._chAbort = false;
+  const r = _dExec(a, order);
+  if(_try) chargeAfterAction(a.side, a.idx, a, !battle._chAbort);   // Electric Boost: golpe Electric usado (ou tentado e impedido)
+  return r;
+}
+function _dExec(a, order){
   const sd = a.side, S = dS(sd), idx = a.idx;
   if(S.active[a.slot] !== idx || S.hp[idx] <= 0) return null;
   if(a.type === 'switch') return dDoSwitch(sd, a.slot, a.to);
@@ -11302,26 +11377,26 @@ function dExec(a, order){
   if(a.type === 'recharge'){ S.rech[idx] = false; dLog(LF.recharge(dP(idx).name)); return null; }
   const _sp = () => { if(a.type === 'move' && !a.semiAttack) solarPrevented(sd, idx, a.move); };
   destinyBondClear(sd, idx, a);   // Destiny Bond acaba quando o usuário age de novo
-  if(S.flinch[idx]){ S.flinch[idx] = false; S.semis[idx] = null; _sp(); dLog(LF.flinch(dP(idx).name)); return null; }
+  if(S.flinch[idx]){ S.flinch[idx] = false; S.semis[idx] = null; _sp(); dLog(LF.flinch(dP(idx).name)); battle._chAbort = true; return null; }
   if((a.type === 'move' || a.type === 'status-move') && throatChopBlocks(sd, idx, a.type === 'move' ? a.move.moveKey : a.move.Name)){   // Throat Chop
     dLog(LF.throatChopBlock(dP(idx).name)); if(a.type === 'move' && normKey(baseMoveNameFromKey(a.move.moveKey)) === 'uproar') uproarAfter(sd, idx, false).forEach(t => dLog(t)); return null; }
   const st = getStatusOf(sd, idx);
   if(st === 'Asleep'){
     S.sleepCounter[idx] = (S.sleepCounter[idx] || 0) + 1;
     if(sleepWakes(S, idx)){ S.status[idx] = 'Healthy'; S.sleepCounter[idx] = 0; dLog(LF.wake(dP(idx).name)); }
-    else { dLog(LF.stillAsleep(dP(idx).name)); S.semis[idx] = null; if(!(a.type === 'status-move' && normKey(a.move.Name) === 'sleep talk') && !(a.type === 'move' && normKey(baseMoveNameFromKey(a.move.moveKey || '')) === 'snore')){ _sp(); return null; } }   // Sleep Talk e Snore funcionam dormindo
+    else { dLog(LF.stillAsleep(dP(idx).name)); S.semis[idx] = null; if(!(a.type === 'status-move' && normKey(a.move.Name) === 'sleep talk') && !(a.type === 'move' && normKey(baseMoveNameFromKey(a.move.moveKey || '')) === 'snore')){ _sp(); battle._chAbort = true; return null; } }   // Sleep Talk e Snore funcionam dormindo
   } else if(st === 'Frozen'){
     S.frozenCounter[idx] = (S.frozenCounter[idx] || 0) + 1;
     const mn = normKey(baseMoveNameFromKey(a.move.moveKey || a.move.Name)), mi = findMoveInfo(baseMoveNameFromKey(a.move.moveKey || a.move.Name));
     const thawMove = ((mi && mi.Type === 'Fire') || THAW_MOVES.has(mn)) && !(mn === 'burn up' && !hasTypeP(dP(idx), 'Fire'));   // Burn Up sem ser Fire: falha e não descongela
     if(S.frozenCounter[idx] >= 3 || battleRandom() < 0.25 || thawMove){ S.status[idx] = 'Healthy'; S.frozenCounter[idx] = 0; dLog(LF.thaw(dP(idx).name)); }
-    else { dLog(LF.stillFrozen(dP(idx).name)); S.semis[idx] = null; _sp(); return null; }
-  } else if(st === 'Paralyzed' && battleRandom() < 0.25){ dLog(LF.paraSkip(dP(idx).name)); S.semis[idx] = null; _sp(); return null; }
+    else { dLog(LF.stillFrozen(dP(idx).name)); S.semis[idx] = null; _sp(); battle._chAbort = true; return null; }
+  } else if(st === 'Paralyzed' && battleRandom() < PARA_SKIP_CHANCE){ dLog(LF.paraSkip(dP(idx).name)); S.semis[idx] = null; _sp(); battle._chAbort = true; return null; }
   // Confusão: depois de sono, congelamento, paralisia e flinch (esses não gastam turno de confusão)
   { const cc = confusionCheck(sd, idx);
     if(cc && cc.snapped) dLog(LF.snapOut(dP(idx).name));
     else if(cc && cc.confused) dLog(LF.confused(dP(idx).name));
-    else if(cc && cc.hit){ battle._curAtt = { sd, slot: a.slot }; battle._tl.actions.push(Object.assign({ _dblCalc: true }, cc.hit)); dLog(LF.confusionHit(cc.hit)); battle._curAtt = null; S.semis[idx] = null; _sp(); return null; } }
+    else if(cc && cc.hit){ battle._curAtt = { sd, slot: a.slot }; battle._tl.actions.push(Object.assign({ _dblCalc: true }, cc.hit)); dLog(LF.confusionHit(cc.hit)); battle._curAtt = null; S.semis[idx] = null; _sp(); battle._chAbort = true; return null; } }
   battle._curAtt = { sd, slot: a.slot };
   const _L0 = battle._tl ? battle._tl.lines.length : 0; battle._upDone = false; battle._mvOk = false; battle._hadTarget = false;
   let _r;
@@ -11516,7 +11591,7 @@ function dSec(sd, idx, tSd, tIdx, info, mk){
     if(key === 'traps'){ if(dS(sd).hp[idx] > 0){ const ce = cantEscapeApply(sd, idx, tSd, tIdx, info.Name); if(ce.text) dLog(ce.text); } return; }   // Spirit Shackle / Anchor Shot
     if(key === 'throat chop'){ throatChopApply(tSd, tIdx); return; }   // sem mensagem (como no jogo)
     if(key === 'confusion'){ const c = applyConfusion(tSd, tIdx, true); if(c.ok) dLog(c.text); return; }
-    const st = { burn:'Burned', poison:'Poisoned', paralyze:'Paralyzed', freeze:'Frozen', sleep:'Asleep' }[key];
+    const st = { burn:'Burned', poison:'Poisoned', paralyze:'Paralyzed', freeze:'Frozen', sleep:'Asleep' }[key === 'dire claw' ? direClawPick() : key];
     if(!st || getStatusOf(tSd, tIdx) !== 'Healthy' || IMM[st]() || leafGuardBlocks(tSd, tIdx) || (st === 'Asleep' && (uproarActive() || (sweetVeilOn(tSd) && !attackerIgnoresAbility(att))))) return;
     dSetStatus(tSd, tIdx, st);
   });
@@ -11582,7 +11657,7 @@ function dHit(a, tSd, tIdx, o){
   const hasSash = heldItem(tSd, tIdx) === 'focus sash';
   const _sturdy = normKey(def.ability || '') === 'sturdy' && !attackerIgnoresAbility(att) && tIdx !== idx;   // Sturdy: golpe de OUTRO Pokémon
   let sturdyHeld = false;
-  const subBypass = SUB_BYPASS_MOVES.has(mk) || normKey(att.ability || '') === 'infiltrator';
+  const subBypass = SUB_BYPASS_MOVES.has(mk) || normKey(att.ability || '') === 'infiltrator' || ignoresSubs(att);   // Stalwart
   const declared = (m.detail && m.detail.multiHits) || 1;
   const tripleBP = (m.detail && m.detail.tripleHitsBP) || null;   // Triple Axel / Triple Kick
   const skillLink = normKey(att.ability || '') === 'skill link';
@@ -11686,7 +11761,7 @@ function dHit(a, tSd, tIdx, o){
     const db = dragHitBlock(att, tSd, tIdx); if(db) dLog(LF.dragHitBlocked(def.name, db)); else dragHit = true;
   }
   if(!dragHit && dealt > 0 && !subbed && T.hp[tIdx] > 0 && !sheerForceOn(att, info)){ const it = heldItem(tSd, tIdx); if(it === 'eject button' || it === 'red card') (o.items || (o.items = [])).push({ sd: tSd, idx: tIdx, it, spe: dSpeed(tSd, tIdx) }); }
-  if(mk === 'fell stinger' && !subbed && T.hp[tIdx] <= 0 && S.hp[idx] > 0) dWith(sd, idx, () => dLog(`${dNm(sd, idx)} ${fmtStageChange(changeStage(sd, 'Atk', 3))} (Fell Stinger).`));   // Fell Stinger: Atk +3
+  if(mk === 'fell stinger' && !subbed && T.hp[tIdx] <= 0 && S.hp[idx] > 0) dWith(sd, idx, () => dLog(LF.fellStinger(dNm(sd, idx), fmtStageChange(changeStage(sd, 'Atk', 3)))));   // Fell Stinger: Atk +3
   // Eelevate: nocauteou com golpe de dano => +1 no maior stat (não ativa se o nocaute encerra a batalha)
   if(!subbed && T.hp[tIdx] <= 0 && S.hp[idx] > 0 && tSd !== sd && normKey(att.ability || '') === 'eelevate' && !dSideDead(tSd)){
     const bst = beastBoostStat(att);
@@ -11712,6 +11787,7 @@ function dHit(a, tSd, tIdx, o){
   if(mk === 'fake out' && dealt > 0 && !subbed && !sheerForceOn(att, info) && dFlinchOK(tSd, tIdx)) T.flinch[tIdx] = true;   // só se o alvo ainda vai agir
   if(dealt > 0 && !subbed) dSec(sd, idx, tSd, tIdx, info, mk);   // igual ao Singles: com o alvo nocauteado ainda vale o bônus no usuário (Ancient Power); efeitos no alvo exigem alvo vivo (dSec)
   if(dealt > 0 && !subbed && T.hp[tIdx] > 0){
+    if(dAb === 'electromorphosis'){ volOf(tSd, tIdx).charge = true; dLog(LF.electricBoost(dn, 'Electromorphosis')); }
     if(dAb === 'stamina') dWith(tSd, tIdx, () => { if(canChangeStage(tSd, 'Def', 1)) dLog(`${dn} ${fmtStageChange(changeStage(tSd, 'Def', 1))} (Stamina).`); });
     const it = normKey(def.item || '');
     if(!T.itemUsed[tIdx]){
@@ -11781,7 +11857,7 @@ function dStatusAct(a){
     const tsm = T.semis[tIdx];
     if(tsm && tsm.kind !== 'charge' && normKey(att.ability || '') !== 'no guard' && normKey(tp.ability || '') !== 'no guard'){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name, semiDodge: tp.name })); return null; }
     if(pranksterDarkBlocks(a, tp, t.sd !== sd)) return fail(LF.pranksterDark(tp.name));
-    if((T.subs[tIdx] || 0) > 0) return fail('o substituto de ' + tp.name + ' bloqueou');
+    if(subUp(T.subs[tIdx], att) > 0) return fail('o substituto de ' + tp.name + ' bloqueou');
     const r = mk === 'octolock' ? octolockApply(sd, idx, t.sd, tIdx) : mk === 'floral healing' ? floralHealApply(t.sd, tIdx) : cantEscapeApply(sd, idx, t.sd, tIdx, m.Name);
     if(r.fail) return fail(r.fail);
     dLog(LF.moveText(att.name, m.Name, r.text), mk === 'floral healing' ? LF.moveHead(att.name, m.Name) : undefined); return null;
@@ -11790,6 +11866,12 @@ function dStatusAct(a){
   if(mk === 'no retreat'){ const nr = noRetreatApply(sd, idx); if(nr.fail) return fail(nr.fail); dLog(LF.moveText(att.name, m.Name, nr.text)); return null; }
   if(mk === 'clangorous soul'){ const cs = clangorousSoulApply(sd, idx); if(cs.fail) return fail(cs.fail); dLog(LF.moveText(att.name, m.Name, cs.text)); return null; }
   if(mk === 'focus energy'){ const fe = pumpApply(sd, idx, 2, 'Focus Energy'); if(fe.fail) return fail(fe.fail); dLog(LF.moveText(att.name, m.Name, fe.text)); return null; }
+  if(mk === 'charge'){ dLog(LF.moveText(att.name, m.Name, chargeApply(sd, idx))); return null; }   // SpD +1 e Electric Boost
+  if(mk === 'coaching'){   // Coaching: Atk +1 e Def +1 só no ALIADO (Showdown: target adjacentAlly); sem aliado falha
+    const al = dActives(sd).find(x => x.idx !== idx); if(!al) return fail('não há aliado em campo');
+    const ct = dWith(sd, al.idx, () => applyStageList(sd, [['Atk', 1], ['Def', 1]]));
+    dLog(LF.moveText(att.name, m.Name, `${dP(al.idx).name}: ${ct}.`)); return null;
+  }
   if(mk === 'dragon cheer'){   // aliado: +1 (+2 se Dragon); aliado com Soundproof é imune (lista sonora do usuário)
     const al = dActives(sd).find(x => x.idx !== idx); if(!al) return fail('não há aliado em campo');
     const ap = dP(al.idx);
@@ -11854,7 +11936,7 @@ function dStatusAct(a){
       dLog(LF.moveText(att.name, m.Name, LF.afterYou(tp.name))); return null;
     }
     if(mk === "forest's curse" || mk === 'trick-or-treat'){   // adiciona Grass / Ghost ao alvo
-      if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
+      if(subUp(T.subs[tIdx], att) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
       const acc = battleMoveAccuracy(mk, m, t.sd, tIdx);
       if(battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name })); return null; }
       const ta = typeAddApply(sd, idx, t.sd, tIdx, mk === 'trick-or-treat' ? 'Ghost' : 'Grass', m.Name, attackerIgnoresAbility(att));
@@ -11863,14 +11945,14 @@ function dStatusAct(a){
     }
     if(mk === 'psych up'){ dLog(LF.moveText(att.name, m.Name, psychUpApply(sd, idx, t.sd, tIdx))); return null; }   // ignora o substituto
     if(mk === 'simple beam'){
-      if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
+      if(subUp(T.subs[tIdx], att) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
       const acc = battleMoveAccuracy(mk, m, t.sd, tIdx);
       if(battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name })); return null; }
       const sb = simpleBeamApply(sd, idx, t.sd, tIdx); if(sb.fail) return fail(sb.fail);
       dLog(LF.moveText(att.name, m.Name, sb.text)); return null;
     }
     if(mk === 'pain split'){   // sempre acerta; substituto bloqueia
-      if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
+      if(subUp(T.subs[tIdx], att) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
       dLog(LF.moveText(att.name, m.Name, painSplitApply(sd, idx, t.sd, tIdx))); return null;
     }
     if(mk === 'reflect type'){   // sempre acerta; ignora o substituto
@@ -11879,7 +11961,7 @@ function dStatusAct(a){
       dLog(LF.moveText(att.name, m.Name, rt.text)); return null;
     }
     if(mk === 'memento'){
-      if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
+      if(subUp(T.subs[tIdx], att) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
       const acc = battleMoveAccuracy(mk, m, t.sd, tIdx);
       if(battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name })); return null; }
       const mt = dWith(t.sd, tIdx, () => applyStageList(t.sd, [['Atk',-2],['SpA',-2]], { ignoreAbility: attackerIgnoresAbility(att), byFoe: t.sd !== sd }));
@@ -11887,14 +11969,14 @@ function dStatusAct(a){
       dLog(LF.moveText(att.name, m.Name, LF.memento(att.name, tp.name, mt))); return null;
     }
     if(mk === 'strength sap'){
-      if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
+      if(subUp(T.subs[tIdx], att) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
       const acc = battleMoveAccuracy(mk, m, t.sd, tIdx);
       if(battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name })); return null; }
       const ss = strengthSapApply(sd, idx, t.sd, tIdx); if(ss.fail) return fail(ss.fail);
       dLog(LF.moveText(att.name, m.Name, ss.text), LF.moveHead(att.name, m.Name)); return null;
     }
     if(mk === 'telekinesis'){
-      if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
+      if(subUp(T.subs[tIdx], att) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
       const tf = telekinesisFail(t.sd, tIdx); if(tf) return fail(tf);
       volOf(t.sd, tIdx).tele = TELEKINESIS_TURNS; refreshBattlePrepared();
       dLog(LF.moveText(att.name, m.Name, `${tp.name} foi erguido no ar! (${TELEKINESIS_TURNS} turnos)${battleGroundedIdx(t.sd, tIdx) ? ' (mas continua no chão)' : ''}`)); return null;
@@ -11902,18 +11984,18 @@ function dStatusAct(a){
     const acc = (mk === 'yawn' || teleSureHit(t.sd, tIdx, mk, tsm)) ? 101 : sandVeilAcc(battleMoveAccuracy(mk, m, t.sd, tIdx), att, t.sd, tIdx);   // Yawn sempre acerta (exceto semi-invulnerável)
     if(battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name })); return null; }
     if(mk === 'yawn'){
-      if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
+      if(subUp(T.subs[tIdx], att) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
       const yf = yawnFail(t.sd, tIdx); if(yf) return fail(yf);
       volOf(t.sd, tIdx).yawn = 2; dLog(LF.moveText(att.name, m.Name, `${tp.name} ficou sonolento!`)); return null;
     }
     if(mk === 'trick' || mk === 'switcheroo'){
-      if((T.subs[tIdx] || 0) > 0) return fail('o substituto de ' + tp.name + ' bloqueou');
+      if(subUp(T.subs[tIdx], att) > 0) return fail('o substituto de ' + tp.name + ' bloqueou');
       const tr = trickApply(sd, idx, t.sd, tIdx);
       if(tr.fail) return fail(tr.fail);
       dLog(LF.moveText(att.name, m.Name, tr.text)); return null;
     }
     if(mk in CONFUSE_STATUS){
-      if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
+      if(subUp(T.subs[tIdx], att) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
       const st = CONFUSE_STATUS[mk], parts = [];
       if(st) dWith(t.sd, tIdx, () => parts.push(`${tp.name} ${fmtStageChange(changeStage(t.sd, st[0], st[1]))}`));
       const c = applyConfusion(t.sd, tIdx, false);
@@ -11922,20 +12004,20 @@ function dStatusAct(a){
       dLog(LF.moveText(att.name, m.Name, parts.join('. '))); return null;
     }
     if(mk === 'gastro acid'){
-      if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
+      if(subUp(T.subs[tIdx], att) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
       const g = gastroAcidApply(sd, idx, t.sd, tIdx, attackerIgnoresAbility(att));
       if(g.fail) return fail(g.fail);
       dLog(LF.moveText(att.name, m.Name, g.text)); return null;
     }
     if(mk === 'electrify'){
-      if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
+      if(subUp(T.subs[tIdx], att) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
       const x = (D.ctx && D.ctx.order || []).find(z => z.idx === tIdx && z.side === t.sd);
       if(!x || x.done || !(x.type === 'move' || x.type === 'status-move')) return fail(tp.name + ' já agiu ou não vai usar golpe');
       if(!battle.electrify) battle.electrify = {}; battle.electrify[tIdx] = battle.turn; refreshBattlePrepared();
       dLog(LF.moveText(att.name, m.Name, LF.electrify(tp.name))); return null;
     }
     if(mk === 'entrainment'){
-      if((T.subs[tIdx] || 0) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
+      if(subUp(T.subs[tIdx], att) > 0 && t.sd !== sd) return fail('o substituto de ' + tp.name + ' bloqueou');
       const e = entrainmentApply(sd, idx, t.sd, tIdx, attackerIgnoresAbility(att));
       if(e.fail) return fail(e.fail);
       dLog(LF.moveText(att.name, m.Name, e.text)); e.extra.forEach(x => dLog(x)); return null;
@@ -12019,7 +12101,7 @@ function dStatusAct(a){
         if(tsm && tsm.kind !== 'charge' && normKey(att.ability || '') !== 'no guard' && normKey(tp.ability || '') !== 'no guard'){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name, semiDodge: tp.name })); return null; }
         { const ea = electricStatusAbsorb(sd, idx, tg.sd, tg.idx, m); if(ea){ dLog(LF.moveText(att.name, m.Name, ea)); return null; } }   // Volt Absorb / Motor Drive / Lightning Rod
         if(pranksterDarkBlocks(a, tp, tg.sd !== sd)) return fail(LF.pranksterDark(tp.name));   // Prankster x Dark
-        if((T.subs[tg.idx] || 0) > 0 && tg.sd !== sd && !SOUND_STAT_MOVES.has(mk)) return fail('o substituto de ' + tp.name + ' bloqueou');
+        if(subUp(T.subs[tg.idx], att) > 0 && tg.sd !== sd && !SOUND_STAT_MOVES.has(mk)) return fail('o substituto de ' + tp.name + ' bloqueou');
         if(POWDER_MOVES.has(mk)){ const pi = powderImmune(tp, tg.sd, tg.idx); if(pi) return fail(LF.powderImmune(tp.name, pi)); }   // pó/esporos
         const acc = teleSureHit(tg.sd, tg.idx, mk, tsm) ? 101 : sandVeilAcc(battleMoveAccuracy(mk, m, tg.sd, tg.idx), att, tg.sd, tg.idx);   // Gravity ×6840/4096 · Telekinesis no alvo: sempre acerta
         if(battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name })); return null; }
@@ -12075,7 +12157,7 @@ function dStatusAct(a){
     if(ti == null || !dAlive(ts, ti)) return fail('sem alvo');
     const sure = toxicSure(att, mk), tsm = dS(ts).semis[ti];
     if(tsm && tsm.kind !== 'charge' && !sure && normKey(att.ability || '') !== 'no guard' && normKey(dP(ti).ability || '') !== 'no guard'){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name, semiDodge: dP(ti).name })); return null; }
-    if(!isSoundMove(mk) && (dS(ts).subs[ti] || 0) > 0 && ts !== sd) return fail('o substituto de ' + dP(ti).name + ' bloqueou');
+    if(!isSoundMove(mk) && subUp(dS(ts).subs[ti], att) > 0 && ts !== sd) return fail('o substituto de ' + dP(ti).name + ' bloqueou');
     const acc = sure ? 101 : sandVeilAcc(battleMoveAccuracy(mk, m, ts, ti), att, ts, ti);
     if(battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ dLog(LF.miss({ attackerName: att.name, moveName: m.Name })); return null; }
     if(pranksterDarkBlocks(a, dP(ti), ts !== sd)) return fail(LF.pranksterDark(dP(ti).name));
@@ -12311,7 +12393,8 @@ function dCpuChoose(sd, slot){
     return { f: isFinite(f) ? f : 0, ko };
   };
   let strongest = 0;
-  const moves = p.moveResults.filter(m => hasPP(baseMoveNameFromKey(m.moveKey)) && !(normKey(baseMoveNameFromKey(m.moveKey)) === 'fake out' && battle.turn !== (S.entry[idx] || 0) + 1));
+  const moves = p.moveResults.filter(m => hasPP(baseMoveNameFromKey(m.moveKey)) && !(normKey(baseMoveNameFromKey(m.moveKey)) === 'fake out' && battle.turn !== (S.entry[idx] || 0) + 1)
+    && !(normKey(baseMoveNameFromKey(m.moveKey)) === 'gigaton hammer' && S.lastMove[idx] === 'gigaton hammer'));   // Gigaton Hammer: não pode ser escolhido duas vezes seguidas (Showdown: flag cantusetwice)
   for(const m of moves){
     const kind = dMoveKind(m, false), pri = getMovePriority(m.moveKey);
     if(kind === 'spread'){
