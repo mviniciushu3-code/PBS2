@@ -124,6 +124,7 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   .remove-poke-x:hover{ color: var(--coral); background: var(--panel-2); }
   .pk-ico{ display:inline-block; width:40px; height:30px; flex:0 0 40px; vertical-align:middle; image-rendering:pixelated; background:transparent url(https://play.pokemonshowdown.com/sprites/pokemonicons-sheet.png) no-repeat; }
   .pk-ico.sm{ margin:-6px 0 -4px -4px; }
+  .pk-ico.lg{ zoom:1.25; }   /* um pouco maior: nome do Pokémon na Calculadora e Pokémon em campo na batalha (não no banco) */
   .battle-poke-name-center .pk-ico{ margin:-6px 2px -4px 0; }
   .battle-action-title .pk-ico, .battle-replacement-btn .pk-ico{ margin:-7px 0 -6px -4px; }
   .poke-name-row{ display:flex; align-items:center; gap:8px; margin-bottom: 8px; }
@@ -517,6 +518,11 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   .bt-hp-row .battle-hp-display{ margin:0; font-size:12px; white-space:nowrap; gap:4px; }
   .bt-hp-row + .bt-head-grid{ margin-top:4px; }
   .bt-head-grid .battle-poke-name-center{ min-width:0; }
+  .bt-hg-r{ white-space:nowrap; }
+  @media (max-width:520px){   /* celular: o nome não invade o Spe (a coluna do meio encolhe) */
+    .bt-head-grid{ grid-template-columns:auto minmax(0,1fr) auto; }
+    .bt-head-grid .battle-poke-name-center{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  }
   .status-ability-row:has(.bt-meta-col){ flex-wrap:nowrap; }
   .status-ability-row .bt-meta-col{ display:flex; flex-direction:column; align-items:flex-end; gap:4px; margin-left:auto; min-width:0; }
   .bt-meta-col .battle-meta-info{ text-align:right; }
@@ -745,7 +751,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 65; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 66; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 const GAME_GEN = 9;      // Pokémon Champions = 9ª geração (regra 17): mecânicas que mudaram entre gerações seguem a Gen 9
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
@@ -4319,6 +4325,7 @@ function battleSideOfPrepared(p){
 }
 function flashFireActive(sd){
   const st = battle && battle.sides && battle.sides[sd];
+  if(st && battle.format === 'doubles' && st.ff && st.ff[st.activePokeIdx]) return true;   // Doubles: Fire Boost guardado por Pokémon (S.ff)
   return !!(st && st.flashFire && st.flashFire.idx === st.activePokeIdx && st.flashFire.entry === (st.currentEntryTurn || 0));
 }
 // Sunsteel Strike: durante o golpe (usado DIRETAMENTE) o usuário ignora as habilidades ignoráveis, como o Mold Breaker
@@ -4738,7 +4745,7 @@ function _computeBattleDamage(attacker, defender, moveResult, roll, isCrit, atkS
     if(_au){ bpVal = auraAdjBP(bpVal, d, overrideBP !== undefined || !!_dyn || _hh); if(!_bpLabels.includes(_au.label)) _bpLabels.push(_au.label); } }
   // Fire Boost (Flash Fire): vale com a habilidade Flash Fire e CONTINUA depois da Mega Evolução (Champions), mesmo sem a habilidade
   if(d.moveType === 'Fire' && (normKey(attacker.ability || '') === 'flash fire' || !!(battle && battle.megaOv && battle.megaOv[attacker.pokeIdx])) && !_bpLabels.some(l => /flash fire/i.test(l))){
-    const _asd = battleSideOfPrepared(attacker);
+    const _asd = battleSideOfPrepared(attacker) || ((locOfPrepared(attacker) || {}).side);   // também a prévia da Mega marcada
     if(_asd && flashFireActive(_asd)){ bpVal = Math.trunc(bpVal * 1.5); _bpLabels.push('Flash Fire (×1.5)'); }
   }
   // Electric Boost (Charge / Electromorphosis): golpe Electric com poder ×2 (Showdown: condition charge, onBasePower chainModify(2))
@@ -7703,21 +7710,55 @@ function runHpAnimations(){
   });
 }
 
-function battleDynPD(side, m, overrideBP){
-  const st = battle.sides[side], d = m.detail, p = getSidePrepared(side);
+// PD AO VIVO de um golpe na batalha — ÚNICA função usada pelo botão do golpe (battlePDText) e pela janela de detalhes
+//  (showMoveDetail), para os dois mostrarem SEMPRE o mesmo valor. Usa o MESMO cálculo do dano da batalha (computeBattleDamage)
+//  contra o oponente em campo: stages, Flash Fire / Electric Boost, Blaze & cia., Knock Off, aura, sol / Protosynthesis, Glaive Rush...
+//  Mega marcada para este turno (botão Mega Evoluir, ainda sem ter evoluído): o PD já é o da forma Mega.
+function megaPendPrepared(side){
+  if(!battle || !battle.megaPend) return null;
+  const idx = battle.sides[side].activePokeIdx, P = battle.megaPend[side];
+  if(idx == null || !P || P[idx] !== 'mega' || (battle.megaOv && battle.megaOv[idx])) return null;
+  const to = megaTargetOf(side, idx); if(!to) return null;
+  if(!battle._mpCache) battle._mpCache = {};
+  const k = idx + '|' + to;
+  if(!(k in battle._mpCache)){ try { battle._mpCache[k] = preparedAsForm(idx, to); } catch(e){ battle._mpCache[k] = null; } }
+  return battle._mpCache[k];
+}
+function battleLivePD(side, m0, overrideBP){
+  const st = battle.sides[side];
+  let act = getSidePrepared(side), m = m0;
+  const _mp = (m0 && !m0.isStruggle) ? megaPendPrepared(side) : null;
+  if(_mp){ const mk = normKey(baseMoveNameFromKey(m0.moveKey || '')); const mm = getBattleMoveByKey(_mp, m0.moveKey) || (_mp.moveResults || []).find(x => normKey(baseMoveNameFromKey(x.moveKey || '')) === mk); if(mm){ act = _mp; m = mm; } }
+  const d = m.detail || {};
   const isPhys = d.isPhysical !== undefined ? d.isPhysical : (d.statName === 'Atk' || d.statName === 'Def');
-  if(overrideBP === undefined) overrideBP = moveOverrideBP(side, m.moveKey);
-  if(overrideBP === undefined){ const _o = getSidePrepared(side === 'A' ? 'B' : 'A'), _dy = _o ? battleDynBaseBP(p, _o, m) : null; if(_dy) overrideBP = _dy.bp; }   // Low Kick / Grass Knot: BP pelo peso do oponente em campo
-  let atk = m.atkFinal;
+  const ob = overrideBP !== undefined ? overrideBP : moveOverrideBP(side, m.moveKey);
+  const _os = side === 'A' ? 'B' : 'A', _def = getSidePrepared(_os);
+  let live = null;
+  if(_def && act){
+    const _mi = act === _mp ? st.activePokeIdx : null, _had = _mi != null && battle.megaOv ? battle.megaOv[_mi] : undefined;
+    if(_mi != null){ if(!battle.megaOv) battle.megaOv = {}; battle.megaOv[_mi] = act.realName || act.name; }   // prévia da Mega: conta como já Mega (Fire Boost continua etc.)
+    try { live = computeBattleDamage(act, _def, m, 1, false, st.stages, battle.sides[_os].stages, ob, getStatusOf(side, st.activePokeIdx), true).calc; } catch(e){ live = null; }
+    finally { if(_mi != null){ if(_had) battle.megaOv[_mi] = _had; else delete battle.megaOv[_mi]; } }
+  }
+  const bp = (live && live.bpVal) ? live.bpVal : auraAdjBP(ob !== undefined ? ob : m.bpFinal, d, ob !== undefined);
+  const bpLabels = (live && live.bpLabels) ? live.bpLabels : (d.bpModifierLabels || []);
   const stg = st.stages[isPhys ? 'Atk' : 'SpA'] || 0;
-  if(stg) atk = Math.floor(atk * STAGE_MULT[stg]);
-  const bp = auraAdjBP(overrideBP !== undefined ? overrideBP : m.bpFinal, d, overrideBP !== undefined);
+  const atk = (live && live.atkVal && !live.foulPlay) ? live.atkVal : (stg ? Math.floor(m.atkFinal * STAGE_MULT[stg]) : m.atkFinal);
+  const atkLabels = (live && live.atkLabels) ? live.atkLabels : (d.attackChainLabels || []);
   let dm = m.dmodReal;
-  if(isPhys && getStatusOf(side, st.activePokeIdx) === 'Burned' && !hasTypeP(p, 'Fire') && !BURN_IMMUNE_ABILITIES.has(p.ability)) dm *= 0.5;
-  const pd = calcPDS(atk, bp, dm, DEFESA_PADRAO_DR, d.tripleHitsBP ? 1 : (d.multiHits || 1));
-  const ratio = m.pd.plus > 0 ? pd.plus / m.pd.plus : 1;
-  const base = battleUsePDR ? [m.dr.plus.total, m.dr.minus.total] : [m.pd.plus, m.pd.minus];
-  return { plus: base[0] * ratio, minus: base[1] * ratio };
+  const glv = !!(live && live.steps && live.steps.some(x => x.label === 'Glaive Rush'));   // Glaive Rush: o oponente em campo está Wide Open (estado da batalha)
+  if((d.glaiveMult || 1) !== 1) dm /= d.glaiveMult;
+  if(glv) dm *= 2;
+  const burned = isPhys && getStatusOf(side, st.activePokeIdx) === 'Burned' && !hasTypeP(act, 'Fire') && !BURN_IMMUNE_ABILITIES.has(act.ability);
+  if(burned) dm *= 0.5;
+  const pdsP = calcPDS(atk, bp, dm, DEFESA_PADRAO_DR, d.tripleHitsBP ? 1 : (d.multiHits || 1));
+  const ratio = m.pd.plus > 0 ? pdsP.plus / m.pd.plus : 1;
+  const pdrPlus = m.dr.plus.total * ratio, pdrMinus = m.dr.minus.total * ratio;
+  return { act, m, d, isPhys, ob, live, bp, bpLabels, stg, atk, atkLabels, dm, glv, burned, pdsP, pdrPlus, pdrMinus, mega: !!_mp && act === _mp };
+}
+function battleDynPD(side, m, overrideBP){
+  const L = battleLivePD(side, m, overrideBP);
+  return battleUsePDR ? { plus: L.pdrPlus, minus: L.pdrMinus } : { plus: L.pdsP.plus, minus: L.pdsP.minus };
 }
 function battlePDText(side, m, overrideBP){ const p = battleDynPD(side, m, overrideBP); return battleSwapPD ? `${Math.round(p.minus)} · ${Math.round(p.plus)}` : `${Math.round(p.plus)} · ${Math.round(p.minus)}`; }
 
@@ -8322,7 +8363,7 @@ function topCardMovesHtml(side, c){
     if(action && action.type === 'switch') prev = benchInfoHtml(action.targetIdx);
     else if(battleShowEstimate){
       if(action && action.type === 'move' && !action.noTgt) prev = battlePreviewForAction(side, action, oppSwitchTgt);
-      else prev = `<div class="battle-preview-box"><div>Dano estimado:</div><div style="opacity:.6;">${action && action.type === 'status-move' ? 'golpe de status — sem dano' : (action && action.noTgt ? 'escolha o alvo' : '—')}</div></div>`;
+      else if(!(action && action.type === 'status-move')) prev = `<div class="battle-preview-box"><div>Dano estimado:</div><div style="opacity:.6;">${action && action.noTgt ? 'escolha o alvo' : '—'}</div></div>`;   // golpe de status: sem quadro
     }
   } else {
     const sel = [active.struggle].concat(active.moveResults).find(x => x && x.moveKey === cpuPreviewMove[side]);
@@ -8486,7 +8527,7 @@ function battleSideCardInner(side){
         <div class="btn-foot"><span>${_sAcc < 101 ? 'Acc ' + _sAcc : ''}</span><span style="${ppColor}">${battlePPEnabled ? ppCur + '/' + ppMax : ''}</span></div>
       </button>`);
     });
-    const previewHtml = (action && action.type === 'switch') ? benchInfoHtml(action.targetIdx) : (!battleShowEstimate ? '' : ((action && action.type === 'move' && !action.noTgt) ? battlePreviewForAction(side, action) : `<div class="battle-preview-box"><div>Dano estimado:</div><div style="opacity:.6;">${action && action.type === 'status-move' ? 'golpe de status — sem dano' : (action && action.noTgt ? 'escolha o alvo' : '—')}</div></div>`));
+    const previewHtml = (action && action.type === 'switch') ? benchInfoHtml(action.targetIdx) : (!battleShowEstimate ? '' : ((action && action.type === 'move' && !action.noTgt) ? battlePreviewForAction(side, action) : (action && action.type === 'status-move') ? '' : `<div class="battle-preview-box"><div>Dano estimado:</div><div style="opacity:.6;">${action && action.noTgt ? 'escolha o alvo' : '—'}</div></div>`));
     movesHtml = `<div class="battle-actions-group">
       <div class="battle-actions-label">⚔️ Golpes${forcedStruggle ? ' — sem PP: Struggle ou trocar' : ''}</div>
       <div class="battle-actions-grid moves-grid">${allMoveBtns.join('') || '<div style="color:var(--text-dim);font-size:11px;font-family:var(--font-mono);">Sem golpes</div>'}</div>
@@ -8636,7 +8677,7 @@ function battleSideCardInner(side){
   const nameHpHtml = `<div class="bt-hp-row" data-hp-anim="${_hf},${hp},${active.hpMax}" data-hp-side="${skey(side)}"><div class="bt-hp-bar">${battleHpBarHtml(_hf, active.hpMax)}</div>${hpText}</div>
   <div class="bt-head-grid">
     <div class="bt-hg-l">${_cond.head}</div>
-    <div class="battle-poke-name-center">${statusTurnBadgeHtml(side, s.activePokeIdx)}${pkIcon(active.name)}${active.name}</div>
+    <div class="battle-poke-name-center">${statusTurnBadgeHtml(side, s.activePokeIdx)}${pkIcon(active.name, 'lg')}${active.name}</div>
     <div class="bt-hg-r" style="${speedInfoStyle}">${speedInfoHtml}</div>
   </div>${(s.sub || 0) > 0 ? `<div style="text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--amber);margin-top:4px;">🧸 Substituto: ${s.sub} HP</div>` : ''}${isCursed(s, s.activePokeIdx) ? `<div style="text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--violet,#A855F7);margin-top:4px;">👻 Amaldiçoado (−¼ HP por turno)</div>` : ''}`;
 
@@ -9060,30 +9101,13 @@ function benchInfoHtml(idx){
   </div>`;
 }
 function showMoveDetail(side, moveKey){
-  const act = getSidePrepared(side); if(!act) return;
-  const m = getBattleMoveByKey(act, moveKey); if(!m) return;
-  const st = battle.sides[side], d = m.detail || {};
-  const isPhys = d.isPhysical !== undefined ? d.isPhysical : (d.statName === 'Atk' || d.statName === 'Def');
-  const ob = moveOverrideBP(side, m.moveKey);
-  // BP Final e Atk/SpA Final AO VIVO: o MESMO cálculo da batalha (computeBattleDamage) contra o oponente em campo —
-  //  inclui os modificadores que só existem na batalha (Flash Fire, Knock Off ×1,5, Grav Apple, aura, sol/Protosynthesis...).
-  const _os = side === 'A' ? 'B' : 'A', _def = getSidePrepared(_os);
-  let live = null;
-  if(_def){ try { live = computeBattleDamage(act, _def, m, 1, false, st.stages, battle.sides[_os].stages, ob, getStatusOf(side, st.activePokeIdx), true).calc; } catch(e){ live = null; } }
-  const bp = (live && live.bpVal) ? live.bpVal : auraAdjBP(ob !== undefined ? ob : m.bpFinal, d, ob !== undefined);
-  const bpLabels = (live && live.bpLabels) ? live.bpLabels : (d.bpModifierLabels || []);
-  const stg = st.stages[isPhys ? 'Atk' : 'SpA'] || 0;
-  const atk = (live && live.atkVal && !live.foulPlay) ? live.atkVal : (stg ? Math.floor(m.atkFinal * STAGE_MULT[stg]) : m.atkFinal);
-  const atkLabels = (live && live.atkLabels) ? live.atkLabels : (d.attackChainLabels || []);
-  let dm = m.dmodReal;
-  const _glv = !!(live && live.steps && live.steps.some(x => x.label === 'Glaive Rush'));   // Glaive Rush: o oponente em campo está Wide Open (estado da batalha)
-  if((d.glaiveMult || 1) !== 1) dm /= d.glaiveMult;
-  if(_glv) dm *= 2;
-  const burned = isPhys && getStatusOf(side, st.activePokeIdx) === 'Burned' && !hasTypeP(act, 'Fire') && !BURN_IMMUNE_ABILITIES.has(act.ability);
-  if(burned) dm *= 0.5;
-  const pdsP = calcPDS(atk, bp, dm, DEFESA_PADRAO_DR, d.tripleHitsBP ? 1 : (d.multiHits || 1));
-  const ratio = m.pd.plus > 0 ? pdsP.plus / m.pd.plus : 1;
-  const pdrPlus = m.dr.plus.total * ratio, pdrMinus = m.dr.minus.total * ratio;
+  const act0 = getSidePrepared(side); if(!act0) return;
+  const m0 = getBattleMoveByKey(act0, moveKey); if(!m0) return;
+  const st = battle.sides[side];
+  // MESMO cálculo do botão do golpe (battleLivePD): BP / Atk ao vivo contra o oponente em campo, Mega marcada etc.
+  const L = battleLivePD(side, m0);
+  const act = L.act, m = L.m, d = L.d, ob = L.ob, bp = L.bp, bpLabels = L.bpLabels, stg = L.stg, atk = L.atk, atkLabels = L.atkLabels;
+  const dm = L.dm, _glv = L.glv, burned = L.burned, pdsP = L.pdsP, pdrPlus = L.pdrPlus, pdrMinus = L.pdrMinus;
   const b = v => `<b style="color:var(--text);">${v}</b>`;
   const lbls = (arr) => arr && arr.length ? ' [' + arr.join(', ') + ']' : '';
   const dmodParts = [];
@@ -9111,7 +9135,7 @@ function showMoveDetail(side, moveKey){
   const ov = document.createElement('div');
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px;';
   ov.innerHTML = `<div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;max-width:380px;width:100%;font-family:var(--font-mono);font-size:12px;color:var(--text-dim);line-height:1.75;max-height:85vh;overflow:auto;">
-    <div style="font-family:var(--font-display);font-size:16px;font-weight:700;color:var(--text);margin-bottom:2px;">${m.moveName}</div>
+    <div style="font-family:var(--font-display);font-size:16px;font-weight:700;color:var(--text);margin-bottom:2px;">${m.moveName}${L.mega ? ` <span style="font-size:11px;color:var(--amber);">(${act.name}: Mega marcada)</span>` : ''}</div>
     <div style="margin-bottom:8px;">${m.tags || ''}${accV ? ' · Acc ' + (accV >= 101 ? '—' : accV) : ''}${_hits}</div>
     Efeito secundário: ${b(_secTxt)}<br>
     ${d.statName || 'Atk'} Final: ${b(m.atkFinal)}${stg ? ` → estágio ${stg > 0 ? '+' : ''}${stg}` : ''}${atk !== m.atkFinal ? ` → ${b(atk)}` : ''}${lbls(atkLabels.map(l => (l && typeof l === 'object') ? l.name + ' ×' + fmt2(l.mult) : l))}<br>
@@ -9333,6 +9357,7 @@ function presStep(token){
   if(pres && pres.token === token) pres.timer = setTimeout(() => presStep(token), delay);
 }
 function renderBattle(){
+  if(battle) battle._mpCache = null;   // forma Mega "marcada" (PD dos golpes): recalcula a cada desenho
   if(battle && battle.format === 'doubles'){ dRenderPres(); return; }
   if(battle && battle._presentLog){ const tl = battle._presentLog; battle._presentLog = null; queuePresentation(tl); }
   if(pres && (!battle || !battle.log.includes(pres.log))) cancelPresentation();
@@ -9890,7 +9915,7 @@ function renderResults(teamResults){
       <span class="remove-poke-x" data-poke="${pr.pokeIdx}" title="Remover">×</span>
       <div class="poke-name-row">
         <span class="build-arrow${openBuilds.has(pr.pokeIdx)?' open':''}" data-poke="${pr.pokeIdx}">▸</span>
-        <div class="poke-name${openBuilds.has(pr.pokeIdx)?' open':''}" data-poke="${pr.pokeIdx}">${pkIcon(pr.pokeName, 'sm')}${pr.pokeName}${abilityNote}</div>
+        <div class="poke-name${openBuilds.has(pr.pokeIdx)?' open':''}" data-poke="${pr.pokeIdx}">${pkIcon(pr.pokeName, 'sm lg')}${pr.pokeName}${abilityNote}</div>
       </div>
       <button class="copy-build-btn${openBuilds.has(pr.pokeIdx)?' open':''}" data-poke="${pr.pokeIdx}" title="Copiar build">${ICON_COPY}</button>
       <textarea class="build-reveal${openBuilds.has(pr.pokeIdx)?' open':''}" id="build-${pr.pokeIdx}" data-poke="${pr.pokeIdx}" spellcheck="false">${serializePoke(currentPokemons[pr.pokeIdx]||{}).replace(/</g,'&lt;')}</textarea>
@@ -12560,7 +12585,7 @@ function dblExtraHtml(side, slot){
         return `${Math.floor(r.min / tp.hpMax * 100)}% – ${Math.floor(r.max / tp.hpMax * 100)}%`;
       } catch(e){ return ''; }
     };
-    return `<div class="battle-actions-group"><div class="battle-actions-label">🎯 ${_isSpr ? 'Dano estimado por alvo' : 'Escolha o alvo'} <span style="text-transform:none;font-weight:400;color:var(--text-dim);">· ${_isSpr ? 'o golpe atinge todos; a seleção só alterna a prévia' : 'clique 2x para confirmar'}</span></div><div class="battle-actions-grid">${opts.map(t => {
+    return `<div class="battle-actions-group"><div class="battle-actions-label">🎯 Alvo</div><div class="battle-actions-grid">${opts.map(t => {
       const pp = dP(t.idx), h = dS(t.tsd).hp[t.idx], pct = pp.hpMax > 0 ? Math.floor(h / pp.hpMax * 100) : 0;
       const sel = !!(ch && ch.tgt && ch.tgt.sd === t.tsd && ch.tgt.slot === t.slot);
       return `<button type="button" class="battle-action-btn${sel ? ' selected' : ''}" data-dbl-tgt="1" data-tsd="${t.tsd}" data-tslot="${t.slot}" style="border-color:${t.ally ? 'var(--mint)' : 'var(--coral)'};${sel ? 'background:rgba(111,227,180,0.15);box-shadow:0 0 0 1px var(--mint) inset;' : ''}"><div class="battle-action-title">${t.ally ? '(aliado) ' : ''}${pp.name}</div><div class="battle-action-sub">${h}/${pp.hpMax} (${pct}%)</div>${(() => { const d = dmgTxt(t); return d ? `<div class="battle-action-sub" style="color:var(--amber);font-weight:700;">${d}</div>` : ''; })()}</button>`;
