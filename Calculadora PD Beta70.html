@@ -39,8 +39,9 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
    diferença permitida: no PvP os botões do Player 2 são ações clicáveis (e ele tem a
    seção de troca/confirmação); na CPU o clique só alterna a prévia de dano.
 13) APRESENTAÇÃO DO TURNO: enquanto o log/HP animam, o card mostra o estado de ANTES do
-   turno (clima, terreno, status, stages, PP, stats...). Só o HP (e o substituto/Pokémon
-   em campo) avança junto com o log. Tudo o mais muda de fato só no fim da animação
+   turno (clima, terreno, stages, PP, stats...). O HP (e o substituto/Pokémon em campo) avança
+   junto com o log; o status (volátil ou não) aparece logo DEPOIS da linha do log que o anuncia,
+   com um pequeno atraso (STATUS_SHOW_DELAY). Tudo o mais muda de fato só no fim da animação
    (presFrozenMap / freezeBattleView). Durante a animação o usuário pode deslizar, expandir,
    abrir detalhes etc.; edições (habilidade, item, status, stages...) ficam na fila e são
    aplicadas no fim (presGateDefer); escolher golpe/alvo/Lutar fica bloqueado (presGateBlock).
@@ -124,6 +125,8 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   .remove-poke-x:hover{ color: var(--coral); background: var(--panel-2); }
   .pk-ico{ display:inline-block; width:40px; height:30px; flex:0 0 40px; vertical-align:middle; image-rendering:pixelated; background:transparent url(https://play.pokemonshowdown.com/sprites/pokemonicons-sheet.png) no-repeat; }
   .pk-ico.sm{ margin:-6px 0 -4px -4px; }
+  .res-ico{ width:11px; height:11px; vertical-align:-1px; display:inline-block; }   /* ícones da RES (física / especial), bem pequenos */
+  .stats-ico{ width:12px; height:12px; vertical-align:-2px; margin-right:4px; color:var(--text-dim); }   /* ícone monocromático do botão Stats */
   /* Doubles: os dois cards de cada fileira com a mesma altura; no de cima o cabeçalho fica no fundo (cards alinhados) */
   .dbl-slot{ display:flex; flex-direction:column; }
   .dbl-slot > .bt-card{ flex:1 1 auto; display:flex; flex-direction:column; }
@@ -135,10 +138,6 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   .dbl-cpu .dbl-slot[data-dbl-slot="1"] .pk-ico, .dbl-me .dbl-slot[data-dbl-slot="0"] .pk-ico{ transform:scaleX(-1); }
   /* Toque duplo não amplia a página (o duplo clique confirma a ação, inclusive no layout PC do celular) */
   html, body{ touch-action:manipulation; }
-  /* Golpes: nome sempre no CENTRO do botão; PD (e o % de dano) logo abaixo, sem empurrar o nome */
-  .battle-actions-grid.moves-grid > .battle-action-btn > .battle-action-title{ position:absolute; left:8px; right:8px; width:auto !important; top:50%; transform:translateY(-50%); margin:0; line-height:1.2; text-align:center; }
-  .battle-actions-grid.moves-grid > .battle-action-btn > .battle-action-sub{ position:absolute; left:8px; right:8px; width:auto !important; top:calc(50% + 9px); margin:0 !important; line-height:1.2; text-align:center; }
-  .battle-actions-grid.moves-grid > .battle-action-btn > .btn-foot + .battle-action-sub{ top:auto; bottom:4px; left:50%; right:auto; transform:translateX(-50%); white-space:nowrap; font-size:10px; }   /* % de dano: na linha do rodapé, entre Acc e PP */
   /* Status não volátil na mesma linha do item/habilidade */
   .status-ability-row:has(.bt-meta-col){ align-items:flex-start; }
   .status-ability-row:has(.bt-meta-col) > .battle-status-row{ margin-top:-3px !important; }
@@ -537,15 +536,15 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   .bt-sprite .pk-ico{ margin:-8px 0 -3px; }
   .bt-name{ text-align:center; margin-top:4px; }
   .bt-hp-row{ display:flex; justify-content:center; align-items:center; gap:6px; margin-top:6px; min-width:0; }
-  .bt-hp-bar{ position:relative; width:260px; max-width:calc(100% - 56px); flex:0 1 260px; }
-  .bt-hp-bar > div:not(.battle-hp-display){ height:14px !important; }
-  .bt-hp-pct{ font-family:var(--font-mono); font-size:12px; font-weight:700; white-space:nowrap; }
-  .bt-hp-bar .battle-hp-display{ position:absolute; top:0; bottom:0; right:7px; margin:0; display:flex; align-items:center; gap:4px; font-size:11px; line-height:1; white-space:nowrap; pointer-events:none; text-shadow:0 0 3px rgba(0,0,0,.95), 0 0 2px rgba(0,0,0,.95); }
+  .bt-hp-bar{ position:relative; width:260px; max-width:calc(100% - 120px); flex:0 1 260px; }
+  .bt-hp-bar > div:not(.battle-hp-display):not(.bt-hp-pct){ height:11px !important; }
+  .bt-hp-pct{ position:absolute; left:calc(100% + 6px); top:50%; transform:translateY(-50%); font-family:var(--font-mono); font-size:12px; font-weight:700; white-space:nowrap; }   /* % logo depois da barra; a barra fica centralizada sob o nome */
+  .bt-hp-bar .battle-hp-display{ position:absolute; top:0; bottom:0; right:6px; margin:0; display:flex; align-items:center; gap:4px; font-size:10px; line-height:1; white-space:nowrap; pointer-events:none; text-shadow:0 0 3px rgba(0,0,0,.95), 0 0 2px rgba(0,0,0,.95); }
   .bt-hp-bar .battle-hp-display .hp-num-big{ color:#fff !important; }
   /* Status não volátil sem edição: sem a seta e do tamanho do texto */
   .battle-status-row select:disabled{ -webkit-appearance:none; -moz-appearance:none; appearance:none; background-image:none; padding:3px 6px; width:auto; }
   .status-ability-row:has(.bt-meta-col){ flex-wrap:nowrap; }
-  .status-ability-row .bt-meta-col{ display:flex; flex-direction:column; align-items:flex-end; gap:4px; margin-left:auto; min-width:0; }
+  .status-ability-row .bt-meta-col{ display:flex; flex-direction:column; align-items:flex-end; gap:9px; margin-left:auto; min-width:0; }
   .bt-meta-col .battle-meta-info{ text-align:right; }
   .bt-meta-col .battle-res-display{ justify-content:flex-end; gap:14px; margin:0; font-size:13px; }
   .bt-meta-col .battle-res-display .res-item{ text-align:right; }
@@ -641,7 +640,7 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   .battle-dbl-layout:not(.is-singles) .battle-status-row select{font-size:10px;padding:2px 4px;}
   .battle-dbl-layout:not(.is-singles) button.primary.battle-lutar-inline{font-size:13px;white-space:nowrap;}
   .battle-dbl-layout:not(.is-singles) .bt-hp-bar{width:230px;flex-basis:230px;}
-  .battle-dbl-layout.log-mid:not(.is-singles) .battle-log{text-align:left;padding-left:25%;}   /* log no meio: texto à esquerda, começando mais ao meio (abaixo do chip de terreno) */
+  .battle-dbl-layout.log-mid:not(.is-singles) .battle-log-scroll{width:fit-content;min-width:min(360px,100%);max-width:100%;margin-left:auto;margin-right:auto;text-align:left;}   /* log no meio: caixa do tamanho do texto (os botões de cima continuam onde estão) */
 }
 /* Botão Lutar (e Confirmar / Continuar / Pular) sempre centralizado */
 button.primary.battle-lutar-inline{display:block;margin-left:auto;margin-right:auto;}
@@ -785,7 +784,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 69; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 70; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 const GAME_GEN = 9;      // Pokémon Champions = 9ª geração (regra 17): mecânicas que mudaram entre gerações seguem a Gen 9
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
@@ -3639,7 +3638,7 @@ function condList(side, idx){
   { const sc = screensOf(side); Object.keys(SCREEN_INFO).forEach(k => add(sc[k] > 0, SCREEN_INFO[k][1], SCREEN_INFO[k][0], k === 'reflect' ? 'reduz o dano físico recebido' : k === 'lightscreen' ? 'reduz o dano especial recebido' : 'reduz o dano físico e especial recebido', sc[k] > 0 ? sc[k] + 't' : '')); }
   add(v.minimize, '🔹', 'Minimize', 'Flying Press contra ele: dano ×2 e sempre acerta');
   add(fireBoostOn(side, idx), '♨️', 'Fire Boost (Flash Fire)', 'golpes Fire com poder ×1,5; continua depois da Mega Evolução; some ao sair de campo');
-  add(v.charge, '⚡', 'Electric Boost', 'o próximo golpe Electric tem poder ×2; some quando ele usar (ou tentar usar) um golpe Electric, ou sair de campo');
+  add(v.charge, '⚡︎', 'Electric Boost', 'o próximo golpe Electric tem poder ×2; some quando ele usar (ou tentar usar) um golpe Electric, ou sair de campo');
   add(battle.electrify && battle.electrify[idx] === battle.turn, '🔌', 'Electrify', 'os golpes dele viram Electric neste turno');
   add(battle.iceFace && battle.iceFace[idx] === 'noice', '🧊', 'Noice Face (Ice Face quebrado)', 'volta ao Ice Face quando a neve começa ou ao entrar na neve');
   add(battle.megaOv && battle.megaOv[idx], MEGA_ICON, 'Mega Evoluído', p ? p.name : '');
@@ -4228,6 +4227,18 @@ function chargeAfterAction(sd, idx, action, executed){
   } else return;
   if(k === 'charge' || t !== 'Electric') return;
   delete v.charge;
+}
+// Static / Flame Body / Spicy Spray do alvo: sorteio a CADA hit que atinge o Pokémon (Showdown: onDamagingHit por hit).
+//  Static e Flame Body: só contato, 30%. Spicy Spray: qualquer golpe de dano, sempre. Devolve { status, by } ou null.
+function contactStatusRoll(def, att, moveInfo, aSd, aIdx){
+  const k = normKey((def && def.ability) || '');
+  if(!((moveInfo && moveInfo.Contact && (k === 'static' || k === 'flame body')) || k === 'spicy spray')) return null;
+  const want = k === 'static' ? 'Paralyzed' : 'Burned';
+  const aT = typesOfP(att), aAb = normKey(att.ability || '');
+  const immune = want === 'Paralyzed' ? (aT.includes('Electric') || aAb === 'limber') : (aT.includes('Fire') || ['water veil','water bubble','thermal exchange','comatose'].includes(aAb));
+  if(immune || leafGuardBlocks(aSd, aIdx) || getStatusOf(aSd, aIdx) !== 'Healthy') return null;
+  if(!(k === 'spicy spray' || battleRandom() < 0.3)) return null;
+  return { status: want, by: def.ability };
 }
 function isPastMove(moveKeyOrName){ const mi = findMoveInfo(baseMoveNameFromKey(moveKeyOrName || '')); return !!(mi && mi.Past); }
 function prepareBattleSide(pokeIdx, env){
@@ -6322,13 +6333,14 @@ function _executeAction(action, ordered, actionIdx){
   const _cRA = (moveInfo && moveInfo.Contact) ? contactRecoilAbility(defender) : null;
   let contactHurt = 0, focusBandHits = 0, hitMove = action.move, helmetHurt = 0, _helmetKO = false;
   const abilNotes = [];
+  let _csPending = null;   // Static / Flame Body / Spicy Spray de golpe de 1 hit: aplicado depois (como antes)
   for(let h = 0; h < nHits; h++){
     // Triple Axel/Kick e Population Bomb: checagem de precisão antes de cada hit. Skill Link: só a checagem inicial.
     if(h > 0 && perHitAcc && !skillLink && battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ missAt = h + 1; break; }
     const hitCrit = rollCrit(action.side, attackerActiveIdx, action.move.moveKey, defSide, s.activePokeIdx);   // estágio de crítico
     const hitRollIdx = Math.floor(battleRandom() * 16);
     const hitBP = tripleBP ? calcBpFinal(tripleBP[h], action.move.detail.bpMods || []) : overrideBP;
-    const r = computeBattleDamage(attacker, defender, hitMove, ROLL_MULTS[hitRollIdx], hitCrit, attackerSideState.stages, defenderSideState.stages, hitBP, attackerStatus, nHits > 1 || !!tripleBP);
+    const r = computeBattleDamage(attacker, defender, hitMove, ROLL_MULTS[hitRollIdx], hitCrit, attackerSideState.stages, defenderSideState.stages, hitBP, h === 0 ? attackerStatus : getStatusOf(action.side, attackerActiveIdx), nHits > 1 || !!tripleBP);   // status do atacante ao vivo (queimou no hit anterior)
     lastRes = r;
     const hpPre = s.hp[s.activePokeIdx];
     let toSub = 0, toHp = 0;
@@ -6361,6 +6373,17 @@ function _executeAction(action, ordered, actionIdx){
     }
     if(toSub === 0 && !_ifb && r.typeEff > 0){ const _pt = poisonTouchLine(action.side, attackerActiveIdx, defSide, s.activePokeIdx, moveInfo); if(_pt) abilNotes.push(_pt); }   // Poison Touch (cada hit)
     hits.push({ damage: _ifb ? 0 : r.damage, toHp, toSub, roll: ROLL_MULTS[hitRollIdx], rollIdx: hitRollIdx, isCrit: hitCrit, calc: r.calc, hpBefore: hpPre, hpAfter: s.hp[s.activePokeIdx], snap: snapView() });
+    // Static / Flame Body / Spicy Spray: a cada hit que atinge o Pokémon. Multistrike: o status vale já para o hit seguinte e a linha sai logo depois do hit.
+    if(toSub === 0 && !_ifb && r.typeEff > 0 && attackerSideState.hp[attackerActiveIdx] > 0 && !_csPending){
+      const _cs = contactStatusRoll(defender, attacker, moveInfo, action.side, attackerActiveIdx);
+      if(_cs){
+        if(nHits > 1 || tripleBP){
+          attackerSideState.status[attackerActiveIdx] = _cs.status;
+          if(window._stSnap && window._stSnap[action.side]) window._stSnap[action.side][attackerActiveIdx] = _cs.status;   // a linha já sai junto do hit
+          const _hr = hits[hits.length - 1]; (_hr.notes || (_hr.notes = [])).push(LF.statusGain({ name: attacker.name, newStatus: _cs.status, oldStatus: 'Healthy' }) + ` (${_cs.by})`); _hr.snap2 = snapView();
+        } else _csPending = _cs;
+      }
+    }
     // Effect Spore: cada hit de contato que atinge o Pokémon sorteia; se o atacante dormir, o golpe acaba na hora.
     let _esSleep = false;
     if(moveInfo && moveInfo.Contact && toSub === 0 && r.typeEff > 0 && normKey(defender.ability || '') === 'effect spore'){
@@ -6575,15 +6598,9 @@ function _executeAction(action, ordered, actionIdx){
   // Pickpocket do alvo (depois de Magician / Shell Bell; não se o alvo for arrastado ou sair pelo Eject Button, nem se o atacante sair por U-turn)
   if(moveInfo && moveInfo.Contact && dealt > 0 && !subbed && !dragHit && !ejectSide && !PIVOT_DAMAGE_MOVES.has(moveNameKey)) pickpocketLines(action.side, attackerActiveIdx, [{ sd: defSide, idx: s.activePokeIdx }]).forEach(t => { hitNote += ' ' + t; });
   let inflicted = null;
-  const defAbK = normKey(defender.ability || '');
-  if(dealt > 0 && !subbed && attackerSideState.hp[attackerActiveIdx] > 0 && ((moveInfo && moveInfo.Contact && (defAbK === 'static' || defAbK === 'flame body')) || defAbK === 'spicy spray')){
-    const want = defAbK === 'static' ? 'Paralyzed' : 'Burned';
-    const aT = typesOfP(attacker), aAb = normKey(attacker.ability || '');
-    const immune = want === 'Paralyzed' ? (aT.includes('Electric') || aAb === 'limber') : (aT.includes('Fire') || ['water veil','water bubble','thermal exchange','comatose'].includes(aAb));
-    if(!immune && !leafGuardBlocks(action.side, attackerActiveIdx) && getStatusOf(action.side, attackerActiveIdx) === 'Healthy' && (defAbK === 'spicy spray' || battleRandom() < 0.3)){
-      attackerSideState.status[attackerActiveIdx] = want;
-      inflicted = { status: want, by: defender.ability };
-    }
+  if(_csPending && attackerSideState.hp[attackerActiveIdx] > 0 && getStatusOf(action.side, attackerActiveIdx) === 'Healthy'){   // golpe de 1 hit (sorteado no hit)
+    attackerSideState.status[attackerActiveIdx] = _csPending.status;
+    inflicted = { status: _csPending.status, by: _csPending.by };
   }
 
   return {
@@ -7075,7 +7092,9 @@ function diffStatus(turnLog){
 }
 function snapView(){
   const o = {};
-  ['A','B'].forEach(sd => { const S = battle.sides[sd], i = S.activePokeIdx; o[sd] = { i, hp: S.hp[i], sub: S.sub || 0, cur: isCursed(S, i), spe: (S.stages && S.stages.Spe) || 0, mg: !!(battle.megaOv && battle.megaOv[i]), iu: !!(S.itemUsed && S.itemUsed[i]) }; });
+  ['A','B'].forEach(sd => { const S = battle.sides[sd], i = S.activePokeIdx; o[sd] = { i, hp: S.hp[i], sub: S.sub || 0, cur: isCursed(S, i), spe: (S.stages && S.stages.Spe) || 0, mg: !!(battle.megaOv && battle.megaOv[i]), iu: !!(S.itemUsed && S.itemUsed[i]),
+    st: (S.status || {})[i] || 'Healthy', slc: (S.sleepCounter || {})[i] || 0, frc: (S.frozenCounter || {})[i] || 0, txc: (S.toxicCounter || {})[i] || 0,
+    vol: S.vol && S.vol[i] ? JSON.parse(JSON.stringify(S.vol[i])) : {} }; });   // status / voláteis: aparecem logo depois da linha do log (pres.stView)
   return o;
 }
 function newTurnLog(turn){
@@ -8168,12 +8187,12 @@ function fmtDamageHtml(a, opt){
         const drainPct = a.attackerMaxHp > 0 ? Math.round((a.drainHeal / a.attackerMaxHp) * 100) : 0;
         drainStr = ` <span style="color:var(--mint);">(+${a.drainHeal} HP${battleShowDamageAsPercent ? ' · +' + drainPct + '%' : ''} recuperados)</span>`;
       }
-      const _head = opt.nohead ? `↳ <b>${a.defenderName}</b>:` : `<b>${a.attackerName}</b> usou <b>${a.moveName}</b>!`;
+      const _head = opt.nohead ? `<b>${a.defenderName}</b>:` : `<b>${a.attackerName}</b> usou <b>${a.moveName}</b>!`;
       if(_multi){
         const _n = a._hitsShown !== undefined ? a._hitsShown : a.hits.length;
         const _hd = h => battleShowDamageAsPercent ? (a.defenderMax > 0 ? Math.round(h.damage / a.defenderMax * 100) + '%' : '0%') : h.damage + ' dano';
-        const hitLines = a.hits.slice(0, _n).map((h, i) => `<div class="action-line" style="padding-left:14px;">↳ Hit ${i + 1}: <span class="dmg">${_hd(h)}</span>${h.isCrit ? ' CRIT!' : ''}${battleShowRolls ? ' [R' + (h.rollIdx + 1) + ']' : ''}${h.toSub > 0 && h.toHp === 0 ? ' (no substituto)' : ''}</div>`).join('')
-          + ((a.missAt && !a._headOnly) ? `<div class="action-line" style="padding-left:14px;">↳ Hit ${a.missAt}: errou!</div>` : '');
+        const hitLines = a.hits.slice(0, _n).map((h, i) => `<div class="action-line" style="padding-left:14px;">Hit ${i + 1}: <span class="dmg">${_hd(h)}</span>${h.isCrit ? ' CRIT!' : ''}${battleShowRolls ? ' [R' + (h.rollIdx + 1) + ']' : ''}${h.toSub > 0 && h.toHp === 0 ? ' (no substituto)' : ''}</div>` + (h.notes || []).map(n => `<div class="action-line" style="padding-left:14px;">${n}</div>`).join('')).join('')
+          + ((a.missAt && !a._headOnly) ? `<div class="action-line" style="padding-left:14px;">Hit ${a.missAt}: errou!</div>` : '');
         if(a._headOnly) return `<div class="action-line">${_head}</div>${hitLines}`;
         return `<div class="action-line">${_head}</div>${hitLines}<div class="action-line">Total (${a.hits.length} hit${a.hits.length === 1 ? '' : 's'}): <span class="dmg">${a.subHit ? a.subAbsorbed + ' no substituto' : dmgText}</span>${eff}.${a.subHit ? ' Substituto de ' + a.defenderName + ' absorveu ' + a.subAbsorbed + (a.subBroken ? ' e quebrou!' : ' (restam ' + a.subRemain + ').') : ' ' + a.defenderAfter + '/' + a.defenderMax + ' HP.'}${a.secEffects && a.secEffects.length ? ` <span style="color:var(--amber);">(${a.secEffects.join(', ')})</span>` : ''}${drainStr}${drainFullStr}${recoilStr}${focusSashStr}${thawStr}${faint}${attackerFaintStr}${rechargeTag}</div>`;
       }
@@ -8293,7 +8312,7 @@ function weatherLabel(w){
 }
 function terrainLabel(t){
   if(!t || t === 'none') return null;
-  const labels = {electric:'⚡ Elétrico', grassy:'🌿 Gramado', psychic:'🔮 Psíquico', misty:'🌫️ Neblina'};
+  const labels = {electric:'⚡︎ Elétrico', grassy:'🌿 Gramado', psychic:'🔮 Psíquico', misty:'🌫️ Neblina'};
   return labels[t] || t;
 }
 
@@ -8316,6 +8335,9 @@ function oppDamageLineHtml(side, m){
    Struggle e golpes sem tipo (Typeless) NÃO recebem cor. */
 const TYPE_COLORS = { Normal:'#A8A77A', Fire:'#EE8130', Water:'#6390F0', Electric:'#F7D02C', Grass:'#7AC74C', Ice:'#96D9D6', Fighting:'#C22E28', Poison:'#A33EA1', Ground:'#E2BF65', Flying:'#A98FF3', Psychic:'#F95587', Bug:'#A6B91A', Rock:'#B6A136', Ghost:'#735797', Dragon:'#6F35FC', Dark:'#705746', Steel:'#B7B7CE', Fairy:'#D685AD' };
 let battleResColors = (() => { try{ return localStorage.getItem('pd_resColors') === '1'; }catch(e){ return false; } })();   // RES Fís azul / RES Esp rosa (desligado por padrão)
+const RES_ICON_FIS = 'data:image/png;base64,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';   // ícone da RES física (enviado pelo usuário)
+const RES_ICON_ESP = 'data:image/png;base64,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';   // ícone da RES especial (enviado pelo usuário)
+function resIco(k){ return `<img class="res-ico" src="${k === 'Def' ? RES_ICON_FIS : RES_ICON_ESP}" alt="${k === 'Def' ? 'Física' : 'Especial'}" title="${k === 'Def' ? 'RES Física' : 'RES Especial'}">`; }
 function resColor(k){ return battleResColors ? (k === 'Def' ? '#2A52BE' : '#FF5CAD') : 'var(--text)'; }
 let battleTypeColors = (() => { try{ return localStorage.getItem('pd_typeColors') !== '0'; }catch(e){ return true; } })();
 function moveTypeOf(m){ if(!m || m.isStruggle) return ''; return (m.detail && m.detail.moveType) || m.Type || ''; }
@@ -8492,7 +8514,7 @@ function battleSideCardInner(side){
       const pct = p.hpMax > 0 ? Math.floor((h/p.hpMax)*100) : 0;
       const isSel = battle.pendingReplacement && battle.pendingReplacement[side] === i;
       const _fast = benchFasterThanOpp(side, i);
-      return `<button type="button" class="battle-replacement-btn${isSel?' selected':''}" data-side="${side}" data-replacement="${i}">${_fast ? '<span class="bench-fast" title="Mais rápido que o Pokémon atual do adversário">⚡</span>' : ''}
+      return `<button type="button" class="battle-replacement-btn${isSel?' selected':''}" data-side="${side}" data-replacement="${i}">${_fast ? '<span class="bench-fast" title="Mais rápido que o Pokémon atual do adversário">⚡︎</span>' : ''}
         <div style="font-weight:600;">${pkIcon(p.name)}${p.name}</div>
         <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim);">${h}/${p.hpMax} (${pct}%)</div>
       </button>`;
@@ -8654,7 +8676,7 @@ function battleSideCardInner(side){
     ? `${k} <input type="number" min="0" max="32" step="1" value="${(active.evs||{})[k]||0}" data-manual-sp="${k}" data-idx="${s.activePokeIdx}" style="width:42px;font-family:var(--font-mono);font-size:11px;">`
     : `${k} <b style="color:var(--text);">${(active.evs||{})[k]||0}</b>`).join(' · ')}`;
   const statsExpandableHtml = `<div class="battle-stats-toggle">
-    <button type="button" data-toggle-stats="${skey(side)}">📊 Stats ${statsOpen ? '▾' : '▸'}</button>
+    <button type="button" data-toggle-stats="${skey(side)}"><svg class="stats-ico" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="2" y="9" width="3" height="5" rx="1"/><rect x="6.5" y="5" width="3" height="9" rx="1"/><rect x="11" y="2" width="3" height="12" rx="1"/></svg>Stats ${statsOpen ? '▾' : '▸'}</button>
   </div>
   <div class="battle-stats-panel${statsOpen ? ' open' : ''}" data-stats-panel="${skey(side)}">
     ${statsBody}${manualStagesHtml}<br>${spNatureHtml}
@@ -8663,8 +8685,8 @@ function battleSideCardInner(side){
   const _resAttr = (stat) => battleResCurrentHP ? `data-res-side="${skey(side)}" data-res-k="${stageVal(stat === 'Def' ? active.defFinal : active.spdFinal, s.stages[stat] || 0) / 100}" data-res-ms="${['multiscale','shadow shield'].includes(normKey(active.ability || '')) ? 1 : 0}" data-res-max="${active.hpMax}"` : '';
   const resDisplayHtml = battleShowPDRes
     ? `<div class="battle-res-display">
-        <div class="res-item"><span class="label">RES Fís</span><b style="color:${resColor('Def')};cursor:pointer;" data-res-click title="Clique: RES com HP ${battleResCurrentHP ? 'atual (mudar para máximo)' : 'máximo (mudar para atual)'}" ${_resAttr('Def')}>${fmt2(resFisica)}</b></div>
-        <div class="res-item"><span class="label">RES Esp</span><b style="color:${resColor('SpD')};cursor:pointer;" data-res-click title="Clique: RES com HP ${battleResCurrentHP ? 'atual (mudar para máximo)' : 'máximo (mudar para atual)'}" ${_resAttr('SpD')}>${fmt2(resEspecial)}</b></div>
+        <div class="res-item"><span class="label">RES ${resIco('Def')}</span><b style="color:${resColor('Def')};cursor:pointer;" data-res-click title="Clique: RES com HP ${battleResCurrentHP ? 'atual (mudar para máximo)' : 'máximo (mudar para atual)'}" ${_resAttr('Def')}>${fmt2(resFisica)}</b></div>
+        <div class="res-item"><span class="label">RES ${resIco('SpD')}</span><b style="color:${resColor('SpD')};cursor:pointer;" data-res-click title="Clique: RES com HP ${battleResCurrentHP ? 'atual (mudar para máximo)' : 'máximo (mudar para atual)'}" ${_resAttr('SpD')}>${fmt2(resEspecial)}</b></div>
       </div>`
     : '';
 
@@ -8695,7 +8717,7 @@ function battleSideCardInner(side){
     speedTie = _isBest && _nBest > 1;
   }
   const speedInfoStyle = 'font-family:var(--font-mono);font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:4px;white-space:nowrap;';
-  const speedInfoHtml = `<span title="Speed efetiva">Spe <b style="color:var(--text);">${myEffSpeed}</b></span>${iAmFaster ? '<span style="font-size:15px;line-height:1;" title="Mais rápido">⚡</span>' : (speedTie ? '<span style="font-size:15px;line-height:1;" title="Speed tie">🟰</span>' : '')}`;
+  const speedInfoHtml = `<span title="Speed efetiva">Spe <b style="color:var(--text);">${myEffSpeed}</b></span>${iAmFaster ? '<span style="font-size:15px;line-height:1;" title="Mais rápido">⚡︎</span>' : (speedTie ? '<span style="font-size:15px;line-height:1;" title="Speed tie">🟰</span>' : '')}`;
 
   const statusColors = {Healthy:'#6FE3B4', Poisoned:'#A855F7', 'Badly Poisoned':'#7C3AED', Burned:'#FF6B5C', Paralyzed:'#FFB454', Asleep:'#9198AA', Frozen:'#60A5FA'};
   const statusVal = currentStatus;
@@ -8717,7 +8739,7 @@ function battleSideCardInner(side){
     <div class="bt-hg-r" style="${speedInfoStyle}">${speedInfoHtml}</div>
   </div>
   <div class="battle-poke-name-center bt-name">${statusTurnBadgeHtml(side, s.activePokeIdx)}${active.name}</div>
-  <div class="bt-hp-row" data-hp-anim="${_hf},${hp},${active.hpMax}" data-hp-side="${skey(side)}"><div class="bt-hp-bar">${battleHpBarHtml(_hf, active.hpMax)}${hpText}</div>${hpPctOut}</div>${(s.sub || 0) > 0 ? `<div style="text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--amber);margin-top:4px;">🧸 Substituto: ${s.sub} HP</div>` : ''}${isCursed(s, s.activePokeIdx) ? `<div style="text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--violet,#A855F7);margin-top:4px;">👻 Amaldiçoado (−¼ HP por turno)</div>` : ''}`;
+  <div class="bt-hp-row" data-hp-anim="${_hf},${hp},${active.hpMax}" data-hp-side="${skey(side)}"><div class="bt-hp-bar">${battleHpBarHtml(_hf, active.hpMax)}${hpText}${hpPctOut}</div></div>${(s.sub || 0) > 0 ? `<div style="text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--amber);margin-top:4px;">🧸 Substituto: ${s.sub} HP</div>` : ''}${isCursed(s, s.activePokeIdx) ? `<div style="text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--violet,#A855F7);margin-top:4px;">👻 Amaldiçoado (−¼ HP por turno)</div>` : ''}`;
 
   let contentHtml;
   if (side === 'A') {
@@ -9139,7 +9161,7 @@ function benchInfoHtml(idx){
       const hp = S.hp[idx], ms = ['multiscale','shadow shield'].includes(normKey(p.ability || '')) && hp >= p.hpMax ? 2 : 1;
       const rf = battleResCurrentHP ? Math.max(0, hp) * ms * p.defFinal / 100 : p.resFisica, re = battleResCurrentHP ? Math.max(0, hp) * ms * p.spdFinal / 100 : p.resEspecial;
       const t = `Clique: RES com HP ${battleResCurrentHP ? 'atual (mudar para máximo)' : 'máximo (mudar para atual)'}`;
-      return `<div>RES ${battleResCurrentHP ? 'atual' : 'máx.'}: Fís <b style="color:${resColor('Def')};cursor:pointer;" data-res-click title="${t}">${fmt2(rf)}</b> · Esp <b style="color:${resColor('SpD')};cursor:pointer;" data-res-click title="${t}">${fmt2(re)}</b></div>`; })() : ''}
+      return `<div>RES ${battleResCurrentHP ? 'atual' : 'máx.'}: ${resIco('Def')} <b style="color:${resColor('Def')};cursor:pointer;" data-res-click title="${t}">${fmt2(rf)}</b> · ${resIco('SpD')} <b style="color:${resColor('SpD')};cursor:pointer;" data-res-click title="${t}">${fmt2(re)}</b></div>`; })() : ''}
     <div>${moves.join(', ')}</div>
   </div>`;
 }
@@ -9356,7 +9378,17 @@ function queuePresentation(tl){
   pres.timer = setTimeout(() => presStep(tk), 350);
 }
 // Cada ação: 1) anima o HP (dano, depois recoil/drain), 2) só então o texto do log aparece.
-const CPU_ENTRY_PAUSE = 900;   // ms de espera antes de a CPU mandar um Pokémon ao campo (o resto da apresentação não muda)
+const CPU_ENTRY_PAUSE = 900;
+// Status (não volátil) e condições voláteis aparecem logo DEPOIS da linha do log que os anuncia, com um pequeno atraso.
+const STATUS_SHOW_DELAY = 300;
+function presStatusLater(token, a, snapOverride){
+  const sn = snapOverride || (a && a._snap); if(!pres || !sn) return;
+  const prev = pres.stView, w = JSON.parse(JSON.stringify(sn));
+  // linha de golpe de dano: o status do alvo vem na linha própria ("agora está ..."), então aqui só os voláteis mudam
+  if(a && a.type === 'move' && !snapOverride) ['A','B'].forEach(sd => { if(!w[sd]) return; const p = prev && prev[sd] && prev[sd].i === w[sd].i ? prev[sd] : null;
+    if(p){ w[sd].st = p.st; w[sd].slc = p.slc; w[sd].frc = p.frc; w[sd].txc = p.txc; } else delete w[sd].st; });
+  setTimeout(() => { if(pres && pres.token === token){ pres.stView = w; renderBattle(); } }, STATUS_SHOW_DELAY);
+}   // ms de espera antes de a CPU mandar um Pokémon ao campo (o resto da apresentação não muda)
 function presStep(token){
   if(!pres || pres.token !== token || !battle) return;
   if(uiBusy()){ pres.timer = setTimeout(() => presStep(token), 150); return; }
@@ -9378,11 +9410,13 @@ function presStep(token){
   if(st.hit){
     pres.hitsShown = st.hit;
     renderBattle();
+    { const _hr = pres.cur && pres.cur.hits && pres.cur.hits[st.hit - 1]; if(_hr && _hr.notes && _hr.snap2) presStatusLater(token, null, _hr.snap2); }   // status de um hit (Spicy Spray...)
     delay = 450;   // pausa curta antes do próximo hit
   } else if(st.text){
     pres.cur = null; pres.hitsShown = 0;
     pres.shown++;
     renderBattle();
+    presStatusLater(token, acts[pres.shown - 1]);
     delay = (pres.queue[0] && pres.queue[0].slow) ? 1400 : 700;   // arrasto: pausa maior antes do Pokémon novo aparecer
   } else {
     const v0 = pres.view;
@@ -9394,7 +9428,7 @@ function presStep(token){
       if(pres && pres.token === token) pres.timer = setTimeout(() => presStep(token), CPU_ENTRY_PAUSE); return; }
     if(_swap && pres.queue.length && pres.queue[0].text){
       pres.queue.shift(); pres.cur = null; pres.hitsShown = 0; pres.shown++;
-      renderBattle(); delay = 700;
+      renderBattle(); delay = 700; presStatusLater(token, acts[pres.shown - 1]);
     } else if(st.slow){ renderBattle(); delay = 1000; }
     else if(JSON.stringify(v0) !== JSON.stringify(st.view)){
       renderBattle();
@@ -9421,6 +9455,10 @@ function renderBattle(){
       if(v[sd].spe !== undefined) S.stages = Object.assign({}, S.stages, { Spe: v[sd].spe });
       if(v[sd].iu !== undefined) S.itemUsed = Object.assign({}, S.itemUsed, { [v[sd].i]: v[sd].iu });   // item consumido some do card junto com a linha do log
       if(v[sd].mg){ _F.sharedPrepared[v[sd].i] = _real.sharedPrepared[v[sd].i]; _F.megaOv = Object.assign({}, _F.megaOv || {}, { [v[sd].i]: (_real.megaOv || {})[v[sd].i] }); } }); }
+    // Status e voláteis: só depois da linha do log que os anuncia (presStatusLater)
+    { const sv = pres.stView; if(sv) ['A','B'].forEach(sd => { const S = _F.sides[sd], w = sv[sd]; if(!w || w.i !== S.activePokeIdx) return;
+      if(w.st !== undefined){ S.status = Object.assign({}, S.status, { [w.i]: w.st }); S.sleepCounter = Object.assign({}, S.sleepCounter, { [w.i]: w.slc }); S.frozenCounter = Object.assign({}, S.frozenCounter, { [w.i]: w.frc }); S.toxicCounter = Object.assign({}, S.toxicCounter, { [w.i]: w.txc }); }
+      if(w.vol) S.vol = Object.assign({}, S.vol || {}, { [w.i]: w.vol }); }); }
     battle = _F;
     try { renderBattleInner(); } finally { battle = _real; }
     const c2 = document.getElementById('battleContent'); if(c2) c2.classList.add('pres-lock');
@@ -9447,7 +9485,7 @@ function renderBattleInner(){
   const toolbarHtml = `<div class="battle-toolbar">
     <datalist id="battleMovesList">${battleEditMoves ? battleAllMoveNames().map(n => `<option value="${n}">`).join('') : ''}</datalist>
     <button type="button" class="battle-toolbar-btn" id="battleFastBtn" style="${battleFastMode?'border-color:var(--mint);color:var(--mint);':''}" title="Desligado: o log e as barras de HP aparecem uma ação por vez. Ligado: o turno aparece de uma vez">⏩ Modo rápido ${battleFastMode?'ON':'OFF'}</button>
-    <button type="button" class="battle-toolbar-btn" id="battleCritToggle" style="${battleCritEnabled?'border-color:var(--mint);color:var(--mint);':''}" title="Chance 1/24 de crítico">⚡ Crítico ${battleCritEnabled?'ON':'OFF'}</button>
+    <button type="button" class="battle-toolbar-btn" id="battleCritToggle" style="${battleCritEnabled?'border-color:var(--mint);color:var(--mint);':''}" title="Chance 1/24 de crítico">⚡︎ Crítico ${battleCritEnabled?'ON':'OFF'}</button>
     <button type="button" class="battle-toolbar-btn" id="battleAccToggle" style="${battleAccuracyEnabled?'border-color:var(--mint);color:var(--mint);':''}" title="Rola precisão dos golpes">🎯 Acc ${battleAccuracyEnabled?'ON':'OFF'}</button>
     <button type="button" class="battle-toolbar-btn" id="battlePPToggle" style="${battlePPEnabled?'border-color:var(--mint);color:var(--mint);':''}" title="Consome PP dos golpes">📦 PP ${battlePPEnabled?'ON':'OFF'}</button>
     <button type="button" class="battle-toolbar-btn" id="battleDamageFormatToggle" title="Mostrar dano em HP ou em %">📏 ${battleShowDamageAsPercent ? 'Dano %' : 'Dano HP'}</button>
@@ -11097,7 +11135,9 @@ function dViewSnap(){
     const S = battle.sides[sd], hp = {}, st = {}, sub = {}, stg = {}, rech = {}, semi = {}, cur = {}, iu = {};
     S.roster.forEach(i => { hp[i] = S.hp[i]; st[i] = S.status[i] || 'Healthy'; });
     S.active.forEach(i => { if(i == null) return; iu[i] = !!(S.itemUsed && S.itemUsed[i]); sub[i] = S.subs[i] || 0; cur[i] = isCursed(S, i); stg[i] = Object.assign({}, S.stg[i] || dEmptyStg()); rech[i] = !!S.rech[i]; semi[i] = S.semis[i] ? Object.assign({}, S.semis[i]) : null; });
-    o[sd] = { hp, st, sub, stg, rech, semi, cur, iu, a: S.active.slice() };
+    const vol = {}, slc = {}, frc = {}, txc = {};
+    S.active.forEach(i => { if(i == null) return; vol[i] = S.vol && S.vol[i] ? JSON.parse(JSON.stringify(S.vol[i])) : {}; slc[i] = (S.sleepCounter || {})[i] || 0; frc[i] = (S.frozenCounter || {})[i] || 0; txc[i] = (S.toxicCounter || {})[i] || 0; });
+    o[sd] = { hp, st, sub, stg, rech, semi, cur, iu, vol, slc, frc, txc, a: S.active.slice() };
   });
   o.mg = Object.assign({}, battle.megaOv || {});
   o.env = { weather: battle.weather, terrain: battle.terrain, wi: battle.weatherInfo ? Object.assign({}, battle.weatherInfo) : null, ti: battle.terrainInfo ? Object.assign({}, battle.terrainInfo) : null, tr: battle.trickRoom, tw: Object.assign({}, battle.tailwind) };
@@ -11142,6 +11182,11 @@ function dQueuePres(tl){
   const tk = dpres.token;
   dpres.timer = setTimeout(() => dPresStep(tk), 350);
 }
+function dStatusLater(token, p){
+  const sn = p.log.snaps && p.log.snaps[p.shown - 1]; if(!sn) return;
+  const w = JSON.parse(JSON.stringify(sn));
+  setTimeout(() => { if(dpres === p && p.token === token){ p.stView = w; renderBattle(); } }, STATUS_SHOW_DELAY);
+}
 function dPresStep(token){
   const p = dpres; if(!p || p.token !== token || !battle) return;
   if(uiBusy()){ p.timer = setTimeout(() => dPresStep(token), 150); return; }
@@ -11171,11 +11216,11 @@ function dPresStep(token){
     if(swap && battle.mode === 'pvc' && JSON.stringify((p.view.B || {}).a || []) !== JSON.stringify((nv.B || {}).a || []) && !(p._cpuW && p._cpuW[p.shown])){   // CPU vai mandar um Pokémon: pausa antes
       (p._cpuW || (p._cpuW = {}))[p.shown] = true; dblPresScrollReq = null; p.timer = setTimeout(() => dPresStep(token), CPU_ENTRY_PAUSE); return; }
     const slow = swap && d === 0 && tl.slow && tl.slow[p.shown];
-    if(slow){ p.next = nv; p.swapReq = dblPresScrollReq; dblPresScrollReq = null; p.shown++; p.phase = 'swap'; renderBattle(); p.timer = setTimeout(() => dPresStep(token), 1400); return; }   // arrasto: primeiro a linha do log, depois o Pokémon novo
+    if(slow){ p.next = nv; p.swapReq = dblPresScrollReq; dblPresScrollReq = null; p.shown++; dStatusLater(token, p); p.phase = 'swap'; renderBattle(); p.timer = setTimeout(() => dPresStep(token), 1400); return; }   // arrasto: primeiro a linha do log, depois o Pokémon novo
     p.view = nv; p.phase = 'text';
-    if(changed && swap && d === 0){ p.shown++; p.phase = 'hp'; renderBattle(); delay = 700; }
+    if(changed && swap && d === 0){ p.shown++; dStatusLater(token, p); p.phase = 'hp'; renderBattle(); delay = 700; }
     else if(changed){ renderBattle(); delay = d > 0 ? hpAnimDur(d) + 300 : 250; }
-  } else { p.shown++; p.phase = 'hp'; renderBattle(); delay = 700; }
+  } else { p.shown++; dStatusLater(token, p); p.phase = 'hp'; renderBattle(); delay = 700; }
   p.timer = setTimeout(() => dPresStep(token), delay);
 }
 function dRenderPres(){
@@ -11204,6 +11249,11 @@ function dRenderPres(){
         // Velocidade (stage de Spe) acompanha o log na hora (regra 13: o resto fica congelado)
         S.active.forEach(i => { if(i != null && w.stg && w.stg[i]) S.stg = Object.assign({}, S.stg, { [i]: Object.assign({}, S.stg[i] || dEmptyStg(), { Spe: w.stg[i].Spe || 0 }) }); });
         dSyncActive(sd); });
+      // Status e voláteis: só depois da linha do log que os anuncia (dStatusLater)
+      { const sv = dpres.stView; if(sv) ['A','B'].forEach(sd => { const S = _F.sides[sd], w = sv[sd]; if(!w) return;
+        if(w.st) S.status = Object.assign({}, S.status, w.st);
+        ['slc','frc','txc'].forEach(k => { const key = { slc: 'sleepCounter', frc: 'frozenCounter', txc: 'toxicCounter' }[k]; if(w[k]) S[key] = Object.assign({}, S[key] || {}, w[k]); });
+        if(w.vol){ S.vol = Object.assign({}, S.vol || {}); Object.keys(w.vol).forEach(i => { S.vol[i] = w.vol[i]; }); } }); }
       if(v && v.mg){ Object.keys(v.mg).forEach(k => { _F.sharedPrepared[k] = _real.sharedPrepared[k]; }); _F.megaOv = Object.assign({}, v.mg); }   // Mega muda o card na hora
       if(v && v.env && v.env.tw) _F.tailwind = Object.assign({}, v.env.tw);
       renderBattleInner();
@@ -11734,15 +11784,15 @@ function dHit(a, tSd, tIdx, o){
         fnt = S.hp[idx] <= 0;
       }
       const side = PROTECT_SIDE_FLAG[_pv.by];
-      dLog(sp ? (side ? `↳ <b>${protectName(_pv.by)}</b> protegeu <b>${def.name}</b>!${note}` : `↳ <b>${def.name}</b> se protegeu!${note}`) : LF.blocked({ attackerName: att.name, moveName: m.moveName, defenderName: def.name, by: _pv.by, note, attackerFainted: fnt }));
+      dLog(sp ? (side ? `<b>${protectName(_pv.by)}</b> protegeu <b>${def.name}</b>!${note}` : `<b>${def.name}</b> se protegeu!${note}`) : LF.blocked({ attackerName: att.name, moveName: m.moveName, defenderName: def.name, by: _pv.by, note, attackerFainted: fnt }));
       o.headDone = true; return res;
     }
     if(_pv.lift){ T.prot[tIdx] = false; T.wide = false; T.quick = false; T.mat = false; dLog(`A proteção de <b>${def.name}</b> foi quebrada por <b>${m.moveName}</b>!`); }
   }
-  if(psychicTerrainBlocks(att, m.moveKey, tSd, tIdx, sd)){ dLog(sp ? `↳ ${LF.psyTerrainBlock(def.name)}` : LF.moveFail(att.name, m.moveName, LF.psyTerrainBlock(def.name))); o.headDone = true; return res; }   // Psychic Terrain
+  if(psychicTerrainBlocks(att, m.moveKey, tSd, tIdx, sd)){ dLog(sp ? `${LF.psyTerrainBlock(def.name)}` : LF.moveFail(att.name, m.moveName, LF.psyTerrainBlock(def.name))); o.headDone = true; return res; }   // Psychic Terrain
   const noGuard = normKey(att.ability || '') === 'no guard' || normKey(def.ability || '') === 'no guard';
   const dsemi = T.semis[tIdx];
-  if(dsemi && dsemi.kind !== 'charge' && !noGuard && !SEMI_HITTERS[dsemi.kind].has(mk)){ dLog(sp ? `↳ <b>${def.name}</b> está invulnerável!` : LF.miss({ attackerName: att.name, moveName: m.moveName, semiDodge: def.name })); o.headDone = true; return res; }
+  if(dsemi && dsemi.kind !== 'charge' && !noGuard && !SEMI_HITTERS[dsemi.kind].has(mk)){ dLog(sp ? `<b>${def.name}</b> está invulnerável!` : LF.miss({ attackerName: att.name, moveName: m.moveName, semiDodge: def.name })); o.headDone = true; return res; }
   if(SUCKER_PUNCH_MOVES.has(mk)){
     const x = o.order.find(z => z.idx === tIdx && z.side === tSd);
     if(!x || x.done || x.type !== 'move'){ dLog(LF.moveFail(att.name, m.moveName)); o.headDone = true; return res; }
@@ -11753,7 +11803,7 @@ function dHit(a, tSd, tIdx, o){
   const acc = (noGuard || stormNoMiss || teleSureHit(tSd, tIdx, mk, dsemi) || minimizeSureHit(mk, tSd, tIdx, dsemi)) ? 101 : sandVeilAcc(battleMoveAccuracy(mk, info, tSd, tIdx), att, tSd, tIdx);   // Telekinesis no alvo: sempre acerta
   if(mk === 'poltergeist'){ flushHead(); dLog(LF.poltergeist(def.name, itemNameNow(tSd, tIdx))); }   // antes da checagem de precisão
   const accRoll = battleRandom() * 100;
-  if(battleAccuracyEnabled && acc < 101 && accRoll >= acc){ dLog(sp ? `↳ errou <b>${def.name}</b>!` : LF.miss({ attackerName: att.name, moveName: m.moveName })); o.headDone = true; return res; }
+  if(battleAccuracyEnabled && acc < 101 && accRoll >= acc){ dLog(sp ? `errou <b>${def.name}</b>!` : LF.miss({ attackerName: att.name, moveName: m.moveName })); o.headDone = true; return res; }
   { const sbt = screenBreakText(mk, mtype, tSd, tIdx); if(sbt){ flushHead(); dLog(sbt); } }   // Brick Break / Psychic Fangs / Raging Bull: acertou => quebra as telas do lado do alvo (até de aliado) antes do dano
   let semiCut = false;
   if(dsemi && SEMI_GROUND_CANCEL.has(mk) && (dsemi.base === 'fly' || dsemi.base === 'bounce')){ flushHead(); T.semis[tIdx] = null; semiCut = true; dLog(`${dn} foi derrubado e perdeu ${dsemi.name}!`); }
@@ -11785,7 +11835,7 @@ function dHit(a, tSd, tIdx, o){
   let subAbs = 0, hpDone = 0, totalDmg = 0, lastRes = null, sash = false, endured = false, crit = false, lastRoll = 1, hitsDone = 0, missAt = 0, debrisLayers = 0;
   const debris = dAb === 'toxic debris' && !attackerIgnoresAbility(att) && !!(m.detail && m.detail.isPhysical) && tSd !== sd;
   const cRA = (info && info.Contact) ? contactRecoilAbility(def) : null; let cHurt = 0, fband = 0, hHurt = 0, helmetKO = false; const abilN = [];
-  const hitRecs = [];
+  const hitRecs = []; let csPend = null;
   for(let h = 0; h < nHits; h++){
     // Triple Axel/Kick e Population Bomb: precisão antes de cada hit (Skill Link: só a inicial).
     if(h > 0 && perHitAcc && !skillLink && battleAccuracyEnabled && acc < 101 && battleRandom() * 100 >= acc){ missAt = h + 1; break; }
@@ -11815,6 +11865,11 @@ function dHit(a, tSd, tIdx, o){
     if(info && info.Contact && !hitSub && r.typeEff > 0 && S.hp[idx] > 0 && tIdx !== idx){ const rh = rockyHelmetDmg(att, tSd, tIdx); if(rh){ const b = S.hp[idx]; S.hp[idx] = Math.max(0, b - rh); hHurt += b - S.hp[idx]; if(S.hp[idx] <= 0) helmetKO = true; } }
     if(!hitSub && !ifb && r.typeEff > 0){ const pt = poisonTouchLine(sd, idx, tSd, tIdx, info); if(pt) abilN.push(pt); }   // Poison Touch (cada hit)
     hitRecs.push({ damage: ifb ? 0 : r.damage, rollIdx: ri, isCrit: hc, calc: r.calc, hpBefore: _hb, hpAfter: T.hp[tIdx] });
+    // Static / Flame Body / Spicy Spray: a cada hit que atinge o Pokémon (multistrike: vale já para o hit seguinte; a linha sai junto do hit)
+    if(!hitSub && !ifb && r.typeEff > 0 && S.hp[idx] > 0 && tSd !== sd && !csPend){
+      const cs = contactStatusRoll(def, att, info, sd, idx);
+      if(cs){ if(nHits > 1 || tripleBP){ S.status[idx] = cs.status; if(cs.status === 'Asleep') S.sleepCounter[idx] = 0; S.toxicCounter[idx] = 0; const hr = hitRecs[hitRecs.length - 1]; (hr.notes || (hr.notes = [])).push(LF.statusGain({ name: att.name, newStatus: cs.status, oldStatus: 'Healthy' }) + ` (${cs.by})`); } else csPend = cs; }
+    }
     // Effect Spore: cada hit de contato que atinge o Pokémon sorteia; se o atacante dormir, o golpe acaba na hora.
     let esSleep = false;
     if(info && info.Contact && !hitSub && tIdx !== idx && r.typeEff > 0 && normKey(def.ability || '') === 'effect spore'){
@@ -11847,7 +11902,7 @@ function dHit(a, tSd, tIdx, o){
     hitNote: (!sp && !o.headDone) ? (o.noteTxt || '') : '' };
   // Autodestruição (Self-Destruct, Explosion... / Final Gambit que acertou): o nocaute do alvo vem depois do nocaute do usuário
   if(_rec.fainted && S.hp[idx] > 0 && (SELF_KO_MOVES.has(mk) || (mk === 'final gambit' && eff > 0))){ _rec._faintLater = true; (o.lateFaints || (o.lateFaints = [])).push(def.name); }
-  if(nHits > 1 || tripleBP){ _rec.hits = hitRecs.map(h => ({ damage: h.damage, isCrit: h.isCrit, rollIdx: h.rollIdx })); _rec.multiStrike = true; _rec.missAt = missAt; }
+  if(nHits > 1 || tripleBP){ _rec.hits = hitRecs.map(h => ({ damage: h.damage, isCrit: h.isCrit, rollIdx: h.rollIdx, notes: h.notes })); _rec.multiStrike = true; _rec.missAt = missAt; }
   { const _fo = { nohead: sp || !!o.headDone }; dLog(fmtDamageHtml(_rec, _fo), fmtDamageHtml(Object.assign({}, _rec, { _headOnly: true, _hitsShown: 0 }), _fo)); } o.headDone = true;   // MESMO formatador do Singles
   if(hpDone > 0 && !subbed){ const ie = illusionEnd(tIdx); if(ie) dLog(ie); }   // Illusion: dano de golpe de dano quebra a ilusão
   if(T.hp[tIdx] <= 0 && !subbed && tSd !== sd && volPeek(tSd, tIdx).destinyBond && S.hp[idx] > 0){   // Destiny Bond (aliado não ativa)
@@ -11913,12 +11968,7 @@ function dHit(a, tSd, tIdx, o){
       else if(mtype === 'Electric' && it === 'cell battery' && dWith(tSd, tIdx, () => canChangeStage(tSd, 'Atk', 1))){ T.itemUsed[tIdx] = true; dWith(tSd, tIdx, () => dLog(`${dn} consumiu ${def.item}: ${fmtStageChange(changeStage(tSd, 'Atk', 1))}.`)); }
     }
   }
-  if(dealt > 0 && !subbed && S.hp[idx] > 0 && tSd !== sd && ((info && info.Contact && (dAb === 'static' || dAb === 'flame body')) || dAb === 'spicy spray')){
-    const want = dAb === 'static' ? 'Paralyzed' : 'Burned';
-    const aT = typesOfP(att), aAb = normKey(att.ability || '');
-    const immune = want === 'Paralyzed' ? (aT.includes('Electric') || aAb === 'limber') : (aT.includes('Fire') || ['water veil','water bubble','thermal exchange','comatose'].includes(aAb));
-    if(!immune && !leafGuardBlocks(sd, idx) && getStatusOf(sd, idx) === 'Healthy' && (dAb === 'spicy spray' || battleRandom() < 0.3)) dSetStatus(sd, idx, want, def.ability);
-  }
+  if(csPend && S.hp[idx] > 0 && getStatusOf(sd, idx) === 'Healthy') dSetStatus(sd, idx, csPend.status, csPend.by);   // golpe de 1 hit: sorteado no hit
   if(T.hp[tIdx] <= 0){ T.subs[tIdx] = 0; }   // "foi nocauteado!" já vem na linha de dano (fmtDamageHtml), igual ao Singles
   if(dragHit && T.hp[tIdx] > 0 && T.active.includes(tIdx)){   // Dragon Tail / Circle Throw: arrasta um aleatório do banco
     const bench = dBench(tSd);
