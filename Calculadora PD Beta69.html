@@ -124,20 +124,26 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   .remove-poke-x:hover{ color: var(--coral); background: var(--panel-2); }
   .pk-ico{ display:inline-block; width:40px; height:30px; flex:0 0 40px; vertical-align:middle; image-rendering:pixelated; background:transparent url(https://play.pokemonshowdown.com/sprites/pokemonicons-sheet.png) no-repeat; }
   .pk-ico.sm{ margin:-6px 0 -4px -4px; }
+  /* Doubles: os dois cards de cada fileira com a mesma altura; no de cima o cabeçalho fica no fundo (cards alinhados) */
+  .dbl-slot{ display:flex; flex-direction:column; }
+  .dbl-slot > .bt-card{ flex:1 1 auto; display:flex; flex-direction:column; }
+  .dbl-cpu .dbl-slot > .bt-card > .bt-head-wrap{ margin-top:auto !important; }
+  /* Sprite no botão (banco / troca): nunca cortado */
+  .battle-action-title:has(.pk-ico), .battle-replacement-btn:has(.pk-ico){ overflow:visible !important; }
   /* Doubles: quem fica à ESQUERDA (slot 2 da CPU / Player 2 em cima, slot 1 do Player 1 embaixo) tem os sprites espelhados,
      virados para o outro lado — campo e banco do card */
   .dbl-cpu .dbl-slot[data-dbl-slot="1"] .pk-ico, .dbl-me .dbl-slot[data-dbl-slot="0"] .pk-ico{ transform:scaleX(-1); }
   /* Toque duplo não amplia a página (o duplo clique confirma a ação, inclusive no layout PC do celular) */
   html, body{ touch-action:manipulation; }
   /* Golpes: nome sempre no CENTRO do botão; PD (e o % de dano) logo abaixo, sem empurrar o nome */
-  .battle-actions-grid.moves-grid > .battle-action-btn > .battle-action-title{ position:absolute; left:8px; right:8px; top:50%; transform:translateY(-50%); margin:0; line-height:1.2; }
-  .battle-actions-grid.moves-grid > .battle-action-btn > .battle-action-sub{ position:absolute; left:8px; right:8px; top:calc(50% + 9px); margin:0 !important; line-height:1.2; }
+  .battle-actions-grid.moves-grid > .battle-action-btn > .battle-action-title{ position:absolute; left:8px; right:8px; width:auto !important; top:50%; transform:translateY(-50%); margin:0; line-height:1.2; text-align:center; }
+  .battle-actions-grid.moves-grid > .battle-action-btn > .battle-action-sub{ position:absolute; left:8px; right:8px; width:auto !important; top:calc(50% + 9px); margin:0 !important; line-height:1.2; text-align:center; }
   .battle-actions-grid.moves-grid > .battle-action-btn > .btn-foot + .battle-action-sub{ top:auto; bottom:4px; left:50%; right:auto; transform:translateX(-50%); white-space:nowrap; font-size:10px; }   /* % de dano: na linha do rodapé, entre Acc e PP */
   /* Status não volátil na mesma linha do item/habilidade */
   .status-ability-row:has(.bt-meta-col){ align-items:flex-start; }
   .status-ability-row:has(.bt-meta-col) > .battle-status-row{ margin-top:-3px !important; }
   .pk-ico.lg{ zoom:1.6; }   /* nome do Pokémon na Calculadora */
-  .pk-ico.xl{ zoom:2; }     /* Pokémon em campo na batalha (não no banco) */   /* um pouco maior: nome do Pokémon na Calculadora e Pokémon em campo na batalha (não no banco) */
+  .pk-ico.xl{ zoom:1.5; }     /* Pokémon em campo na batalha (não no banco) */   /* um pouco maior: nome do Pokémon na Calculadora e Pokémon em campo na batalha (não no banco) */
   .battle-poke-name-center .pk-ico{ margin:-6px 2px -4px 0; }
   .battle-action-title .pk-ico, .battle-replacement-btn .pk-ico{ margin:-7px 0 -6px -4px; }
   .poke-name-row{ display:flex; align-items:center; gap:8px; margin-bottom: 8px; }
@@ -530,11 +536,12 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   .bt-sprite{ display:flex; justify-content:center; align-items:center; min-height:30px; }
   .bt-sprite .pk-ico{ margin:-8px 0 -3px; }
   .bt-name{ text-align:center; margin-top:4px; }
-  .bt-hp-row{ display:flex; justify-content:center; margin-top:6px; min-width:0; }
-  .bt-hp-bar{ position:relative; width:230px; max-width:100%; }
-  .bt-hp-bar > div:not(.battle-hp-display){ height:16px !important; }
+  .bt-hp-row{ display:flex; justify-content:center; align-items:center; gap:6px; margin-top:6px; min-width:0; }
+  .bt-hp-bar{ position:relative; width:260px; max-width:calc(100% - 56px); flex:0 1 260px; }
+  .bt-hp-bar > div:not(.battle-hp-display){ height:14px !important; }
+  .bt-hp-pct{ font-family:var(--font-mono); font-size:12px; font-weight:700; white-space:nowrap; }
   .bt-hp-bar .battle-hp-display{ position:absolute; top:0; bottom:0; right:7px; margin:0; display:flex; align-items:center; gap:4px; font-size:11px; line-height:1; white-space:nowrap; pointer-events:none; text-shadow:0 0 3px rgba(0,0,0,.95), 0 0 2px rgba(0,0,0,.95); }
-  .bt-hp-bar .battle-hp-display .hp-num-big, .bt-hp-bar .battle-hp-display .hp-pct-big{ color:#fff !important; }
+  .bt-hp-bar .battle-hp-display .hp-num-big{ color:#fff !important; }
   /* Status não volátil sem edição: sem a seta e do tamanho do texto */
   .battle-status-row select:disabled{ -webkit-appearance:none; -moz-appearance:none; appearance:none; background-image:none; padding:3px 6px; width:auto; }
   .status-ability-row:has(.bt-meta-col){ flex-wrap:nowrap; }
@@ -633,8 +640,8 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   .battle-dbl-layout:not(.is-singles) .battle-status-row label{font-size:9px;}
   .battle-dbl-layout:not(.is-singles) .battle-status-row select{font-size:10px;padding:2px 4px;}
   .battle-dbl-layout:not(.is-singles) button.primary.battle-lutar-inline{font-size:13px;white-space:nowrap;}
-  .battle-dbl-layout:not(.is-singles) .bt-hp-bar{width:200px;}
-  .battle-dbl-layout.log-mid:not(.is-singles) .battle-log{text-align:center;}   /* log no meio: texto centralizado */
+  .battle-dbl-layout:not(.is-singles) .bt-hp-bar{width:230px;flex-basis:230px;}
+  .battle-dbl-layout.log-mid:not(.is-singles) .battle-log{text-align:left;padding-left:25%;}   /* log no meio: texto à esquerda, começando mais ao meio (abaixo do chip de terreno) */
 }
 /* Botão Lutar (e Confirmar / Continuar / Pular) sempre centralizado */
 button.primary.battle-lutar-inline{display:block;margin-left:auto;margin-right:auto;}
@@ -778,7 +785,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 68; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 69; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 const GAME_GEN = 9;      // Pokémon Champions = 9ª geração (regra 17): mecânicas que mudaram entre gerações seguem a Gen 9
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
@@ -8700,10 +8707,8 @@ function battleSideCardInner(side){
   hpAnimPrev[_hk] = hp;
   const _pctOf = v => v <= 0 ? 0 : Math.max(1, Math.floor((v / active.hpMax) * 100));
   const _corOf = pc => pc >= 50 ? 'var(--mint)' : pc >= 20 ? 'var(--amber)' : 'var(--coral)';
-  const hpText = `<div class="battle-hp-display">
-    <span class="hp-num-big">${_hf} / ${active.hpMax}</span>
-    <span class="hp-pct-big" style="color:${_corOf(_pctOf(_hf))};">(${_pctOf(_hf)}%)</span>
-  </div>`;
+  const hpText = `<div class="battle-hp-display"><span class="hp-num-big">${_hf} / ${active.hpMax}</span></div>`;   // dentro da barra: só a quantidade
+  const hpPctOut = `<span class="hp-pct-big bt-hp-pct" style="color:${_corOf(_pctOf(_hf))};">(${_pctOf(_hf)}%)</span>`;   // logo depois da barra
   const _cond = condBadgesHtml(side, s.activePokeIdx);
   // Cabeçalho do card: [condições] [SPRITE] [Spe] · nome embaixo do sprite · barra de HP embaixo do nome (HP e % na ponta direita da barra)
   const nameHpHtml = `<div class="bt-head-grid">
@@ -8712,7 +8717,7 @@ function battleSideCardInner(side){
     <div class="bt-hg-r" style="${speedInfoStyle}">${speedInfoHtml}</div>
   </div>
   <div class="battle-poke-name-center bt-name">${statusTurnBadgeHtml(side, s.activePokeIdx)}${active.name}</div>
-  <div class="bt-hp-row" data-hp-anim="${_hf},${hp},${active.hpMax}" data-hp-side="${skey(side)}"><div class="bt-hp-bar">${battleHpBarHtml(_hf, active.hpMax)}${hpText}</div></div>${(s.sub || 0) > 0 ? `<div style="text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--amber);margin-top:4px;">🧸 Substituto: ${s.sub} HP</div>` : ''}${isCursed(s, s.activePokeIdx) ? `<div style="text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--violet,#A855F7);margin-top:4px;">👻 Amaldiçoado (−¼ HP por turno)</div>` : ''}`;
+  <div class="bt-hp-row" data-hp-anim="${_hf},${hp},${active.hpMax}" data-hp-side="${skey(side)}"><div class="bt-hp-bar">${battleHpBarHtml(_hf, active.hpMax)}${hpText}</div>${hpPctOut}</div>${(s.sub || 0) > 0 ? `<div style="text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--amber);margin-top:4px;">🧸 Substituto: ${s.sub} HP</div>` : ''}${isCursed(s, s.activePokeIdx) ? `<div style="text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--violet,#A855F7);margin-top:4px;">👻 Amaldiçoado (−¼ HP por turno)</div>` : ''}`;
 
   let contentHtml;
   if (side === 'A') {
@@ -8736,12 +8741,12 @@ function battleSideCardInner(side){
     ${dblExtra}
     ${lutarInline}
     ${switchHtml}
-    <div style="position:relative;padding-top:8px;border-top:1px dashed var(--line);margin-top:10px;">
+    <div class="bt-head-wrap" style="position:relative;padding-top:8px;border-top:1px dashed var(--line);margin-top:10px;">
       ${nameHpHtml}${_cond.panel}
     </div>`;
   }
 
-  return `<div style="background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:14px;">
+  return `<div class="bt-card" style="background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:14px;">
     ${contentHtml}
   </div>`;
 }
@@ -12738,9 +12743,16 @@ function dConfirmSlot(sd, slot){
   const dd = b.dd && b.dd[sd][slot];
   if(!dd){ if(!dNeedsInput(sd, slot) && dCanFight()) dRunTurn(); return; }
   if(dd.need && !dd.tgt) return;
+  const _dpBefore = JSON.parse(JSON.stringify(b.dp)), _mpBefore = b.megaPend ? JSON.parse(JSON.stringify(b.megaPend)) : null;
   b.dp[sd][slot] = dd; b.dd[sd][slot] = null;
   if(D.ui.pick && D.ui.pick.sd === sd && D.ui.pick.slot === slot) D.ui.pick = null;
-  if(dCanFight()){ dRunTurn(); return; }
+  if(dCanFight()){
+    // Undo depois do turno: volta para antes desta (última) confirmação — as ações já confirmadas continuam marcadas
+    if(b.history && b.historyIdx === b.history.length - 1 && b.history[b.historyIdx]){
+      try { const o = JSON.parse(b.history[b.historyIdx]); o.dp = _dpBefore; o.dd = { A: [null, null], B: [null, null] }; if(_mpBefore) o.megaPend = _mpBefore; b.history[b.historyIdx] = JSON.stringify(o); } catch(e){}
+    }
+    dRunTurn(); return;
+  }
   // Ação decidida: desliza automaticamente para o outro Pokémon do mesmo lado que ainda precisa escolher (celular).
   const other = 1 - slot;
   if(dNeedsInput(sd, other) && !b.dp[sd][other]) dblScrollReq = { sd, slot: other };
