@@ -124,6 +124,18 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   .remove-poke-x:hover{ color: var(--coral); background: var(--panel-2); }
   .pk-ico{ display:inline-block; width:40px; height:30px; flex:0 0 40px; vertical-align:middle; image-rendering:pixelated; background:transparent url(https://play.pokemonshowdown.com/sprites/pokemonicons-sheet.png) no-repeat; }
   .pk-ico.sm{ margin:-6px 0 -4px -4px; }
+  /* Doubles: quem fica à ESQUERDA (slot 2 da CPU / Player 2 em cima, slot 1 do Player 1 embaixo) tem os sprites espelhados,
+     virados para o outro lado — campo e banco do card */
+  .dbl-cpu .dbl-slot[data-dbl-slot="1"] .pk-ico, .dbl-me .dbl-slot[data-dbl-slot="0"] .pk-ico{ transform:scaleX(-1); }
+  /* Toque duplo não amplia a página (o duplo clique confirma a ação, inclusive no layout PC do celular) */
+  html, body{ touch-action:manipulation; }
+  /* Golpes: nome sempre no CENTRO do botão; PD (e o % de dano) logo abaixo, sem empurrar o nome */
+  .battle-actions-grid.moves-grid > .battle-action-btn > .battle-action-title{ position:absolute; left:8px; right:8px; top:50%; transform:translateY(-50%); margin:0; line-height:1.2; }
+  .battle-actions-grid.moves-grid > .battle-action-btn > .battle-action-sub{ position:absolute; left:8px; right:8px; top:calc(50% + 9px); margin:0 !important; line-height:1.2; }
+  .battle-actions-grid.moves-grid > .battle-action-btn > .btn-foot + .battle-action-sub{ top:auto; bottom:4px; left:50%; right:auto; transform:translateX(-50%); white-space:nowrap; font-size:10px; }   /* % de dano: na linha do rodapé, entre Acc e PP */
+  /* Status não volátil na mesma linha do item/habilidade */
+  .status-ability-row:has(.bt-meta-col){ align-items:flex-start; }
+  .status-ability-row:has(.bt-meta-col) > .battle-status-row{ margin-top:-3px !important; }
   .pk-ico.lg{ zoom:1.6; }   /* nome do Pokémon na Calculadora */
   .pk-ico.xl{ zoom:2; }     /* Pokémon em campo na batalha (não no banco) */   /* um pouco maior: nome do Pokémon na Calculadora e Pokémon em campo na batalha (não no banco) */
   .battle-poke-name-center .pk-ico{ margin:-6px 2px -4px 0; }
@@ -622,6 +634,7 @@ REGRAS DO PROJETO (valem para QUALQUER chat — leia antes de editar)
   .battle-dbl-layout:not(.is-singles) .battle-status-row select{font-size:10px;padding:2px 4px;}
   .battle-dbl-layout:not(.is-singles) button.primary.battle-lutar-inline{font-size:13px;white-space:nowrap;}
   .battle-dbl-layout:not(.is-singles) .bt-hp-bar{width:200px;}
+  .battle-dbl-layout.log-mid:not(.is-singles) .battle-log{text-align:center;}   /* log no meio: texto centralizado */
 }
 /* Botão Lutar (e Confirmar / Continuar / Pular) sempre centralizado */
 button.primary.battle-lutar-inline{display:block;margin-left:auto;margin-right:auto;}
@@ -765,7 +778,7 @@ Adamant Nature
 </datalist>
 
 <script>
-const APP_VERSION = 67; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
+const APP_VERSION = 68; // <<< SUBIR A CADA MODIFICAÇÃO (ver regras no topo do arquivo)
 const GAME_GEN = 9;      // Pokémon Champions = 9ª geração (regra 17): mecânicas que mudaram entre gerações seguem a Gen 9
 (function(){ document.title = 'Calculadora de Potencial de Dano — Champions VGC (beta ' + APP_VERSION + ')'; const b = document.querySelector('.beta-badge'); if(b) b.textContent = 'BETA ' + APP_VERSION; })();
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
@@ -8300,6 +8313,7 @@ function resColor(k){ return battleResColors ? (k === 'Def' ? '#2A52BE' : '#FF5C
 let battleTypeColors = (() => { try{ return localStorage.getItem('pd_typeColors') !== '0'; }catch(e){ return true; } })();
 function moveTypeOf(m){ if(!m || m.isStruggle) return ''; return (m.detail && m.detail.moveType) || m.Type || ''; }
 function typeClsOf(type){ return (battleTypeColors && TYPE_COLORS[type]) ? ' typed' : ''; }
+function typeCardBg(type){ return (battleTypeColors && TYPE_COLORS[type]) ? `background:color-mix(in srgb, ${TYPE_COLORS[type]} 20%, var(--panel));border:1px solid color-mix(in srgb, ${TYPE_COLORS[type]} 70%, var(--line));` : 'background:var(--panel);border:1px solid var(--line);'; }   // janela de detalhes = cor do botão do golpe
 function typeVarOf(type){ return (battleTypeColors && TYPE_COLORS[type]) ? `--tc:${TYPE_COLORS[type]};` : ''; }
 
 /* ===== Card de cima: CPU e Player 2 usam EXATAMENTE este mesmo componente (REGRA 12) =====
@@ -9158,7 +9172,7 @@ function showMoveDetail(side, moveKey){
   const _hits = d.tripleHitsBP ? ` · ${d.tripleHitsBP.length} hits (${d.tripleHitsBP.map(x => calcBpFinal(x, d.bpMods || [])).join(' / ')} BP)` : (d.multiHits > 1 ? ` · ${SKILL_LINK_MOVES.has(normKey(mbk)) ? (normKey(act.ability || '') === 'skill link' ? '5 hits (Skill Link)' : '2–5 hits') : d.multiHits + ' hits'}` : '');
   const ov = document.createElement('div');
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px;';
-  ov.innerHTML = `<div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;max-width:380px;width:100%;font-family:var(--font-mono);font-size:12px;color:var(--text-dim);line-height:1.75;max-height:85vh;overflow:auto;">
+  ov.innerHTML = `<div style="${m.isStruggle ? 'background:var(--panel);border:1px solid var(--line);' : typeCardBg(moveTypeOf(m))}border-radius:12px;padding:16px;max-width:380px;width:100%;font-family:var(--font-mono);font-size:12px;color:var(--text-dim);line-height:1.75;max-height:85vh;overflow:auto;">
     <div style="font-family:var(--font-display);font-size:16px;font-weight:700;color:var(--text);margin-bottom:2px;">${m.moveName}${L.mega ? ` <span style="font-size:11px;color:var(--amber);">(${act.name}: Mega marcada)</span>` : ''}</div>
     <div style="margin-bottom:8px;">${m.tags || ''}${accV ? ' · Acc ' + (accV >= 101 ? '—' : accV) : ''}${_hits}</div>
     Efeito secundário: ${b(_secTxt)}<br>
@@ -9230,7 +9244,7 @@ function showStatusMoveDetail(name){
   const acc = m.Accuracy ?? 101, desc = statusMoveDescription(m);
   const ov = document.createElement('div');
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px;';
-  ov.innerHTML = `<div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;max-width:380px;width:100%;font-family:var(--font-mono);font-size:12px;color:var(--text-dim);line-height:1.75;max-height:85vh;overflow:auto;">
+  ov.innerHTML = `<div style="${typeCardBg(m.Type || '')}border-radius:12px;padding:16px;max-width:380px;width:100%;font-family:var(--font-mono);font-size:12px;color:var(--text-dim);line-height:1.75;max-height:85vh;overflow:auto;">
     <div style="font-family:var(--font-display);font-size:16px;font-weight:700;color:var(--text);margin-bottom:2px;">${m.Name}</div>
     <div style="margin-bottom:${desc ? 8 : 0}px;">Status${m.Type ? ' · ' + m.Type : ''} · Acc ${acc >= 101 ? '—' : acc}</div>
     ${desc ? `<div style="color:var(--text);">${desc}</div>` : ''}
@@ -9337,6 +9351,7 @@ function queuePresentation(tl){
   pres.timer = setTimeout(() => presStep(tk), 350);
 }
 // Cada ação: 1) anima o HP (dano, depois recoil/drain), 2) só então o texto do log aparece.
+const CPU_ENTRY_PAUSE = 900;   // ms de espera antes de a CPU mandar um Pokémon ao campo (o resto da apresentação não muda)
 function presStep(token){
   if(!pres || pres.token !== token || !battle) return;
   if(uiBusy()){ pres.timer = setTimeout(() => presStep(token), 150); return; }
@@ -9369,6 +9384,9 @@ function presStep(token){
     pres.view = st.view;
     // Entrou outro Pokémon em campo: o card troca e a linha do log aparece NO MESMO instante.
     const _swap = !!v0 && !!st.view && ['A','B'].some(sd => v0[sd] && st.view[sd] && v0[sd].i !== st.view[sd].i);
+    if(_swap && battle.mode === 'pvc' && v0.B && st.view.B && v0.B.i !== st.view.B.i && !st._cpuWait){   // CPU vai mandar um Pokémon: pausa antes
+      st._cpuWait = true; pres.queue.unshift(st); pres.view = v0;
+      if(pres && pres.token === token) pres.timer = setTimeout(() => presStep(token), CPU_ENTRY_PAUSE); return; }
     if(_swap && pres.queue.length && pres.queue[0].text){
       pres.queue.shift(); pres.cur = null; pres.hitsShown = 0; pres.shown++;
       renderBattle(); delay = 700;
@@ -9470,7 +9488,7 @@ function renderBattleInner(){
     <div class="battle-log battle-log-scroll${battleLogCompact ? ' compact' : ''}" id="battleLogScroll" style="${battleLogCollapsed ? 'display:none;' : ''}">${battleCalcView ? battleCalcLogHtml() : battleLogHtml()}</div>
     <div class="battle-log-foot">
       <button type="button" class="battle-toolbar-btn" id="battleUndoBtn" ${battleCanUndo()?'':'disabled'} title="Voltar turno">← Undo</button>
-      <button type="button" class="battle-toolbar-btn" id="battleCalcBtn" style="${battleCalcView?'border-color:var(--mint);color:var(--mint);':''}" title="Alternar entre log e cálculos de dano">🧮 ${battleCalcView ? 'Log' : 'Cálculo'}</button>
+      <button type="button" class="battle-toolbar-btn" id="battleCalcBtn" style="${battleCalcView?'border-color:var(--mint);color:var(--mint);':''}" title="Alternar entre log e cálculos de dano">${battleCalcView ? 'Log' : 'Cálculo'}</button>
       <button type="button" class="battle-toolbar-btn" id="battleRedoBtn" ${battleCanRedo()?'':'disabled'} title="Avançar turno">Redo →</button>
     </div>
   </div>`;
@@ -11145,6 +11163,8 @@ function dPresStep(token){
       if(reqs.length) dblPresScrollReq = reqs; }
     // Entrou outro Pokémon em campo: o card troca e a linha do log aparece NO MESMO instante.
     const swap = ['A','B'].some(k => JSON.stringify((p.view[k] || {}).a || []) !== JSON.stringify((nv[k] || {}).a || []));
+    if(swap && battle.mode === 'pvc' && JSON.stringify((p.view.B || {}).a || []) !== JSON.stringify((nv.B || {}).a || []) && !(p._cpuW && p._cpuW[p.shown])){   // CPU vai mandar um Pokémon: pausa antes
+      (p._cpuW || (p._cpuW = {}))[p.shown] = true; dblPresScrollReq = null; p.timer = setTimeout(() => dPresStep(token), CPU_ENTRY_PAUSE); return; }
     const slow = swap && d === 0 && tl.slow && tl.slow[p.shown];
     if(slow){ p.next = nv; p.swapReq = dblPresScrollReq; dblPresScrollReq = null; p.shown++; p.phase = 'swap'; renderBattle(); p.timer = setTimeout(() => dPresStep(token), 1400); return; }   // arrasto: primeiro a linha do log, depois o Pokémon novo
     p.view = nv; p.phase = 'text';
@@ -12354,9 +12374,9 @@ function dInfiniteRefill(sd, N){
   if(!created.length) return false;
   old.forEach(i => { dropMon(sd, i); S.active = S.active.map(x => x === i ? null : x); });
   created.forEach(i => { S.stg[i] = dEmptyStg(); S.entry[i] = 0; S.prevAlive[i] = true; });
-  S.active = [created[0] ?? null, created[1] ?? null];
-  S.active.forEach((i, slot) => { if(i != null) dEnter(sd, slot, i, true); });
+  S.active = [null, null]; dSyncActive(sd);
   dLog(`${sd === 'A' ? 'Seu' : 'O'} time foi substituído por ${created.length} novos Pokémon!`);
+  created.slice(0, 2).forEach((i, slot) => { dLogEntry(LF.autoSwitch(sd, entryName(sd, i))); dEnter(sd, slot, i, true); });   // um de cada vez
   return true;
 }
 // Fim de batalha (algum lado sem Pokémon). true = acabou.
